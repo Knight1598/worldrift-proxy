@@ -8,7 +8,7 @@ app.use(cors());
 app.use(express.json());
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const webhook_url = process.env.WEBHOOK_URL || 'https://worldrift-proxy.onrender.com';
+const webhook_url = process.env.WEBHOOK_URL || "https://worldrift-proxy.onrender.com/api";
 
 app.post('/api', async (req, res) => {
   try {
