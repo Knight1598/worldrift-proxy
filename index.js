@@ -18,7 +18,7 @@
   <div id="status"></div>
 
   <script>
-    const WEBHOOK_URL = "https://worldrift-proxy.onrender.com/api";
+    const WEBHOOK_URL = "https://worldrift-proxy.onrender.com";
 
     const player = {
       id: "WR-" + Math.random().toString(36).substring(2, 😎.toUpperCase(),
