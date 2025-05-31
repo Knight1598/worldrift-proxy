@@ -1,37 +1,14 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Worldrift AI</title>
-</head>
-<body>
-  <h2>Worldrift AI - Webhook Proxy</h2>
-  <div id="output">[เชื่อมต่อ Webhook Proxy... พร้อมแล้ว]</div>
-  <input id="input" placeholder="พิมพ์คำสั่งของคุณ" />
-  <button onclick="sendMessage()">ส่งคำสั่ง</button>
+<input id="playerInput" placeholder="ชื่อผู้เล่น" />
+<input id="commandInput" placeholder="พิมพ์คำสั่ง" />
+<button onclick="send()">ส่งคำสั่ง</button>
 
-  <script>
-    const WEBHOOK_URL = "https://worldrift-proxy.onrender.com/api"; 
+<div id="storyBox"></div>
 
-    function sendMessage() {
-      const input = document.getElementById('input').value;
-      document.getElementById('output').innerText = '> ' + input;
-
-      fetch(WEBHOOK_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: "user", content: input }]
-        })
-      })
-      .then(res => res.text())
-      .then(reply => {
-        document.getElementById('output').innerText += '\n' + reply;
-      })
-      .catch(err => {
-        document.getElementById('output').innerText += '\n[ข้อผิดพลาด: ' + err.message + ']';
-      });
-    }
-  </script>
-</body>
-</html>
+<script src="./index.js"></script>
+<script>
+  function send() {
+    const player = document.getElementById("playerInput").value;
+    const message = document.getElementById("commandInput").value;
+    sendToGame(player, message, "ไม่มีเหตุการณ์ก่อนหน้า");
+  }
+</script>
