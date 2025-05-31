@@ -1,4 +1,7 @@
-const sendToGame = async (player, message, summary) => {
+async function send() {
+  const player = document.getElementById("playerInput").value;
+  const message = document.getElementById("commandInput").value;
+
   const response = await fetch("https://iahcarus.app.n8n.cloud/webhook-test/text-game", {
     method: "POST",
     headers: {
@@ -7,11 +10,10 @@ const sendToGame = async (player, message, summary) => {
     body: JSON.stringify({
       player: player,
       message: message,
-      summary: summary
+      summary: "ไม่มีเหตุการณ์ก่อนหน้า"
     })
   });
 
   const data = await response.json();
-  console.log("🧠 เนื้อเรื่องที่ได้:", data.message);
-  document.getElementById("storyBox").innerText = data.message;
-};
+  document.getElementById("storyBox").innerText = data.message || "⚠️ ไม่พบคำตอบจาก GPT";
+}
