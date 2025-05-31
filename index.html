@@ -1,14 +1,16 @@
-<input id="playerInput" placeholder="ชื่อผู้เล่น" />
-<input id="commandInput" placeholder="พิมพ์คำสั่ง" />
-<button onclick="send()">ส่งคำสั่ง</button>
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>Text-Based Game</title>
+</head>
+<body>
+  <input id="playerInput" placeholder="ชื่อผู้เล่น" />
+  <input id="commandInput" placeholder="พิมพ์คำสั่ง เช่น เดินหน้า" />
+  <button onclick="send()">ส่งคำสั่ง</button>
 
-<div id="storyBox"></div>
+  <div id="storyBox" style="margin-top:20px; white-space: pre-wrap;"></div>
 
-<script src="./index.js"></script>
-<script>
-  function send() {
-    const player = document.getElementById("playerInput").value;
-    const message = document.getElementById("commandInput").value;
-    sendToGame(player, message, "ไม่มีเหตุการณ์ก่อนหน้า");
-  }
-</script>
+  <script src="index.js"></script>
+</body>
+</html>
