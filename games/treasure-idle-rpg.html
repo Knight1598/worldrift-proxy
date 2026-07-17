@@ -580,6 +580,9 @@ function getStageMonster(stage) {
   let tier = 'normal';
   if (stage % 10 === 0)      { mult = 5; tier = 'bigboss'; }
   else if (stage % 5 === 0)  { mult = 3; tier = 'midboss'; }
+  // HP ใช้ mult เต็มเพื่อความ "อึด" ของบอส แต่ ATK/DEF ใช้ sqrt(mult) แทน
+  // ป้องกันไม่ให้ DEF ของบอสสูงจนหักล้าง ATK ผู้เล่นจนเหลือดาเมจ 1 แทบทุกครั้ง
+  const offenseMult = Math.sqrt(mult);
 
   return {
     key: base.key,
@@ -588,8 +591,8 @@ function getStageMonster(stage) {
     tier,
     maxHp: Math.round(base.hp * stageScale * mult),
     hp: Math.round(base.hp * stageScale * mult),
-    atk: Math.round(base.atk * stageScale * mult),
-    def: Math.round(base.def * stageScale * mult),
+    atk: Math.round(base.atk * stageScale * offenseMult),
+    def: Math.round(base.def * stageScale * offenseMult),
   };
 }
 
