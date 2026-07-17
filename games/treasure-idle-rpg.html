@@ -37,7 +37,10 @@
                  volcano.png, castle.png, hell.png, heaven.png,
                  demon_king_throne.png
 
- หากยังไม่มีไฟล์ภาพ เกมจะยังเล่นได้ปกติ (จะเห็นแค่กรอบ/พื้นที่ว่างแทนรูป)
+ สถานะปัจจุบัน: ไฟล์ภาพทั้งหมดถูกตัดจาก sprite sheet และวางไว้ใน games/assets/
+ ตามโครงสร้างนี้เรียบร้อยแล้ว — ถ้าต้องการเปลี่ยนรูปภาพใดก็แค่แทนที่ไฟล์เดิม
+ (ชื่อไฟล์/โฟลเดอร์ต้องตรงกับที่ระบุไว้ด้านบน) โค้ดจะยังเล่นได้ปกติแม้ไฟล์ภาพ
+ ไฟล์ใดไฟล์หนึ่งหายไป (จะเห็นกรอบ/พื้นที่ว่างแทนรูปที่ขาด)
 =====================================================================
 -->
 
@@ -222,6 +225,7 @@
     width: 54px;
     height: 54px;
     background-color: #3a2a1a;
+    background-image: url('assets/ui/slot_frame_brown.png'); /* ค่าเริ่มต้นก่อนสวมใส่ไอเทม */
     background-repeat: no-repeat;
     background-size: 100% 100%;
     display: flex;
@@ -576,6 +580,9 @@ function getStageMonster(stage) {
   let tier = 'normal';
   if (stage % 10 === 0)      { mult = 5; tier = 'bigboss'; }
   else if (stage % 5 === 0)  { mult = 3; tier = 'midboss'; }
+  // HP ใช้ mult เต็มเพื่อความ "อึด" ของบอส แต่ ATK/DEF ใช้ sqrt(mult) แทน
+  // ป้องกันไม่ให้ DEF ของบอสสูงจนหักล้าง ATK ผู้เล่นจนเหลือดาเมจ 1 แทบทุกครั้ง
+  const offenseMult = Math.sqrt(mult);
 
   return {
     key: base.key,
@@ -584,8 +591,8 @@ function getStageMonster(stage) {
     tier,
     maxHp: Math.round(base.hp * stageScale * mult),
     hp: Math.round(base.hp * stageScale * mult),
-    atk: Math.round(base.atk * stageScale * mult),
-    def: Math.round(base.def * stageScale * mult),
+    atk: Math.round(base.atk * stageScale * offenseMult),
+    def: Math.round(base.def * stageScale * offenseMult),
   };
 }
 
@@ -667,6 +674,38 @@ function ensureEncounter() {
   if (!player.encounter) {
     player.encounter = getStageMonster(player.stage);
   }
+}
+
+/* =====================================================================
+   SAVE / LOAD (localStorage — เก็บความคืบหน้าไว้เมื่อปิดแท็บ/รีเฟรช)
+   ===================================================================== */
+const SAVE_KEY = 'treasureIdleRpgSave';
+
+function saveGame() {
+  const data = {
+    gold: player.gold,
+    stage: player.stage,
+    baseStats: player.baseStats,
+    upgradeLevels: player.upgradeLevels,
+    currentHp: player.currentHp,
+    equipment: player.equipment,
+    chests: player.chests,
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
+}
+
+function loadGame() {
+  let raw;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { return; }
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    Object.assign(player, {
+      gold: data.gold, stage: data.stage, baseStats: data.baseStats,
+      upgradeLevels: data.upgradeLevels, currentHp: data.currentHp,
+      equipment: data.equipment, chests: data.chests,
+    });
+  } catch (e) { /* เซฟไฟล์เสีย ข้ามไปเริ่มเกมใหม่ */ }
 }
 
 /* =====================================================================
@@ -872,6 +911,7 @@ function renderAll() {
   renderCharacterPanel();
   renderChestPanel();
   renderBattlePanel();
+  saveGame();
 }
 
 /* =====================================================================
@@ -942,6 +982,7 @@ document.getElementById('btnAutoBattle').addEventListener('click', () => {
 /* =====================================================================
    INIT
    ===================================================================== */
+loadGame();
 ensureEncounter();
 renderAll();
 </script>
