@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Treasure Idle RPG</title>
+
+<!--
+=====================================================================
+ ASSET MANIFEST / รายการไฟล์ภาพที่ต้องเตรียม
+ ---------------------------------------------------------------
+ วางไฟล์ภาพทั้งหมดตามโครงสร้างโฟลเดอร์นี้ (สัมพัทธ์กับไฟล์ html นี้):
+
+ games/
+   treasure-idle-rpg.html   <- ไฟล์นี้
+   assets/
+     monsters/   slime.png, bat.png, rat.png, skeleton.png, goblin.png,
+                 orc.png, dark_wolf.png, spider.png, dark_knight.png,
+                 stone_golem.png, red_demon.png, necromancer.png,
+                 purple_dragon.png, armored_golem_warrior.png, demon_king.png
+     equipment/  sword_bronze.png, sword_iron.png, sword_silver_gem.png,
+                 sword_gold_gem.png, shield_wood.png, shoulder_leather.png,
+                 shield_steel.png, shoulder_steel.png, shield_holy_blue.png,
+                 ring.png, necklace.png
+     chests/     chest_common_closed.png / _open.png
+                 chest_good_closed.png / _open.png
+                 chest_rare_closed.png / _open.png
+                 chest_epic_closed.png / _open.png
+                 chest_legendary_closed.png / _open.png
+     ui/         panel_wood.png, panel_stone.png, panel_gold.png,
+                 bar_hp_bg.png, bar_hp_fill_red.png,
+                 button_gold.png, button_red.png, button_gray.png,
+                 button_blue.png, button_green.png,
+                 slot_frame_brown.png, slot_frame_gray.png, slot_frame_gold.png,
+                 icon_gold_coin.png
+     bg/         forest.png, cave.png, desert.png, snow.png, graveyard.png,
+                 volcano.png, castle.png, hell.png, heaven.png,
+                 demon_king_throne.png
+
+ หากยังไม่มีไฟล์ภาพ เกมจะยังเล่นได้ปกติ (จะเห็นแค่กรอบ/พื้นที่ว่างแทนรูป)
+=====================================================================
+-->
+
+<style>
+  :root {
+    --panel-radius: 6px;
+    --gap: 12px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #10121c;
+    color: #f1ecd8;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 15px;
+  }
+
+  /* rendering ทุก sprite/รูปให้คมชัดแบบ pixel art ไม่เบลอตอนขยาย */
+  img, .sprite, .bg-scene, .panel, .btn, .item-slot, .hp-bar-bg, .hp-bar-fill {
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+
+  h1.title {
+    text-align: center;
+    margin: 10px 0;
+    font-size: 1.4rem;
+    letter-spacing: 2px;
+    color: #ffd76a;
+    text-shadow: 2px 2px 0 #000;
+  }
+
+  .game-wrap {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--gap) 20px;
+  }
+
+  .board {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-areas: "char chest battle";
+    gap: var(--gap);
+  }
+
+  @media (max-width: 768px) {
+    .board {
+      grid-template-columns: 1fr;
+      grid-template-areas: "char" "chest" "battle";
+    }
+  }
+
+  /* ===============================================
+     🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังกรอบพาเนลแต่ละใบ)
+     วางไฟล์ในโฟลเดอร์ assets/ui/
+     =============================================== */
+  .panel {
+    border-radius: var(--panel-radius);
+    padding: 14px;
+    background-color: #2a2140;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    border: 4px solid #000;
+    box-shadow: inset 0 0 0 2px #4a3a70;
+    min-height: 260px;
+  }
+  .panel--character {
+    grid-area: char;
+    /* ใส่รูปภาพตรงนี้: กรอบไม้ */
+    background-image: url('assets/ui/panel_wood.png');
+  }
+  .panel--chest {
+    grid-area: chest;
+    /* ใส่รูปภาพตรงนี้: กรอบหิน */
+    background-image: url('assets/ui/panel_stone.png');
+  }
+  .panel--battle {
+    grid-area: battle;
+    /* ใส่รูปภาพตรงนี้: กรอบทอง */
+    background-image: url('assets/ui/panel_gold.png');
+  }
+
+  .panel h2 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+    color: #ffd76a;
+    border-bottom: 2px dashed #5a4a80;
+    padding-bottom: 6px;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 6px 0;
+    font-size: 0.85rem;
+  }
+
+  .gold-display {
+    text-align: center;
+    font-size: 1rem;
+    color: #ffd76a;
+    margin-bottom: 10px;
+  }
+  .gold-display img { width: 18px; height: 18px; vertical-align: middle; margin-right: 4px; }
+
+  /* ===============================================
+     🖼️ ใส่รูปภาพตรงนี้ (แถบเลือด HP)
+     วางไฟล์ในโฟลเดอร์ assets/ui/
+     =============================================== */
+  .hp-bar-bg {
+    position: relative;
+    width: 100%;
+    height: 18px;
+    background-color: #3a0a0a;
+    background-image: url('assets/ui/bar_hp_bg.png');
+    background-size: 100% 100%;
+    border-radius: 3px;
+    overflow: hidden;
+    border: 2px solid #000;
+  }
+  .hp-bar-fill {
+    height: 100%;
+    background-color: #d3372c;
+    background-image: url('assets/ui/bar_hp_fill_red.png');
+    background-size: 100% 100%;
+    transition: width 0.3s ease;
+  }
+  .hp-bar-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    text-shadow: 1px 1px 0 #000;
+  }
+
+  .stat-line { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 3px 0; }
+
+  /* ===============================================
+     🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังปุ่มแต่ละสี)
+     วางไฟล์ในโฟลเดอร์ assets/ui/
+     =============================================== */
+  .btn {
+    display: inline-block;
+    width: 100%;
+    padding: 8px 6px;
+    margin-top: 6px;
+    border: 2px solid #000;
+    border-radius: 4px;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+    font-family: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    background-color: #555;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn--primary { background-color: #b8860b; background-image: url('assets/ui/button_gold.png'); }
+  .btn--danger  { background-color: #a33; background-image: url('assets/ui/button_red.png'); }
+  .btn--neutral { background-color: #666; background-image: url('assets/ui/button_gray.png'); }
+  .btn--info    { background-color: #2f6fb0; background-image: url('assets/ui/button_blue.png'); }
+  .btn--success { background-color: #2f8f4e; background-image: url('assets/ui/button_green.png'); }
+
+  .upgrade-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+
+  /* ===============================================
+     🖼️ ใส่รูปภาพตรงนี้ (กรอบช่องไอเทม/อุปกรณ์)
+     วางไฟล์ในโฟลเดอร์ assets/ui/
+     =============================================== */
+  .equip-slots { display: flex; gap: 8px; margin-top: 10px; }
+  .item-slot {
+    width: 54px;
+    height: 54px;
+    background-color: #3a2a1a;
+    background-repeat: no-repeat;
+    background-size: 100% 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .item-slot--common,
+  .item-slot--good { background-image: url('assets/ui/slot_frame_brown.png'); }
+  .item-slot--rare,
+  .item-slot--epic { background-image: url('assets/ui/slot_frame_gray.png'); }
+  .item-slot--legendary { background-image: url('assets/ui/slot_frame_gold.png'); }
+  .item-slot img { width: 70%; height: 70%; object-fit: contain; }
+  .item-slot .slot-label {
+    position: absolute;
+    bottom: -16px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 0.55rem;
+    color: #cfc7ae;
+  }
+
+  /* กล่องสมบัติ */
+  .chest-count { text-align: center; font-size: 0.9rem; margin-bottom: 8px; }
+  .chest-open-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  /* ===============================================
+     🖼️ ใส่รูปภาพตรงนี้ (ภาพกล่องสมบัติ ปิด/เปิด ตามระดับความหายาก)
+     วางไฟล์ในโฟลเดอร์ assets/chests/
+     =============================================== */
+  .chest-sprite {
+    width: 96px;
+    height: 96px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+  .gacha-result {
+    width: 100%;
+    background: #1c1730;
+    border: 2px dashed #6a5a9a;
+    border-radius: 4px;
+    padding: 8px;
+    text-align: center;
+    font-size: 0.8rem;
+  }
+  .gacha-result img { width: 40px; height: 40px; object-fit: contain; margin-bottom: 4px; }
+  .rarity-common    { color: #b7b7b7; }
+  .rarity-good      { color: #5cd65c; }
+  .rarity-rare      { color: #57a0ff; }
+  .rarity-epic      { color: #c46bff; }
+  .rarity-legendary { color: #ffcc33; }
+
+  .gacha-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .gacha-actions .btn { margin-top: 0; }
+
+  /* ฉากต่อสู้ */
+  /* ===============================================
+     🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังฉากต่อสู้ เปลี่ยนตามช่วงด่าน)
+     วางไฟล์ในโฟลเดอร์ assets/bg/
+     =============================================== */
+  .bg-scene {
+    width: 100%;
+    height: 130px;
+    background-color: #1a2a1a;
+    background-size: cover;
+    background-position: center;
+    border-radius: 4px;
+    border: 2px solid #000;
+    margin-bottom: 10px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .bg-scene .monster-sprite {
+    width: 72px;
+    height: 72px;
+    object-fit: contain;
+    filter: drop-shadow(2px 2px 0 #000);
+  }
+  .stage-badge {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 0.7rem;
+    background: rgba(0,0,0,0.6);
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .tier-badge {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 3px;
+  }
+  .tier-normal   { background: rgba(80,80,80,0.7); }
+  .tier-midboss  { background: rgba(180,120,20,0.8); }
+  .tier-bigboss  { background: rgba(180,20,20,0.85); }
+
+  .monster-name { text-align: center; font-size: 0.85rem; margin-bottom: 4px; }
+
+  .battle-buttons { display: flex; gap: 6px; }
+
+  /* Battle log */
+  .log-panel {
+    grid-column: 1 / -1;
+    margin-top: var(--gap);
+    background: #0c0d15;
+    border: 3px solid #000;
+    border-radius: var(--panel-radius);
+    padding: 10px;
+    height: 150px;
+    overflow-y: auto;
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+  .log-panel div { border-bottom: 1px solid #222; padding: 2px 0; }
+  .log-panel div:last-child { color: #ffd76a; }
+</style>
+</head>
+<body>
+
+<h1 class="title">⚔ Treasure Idle RPG ⚔</h1>
+
+<div class="game-wrap">
+  <div class="board">
+
+    <!-- ============ Panel 1: Character ============ -->
+    <section class="panel panel--character">
+      <h2>ตัวละคร</h2>
+      <div class="gold-display">
+        <img src="assets/ui/icon_gold_coin.png" alt="gold" onerror="this.style.display='none'">
+        <span id="goldValue">0</span> Gold
+      </div>
+
+      <div class="row"><span>Lv.</span><span id="playerLevel">1</span></div>
+
+      <div class="hp-bar-bg">
+        <div class="hp-bar-fill" id="hpBarFill" style="width:100%;"></div>
+        <div class="hp-bar-label" id="hpBarLabel">50 / 50</div>
+      </div>
+
+      <div class="stat-line"><span>ATK</span><span id="statAtk">10</span></div>
+      <div class="stat-line"><span>DEF</span><span id="statDef">5</span></div>
+      <div class="stat-line"><span>CP (พลังรบรวม)</span><span id="statCp">0</span></div>
+
+      <div class="equip-slots">
+        <div class="item-slot" id="slotWeapon"><span class="slot-label">อาวุธ</span></div>
+        <div class="item-slot" id="slotArmor"><span class="slot-label">เกราะ</span></div>
+        <div class="item-slot" id="slotRing"><span class="slot-label">แหวน</span></div>
+      </div>
+
+      <div style="margin-top:22px;">
+        <div class="upgrade-row">
+          <button class="btn btn--danger" id="btnUpgradeHp">อัปเกรด HP (<span id="costHp">-</span> Gold)</button>
+        </div>
+        <div class="upgrade-row">
+          <button class="btn btn--danger" id="btnUpgradeAtk">อัปเกรด ATK (<span id="costAtk">-</span> Gold)</button>
+        </div>
+        <div class="upgrade-row">
+          <button class="btn btn--danger" id="btnUpgradeDef">อัปเกรด DEF (<span id="costDef">-</span> Gold)</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Panel 2: Chest / Gacha ============ -->
+    <section class="panel panel--chest">
+      <h2>กล่องสมบัติ</h2>
+      <div class="chest-count">กล่องที่มี: <span id="chestCount">0</span></div>
+
+      <div class="chest-open-area">
+        <div class="chest-sprite" id="chestSprite"></div>
+        <button class="btn btn--primary" id="btnOpenChest">เปิดกล่อง</button>
+
+        <div class="gacha-result" id="gachaResult" style="display:none;">
+          <img id="gachaItemIcon" src="" alt="item" onerror="this.style.display='none'">
+          <div id="gachaItemName">-</div>
+          <div id="gachaItemValue">-</div>
+          <div class="gacha-actions">
+            <button class="btn btn--info" id="btnEquipItem">สวมใส่</button>
+            <button class="btn btn--success" id="btnSellItem">ขายรับ Gold</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Panel 3: Battle ============ -->
+    <section class="panel panel--battle">
+      <h2>ตะลุยด่าน</h2>
+      <div class="bg-scene" id="bgScene">
+        <span class="stage-badge">ด่าน <span id="stageNum">1</span></span>
+        <span class="tier-badge tier-normal" id="tierBadge">ปกติ</span>
+        <img class="monster-sprite" id="monsterSprite" src="" alt="monster" onerror="this.style.opacity='0'">
+      </div>
+      <div class="monster-name" id="monsterName">-</div>
+      <div class="hp-bar-bg" style="margin-bottom:10px;">
+        <div class="hp-bar-fill" id="monsterHpFill" style="width:100%;"></div>
+        <div class="hp-bar-label" id="monsterHpLabel">- / -</div>
+      </div>
+
+      <div class="battle-buttons">
+        <button class="btn btn--neutral" id="btnFight">สู้ (Fight)</button>
+        <button class="btn btn--primary" id="btnAutoBattle">Auto-Battle: OFF</button>
+      </div>
+    </section>
+
+    <!-- ============ Battle Log ============ -->
+    <section class="log-panel" id="logPanel"></section>
+
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   IMAGE ASSET PATHS
+   ตัวแปรอ้างอิงรูปภาพทั้งหมด — แก้ path ตรงนี้เมื่อมีไฟล์ภาพจริงแล้ว
+   ===================================================================== */
+
+// ===============================================
+// 🖼️ ใส่รูปมอนสเตอร์ตรงนี้ (15 ตัว ตามชีตที่มี)
+// วางไฟล์ในโฟลเดอร์ assets/monsters/
+// ===============================================
+const MONSTER_ICONS = {
+  slime: 'assets/monsters/slime.png',
+  bat: 'assets/monsters/bat.png',
+  rat: 'assets/monsters/rat.png',
+  skeleton: 'assets/monsters/skeleton.png',
+  goblin: 'assets/monsters/goblin.png',
+  orc: 'assets/monsters/orc.png',
+  dark_wolf: 'assets/monsters/dark_wolf.png',
+  spider: 'assets/monsters/spider.png',
+  dark_knight: 'assets/monsters/dark_knight.png',
+  stone_golem: 'assets/monsters/stone_golem.png',
+  red_demon: 'assets/monsters/red_demon.png',
+  necromancer: 'assets/monsters/necromancer.png',
+  purple_dragon: 'assets/monsters/purple_dragon.png',
+  armored_golem_warrior: 'assets/monsters/armored_golem_warrior.png',
+  demon_king: 'assets/monsters/demon_king.png',
+};
+
+// ===============================================
+// 🖼️ ใส่รูปไอเทม/อาวุธ/เกราะ/แหวนตรงนี้ ตามระดับความหายาก
+// วางไฟล์ในโฟลเดอร์ assets/equipment/
+// หมายเหตุ: legendary ของ weapon/ring ใช้ไฟล์ซ้ำกับ epic ชั่วคราว
+// เพราะชีตต้นฉบับมีดาบ/แหวนไม่ครบ 5 ระดับ — เพิ่มไฟล์แยกภายหลังได้
+// ===============================================
+const EQUIPMENT_ICONS = {
+  weapon: {
+    common: 'assets/equipment/sword_bronze.png',
+    good: 'assets/equipment/sword_iron.png',
+    rare: 'assets/equipment/sword_silver_gem.png',
+    epic: 'assets/equipment/sword_gold_gem.png',
+    legendary: 'assets/equipment/sword_gold_gem.png',
+  },
+  armor: {
+    common: 'assets/equipment/shield_wood.png',
+    good: 'assets/equipment/shoulder_leather.png',
+    rare: 'assets/equipment/shield_steel.png',
+    epic: 'assets/equipment/shoulder_steel.png',
+    legendary: 'assets/equipment/shield_holy_blue.png',
+  },
+  ring: {
+    common: 'assets/equipment/ring.png',
+    good: 'assets/equipment/ring.png',
+    rare: 'assets/equipment/necklace.png',
+    epic: 'assets/equipment/necklace.png',
+    legendary: 'assets/equipment/ring.png',
+  },
+};
+// Asset สำรอง (มีในชีตแต่ไม่ผูกกับระบบหลัก): axe.png, spear.png, bow.png, wand.png,
+// boots.png, gloves.png, helmet.png, potion_red.png, potion_blue.png
+
+const SLOT_NAMES = { weapon: 'อาวุธ', armor: 'เกราะ', ring: 'แหวน' };
+
+// ===============================================
+// 🖼️ ใส่รูปหีบสมบัติตรงนี้ (ปิด/เปิด) ตามระดับความหายาก
+// วางไฟล์ในโฟลเดอร์ assets/chests/
+// (ข้ามแถวหีบปีศาจปาก/มิมิค — เป็น asset สำรอง ไม่ใช้ในสเปคนี้)
+// ===============================================
+const CHEST_ICONS = {
+  common:    { closed: 'assets/chests/chest_common_closed.png',    open: 'assets/chests/chest_common_open.png' },
+  good:      { closed: 'assets/chests/chest_good_closed.png',      open: 'assets/chests/chest_good_open.png' },
+  rare:      { closed: 'assets/chests/chest_rare_closed.png',      open: 'assets/chests/chest_rare_open.png' },
+  epic:      { closed: 'assets/chests/chest_epic_closed.png',      open: 'assets/chests/chest_epic_open.png' },
+  legendary: { closed: 'assets/chests/chest_legendary_closed.png', open: 'assets/chests/chest_legendary_open.png' },
+};
+
+// ===============================================
+// 🖼️ ใส่รูปกรอบพาเนล/หลอดเลือด/ปุ่ม/ช่องไอเทมตรงนี้
+// วางไฟล์ในโฟลเดอร์ assets/ui/ (อ้างอิงซ้ำกับ CSS ด้านบนของไฟล์นี้)
+// Asset สำรอง (มีในชีตแต่ไม่ผูก): เพชร 4 สี, ไอคอนล็อก/เกียร์/ย้อนกลับ, ลูกศร D-pad
+// ===============================================
+const CURRENCY_ICONS = { gold: 'assets/ui/icon_gold_coin.png' };
+
+// ===============================================
+// 🖼️ ใส่รูปพื้นหลังฉากต่อสู้ตรงนี้ (ตามช่วงด่าน)
+// วางไฟล์ในโฟลเดอร์ assets/bg/
+// ด่าน 100+ ใช้ฉาก "ห้องบัลลังก์ราชาปีศาจ" คู่กับบอส demon_king
+// ===============================================
+const BG_BY_STAGE_RANGE = [
+  { min: 1,   max: 10,  bg: 'assets/bg/forest.png' },
+  { min: 11,  max: 20,  bg: 'assets/bg/cave.png' },
+  { min: 21,  max: 30,  bg: 'assets/bg/desert.png' },
+  { min: 31,  max: 40,  bg: 'assets/bg/snow.png' },
+  { min: 41,  max: 50,  bg: 'assets/bg/graveyard.png' },
+  { min: 51,  max: 60,  bg: 'assets/bg/volcano.png' },
+  { min: 61,  max: 70,  bg: 'assets/bg/castle.png' },
+  { min: 71,  max: 80,  bg: 'assets/bg/hell.png' },
+  { min: 81,  max: 99,  bg: 'assets/bg/heaven.png' },
+  { min: 100, max: 999, bg: 'assets/bg/demon_king_throne.png' },
+];
+function getBgForStage(stage) {
+  const found = BG_BY_STAGE_RANGE.find(r => stage >= r.min && stage <= r.max);
+  return (found || BG_BY_STAGE_RANGE[0]).bg;
+}
+
+/* =====================================================================
+   MONSTER ROSTER — stage gating (มอนสเตอร์ที่ปรากฏในแต่ละช่วงด่าน)
+   ===================================================================== */
+const MONSTERS = [
+  { key: 'slime',        name: 'Slime',                 icon: MONSTER_ICONS.slime,        stageMin: 1,   stageMax: 10,  hp: 20,  atk: 4,  def: 1 },
+  { key: 'bat',          name: 'Bat',                    icon: MONSTER_ICONS.bat,           stageMin: 3,   stageMax: 15,  hp: 22,  atk: 5,  def: 1 },
+  { key: 'rat',          name: 'Giant Rat',              icon: MONSTER_ICONS.rat,           stageMin: 1,   stageMax: 12,  hp: 18,  atk: 4,  def: 0 },
+  { key: 'goblin',       name: 'Goblin',                 icon: MONSTER_ICONS.goblin,        stageMin: 5,   stageMax: 20,  hp: 28,  atk: 7,  def: 2 },
+  { key: 'skeleton',     name: 'Skeleton Swordsman',     icon: MONSTER_ICONS.skeleton,      stageMin: 8,   stageMax: 25,  hp: 35,  atk: 8,  def: 3 },
+  { key: 'orc',          name: 'Goblin Brute',           icon: MONSTER_ICONS.orc,           stageMin: 12,  stageMax: 30,  hp: 45,  atk: 10, def: 4 },
+  { key: 'dark_wolf',    name: 'Dark Wolf',              icon: MONSTER_ICONS.dark_wolf,     stageMin: 15,  stageMax: 35,  hp: 40,  atk: 12, def: 3 },
+  { key: 'spider',       name: 'Spider',                 icon: MONSTER_ICONS.spider,        stageMin: 18,  stageMax: 40,  hp: 42,  atk: 11, def: 4 },
+  { key: 'dark_knight',  name: 'Dark Knight',            icon: MONSTER_ICONS.dark_knight,   stageMin: 25,  stageMax: 50,  hp: 60,  atk: 15, def: 8 },
+  { key: 'stone_golem',  name: 'Stone Golem',            icon: MONSTER_ICONS.stone_golem,   stageMin: 30,  stageMax: 60,  hp: 90,  atk: 14, def: 15 },
+  { key: 'red_demon',    name: 'Red Demon',              icon: MONSTER_ICONS.red_demon,     stageMin: 35,  stageMax: 70,  hp: 80,  atk: 20, def: 6 },
+  { key: 'necromancer',  name: 'Necromancer',            icon: MONSTER_ICONS.necromancer,   stageMin: 40,  stageMax: 80,  hp: 75,  atk: 22, def: 5 },
+  { key: 'armored_golem_warrior', name: 'Armored Golem Warrior', icon: MONSTER_ICONS.armored_golem_warrior, stageMin: 50, stageMax: 999, hp: 120, atk: 25, def: 20 },
+  { key: 'purple_dragon',name: 'Purple Dragon',          icon: MONSTER_ICONS.purple_dragon, stageMin: 60,  stageMax: 999, hp: 150, atk: 30, def: 12 },
+  { key: 'demon_king',   name: 'Demon King',             icon: MONSTER_ICONS.demon_king,    stageMin: 100, stageMax: 999, hp: 400, atk: 45, def: 25 },
+];
+
+function getStageMonster(stage) {
+  const candidates = MONSTERS.filter(m => stage >= m.stageMin && stage <= m.stageMax);
+  const pool = candidates.length ? candidates : [MONSTERS[0]];
+  const base = pool[Math.floor(Math.random() * pool.length)];
+
+  const stageScale = 1 + (stage - 1) * 0.15;
+  let mult = 1;
+  let tier = 'normal';
+  if (stage % 10 === 0)      { mult = 5; tier = 'bigboss'; }
+  else if (stage % 5 === 0)  { mult = 3; tier = 'midboss'; }
+
+  return {
+    key: base.key,
+    name: base.name,
+    icon: base.icon,
+    tier,
+    maxHp: Math.round(base.hp * stageScale * mult),
+    hp: Math.round(base.hp * stageScale * mult),
+    atk: Math.round(base.atk * stageScale * mult),
+    def: Math.round(base.def * stageScale * mult),
+  };
+}
+
+/* =====================================================================
+   RARITY / GACHA SYSTEM
+   ===================================================================== */
+const RARITY_TABLE = [
+  { key: 'common',    weight: 50, mult: 1.0, label: 'Common' },
+  { key: 'good',      weight: 30, mult: 1.5, label: 'Good' },
+  { key: 'rare',      weight: 15, mult: 2.2, label: 'Rare' },
+  { key: 'epic',      weight: 4,  mult: 3.5, label: 'Epic' },
+  { key: 'legendary', weight: 1,  mult: 5.5, label: 'Legendary' },
+];
+
+function rollRarity() {
+  const total = RARITY_TABLE.reduce((s, r) => s + r.weight, 0); // 100
+  let roll = Math.random() * total;
+  for (const r of RARITY_TABLE) {
+    if (roll < r.weight) return r;
+    roll -= r.weight;
+  }
+  return RARITY_TABLE[0];
+}
+
+const SLOT_BASE_VALUE = { weapon: 3, armor: 2, ring: 8 };
+
+function rollItem(slotType, stage) {
+  const rarity = rollRarity();
+  const base = SLOT_BASE_VALUE[slotType];
+  const stageScale = 1 + (stage - 1) * 0.12;
+  const value = Math.max(1, Math.round(base * rarity.mult * stageScale));
+  return {
+    slot: slotType,
+    rarity: rarity.key,
+    rarityLabel: rarity.label,
+    value,
+    icon: EQUIPMENT_ICONS[slotType][rarity.key],
+    name: `${rarity.label} ${SLOT_NAMES[slotType]}`,
+  };
+}
+
+function rollGachaItem(stage) {
+  const slots = ['weapon', 'armor', 'ring'];
+  const slotType = slots[Math.floor(Math.random() * slots.length)];
+  return rollItem(slotType, stage);
+}
+
+function getSellValue(item) {
+  return Math.floor(item.value * 4);
+}
+
+/* =====================================================================
+   PLAYER STATE
+   ===================================================================== */
+let player = {
+  gold: 100,
+  stage: 1,
+  baseStats: { hp: 50, atk: 10, def: 5 },
+  upgradeLevels: { hp: 0, atk: 0, def: 0 },
+  currentHp: 50,
+  equipment: { weapon: null, armor: null, ring: null },
+  chests: 1, // เริ่มต้นให้ 1 กล่อง เพื่อให้ทดสอบระบบกาชาได้ทันที
+  autoBattle: false,
+  encounter: null, // มอนสเตอร์ปัจจุบันของด่านนี้ (สุ่มครั้งเดียวต่อด่าน)
+  pendingGacha: null, // ไอเทมที่เพิ่งสุ่มได้ รอ Equip/Sell
+};
+
+function getMaxHp(p) { return p.baseStats.hp + p.upgradeLevels.hp * 10 + (p.equipment.ring ? p.equipment.ring.value : 0); }
+function getAtk(p)   { return p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0); }
+function getDef(p)   { return p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0); }
+function getCP(p)    { return Math.round(getMaxHp(p) * 0.5 + getAtk(p) * 2 + getDef(p) * 1.5); }
+function getPlayerLevel(p) { return 1 + p.upgradeLevels.hp + p.upgradeLevels.atk + p.upgradeLevels.def; }
+function getUpgradeCost(statKey) {
+  const n = player.upgradeLevels[statKey];
+  return Math.floor(20 * Math.pow(1.15, n));
+}
+
+function ensureEncounter() {
+  if (!player.encounter) {
+    player.encounter = getStageMonster(player.stage);
+  }
+}
+
+/* =====================================================================
+   COMBAT
+   ===================================================================== */
+function resolveBattle() {
+  ensureEncounter();
+  const monster = player.encounter;
+  let playerHp = getMaxHp(player);
+  let monsterHp = monster.hp;
+  const atk = getAtk(player), def = getDef(player);
+  const log = [`เจอ ${monster.name} (ด่าน ${player.stage}, ${tierLabel(monster.tier)})`];
+
+  let turn = 0;
+  while (playerHp > 0 && monsterHp > 0 && turn < 200) {
+    turn++;
+    const dmgToMonster = Math.max(1, atk - monster.def);
+    monsterHp -= dmgToMonster;
+    log.push(`คุณโจมตี ${monster.name} เป็นดาเมจ ${dmgToMonster}`);
+    if (monsterHp <= 0) { log.push(`${monster.name} พ่ายแพ้!`); break; }
+
+    const dmgToPlayer = Math.max(1, monster.atk - def);
+    playerHp -= dmgToPlayer;
+    log.push(`${monster.name} โจมตีคุณเป็นดาเมจ ${dmgToPlayer}`);
+    if (playerHp <= 0) { log.push('คุณพ่ายแพ้...'); break; }
+  }
+
+  player.currentHp = Math.max(0, playerHp);
+  monster.hp = Math.max(0, monsterHp);
+
+  return { victory: monsterHp <= 0 && playerHp > 0, monster, log };
+}
+
+function tierLabel(tier) {
+  if (tier === 'midboss') return 'Mid-Boss';
+  if (tier === 'bigboss') return 'Big-Boss';
+  return 'ปกติ';
+}
+
+function grantChest(n) {
+  player.chests += n;
+}
+
+function onBattleResolved(result) {
+  appendLog(result.log);
+  if (result.victory) {
+    const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
+    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.2) * bossMult);
+    player.gold += goldDrop;
+    appendLog([`ได้รับ ${goldDrop} Gold`]);
+
+    if (result.monster.tier === 'midboss') {
+      grantChest(1);
+      appendLog(['ได้รับกล่องสมบัติ 1 ใบ']);
+    } else if (result.monster.tier === 'bigboss') {
+      grantChest(3);
+      appendLog(['ได้รับกล่องสมบัติ 3 ใบ']);
+    }
+
+    player.stage += 1;
+    player.encounter = null; // สุ่มมอนสเตอร์ใหม่สำหรับด่านถัดไป
+  }
+  player.currentHp = getMaxHp(player); // ฟื้น HP เต็มก่อนด่านถัดไป/หลังพ่ายแพ้ (แนวเกม idle ไม่ลงโทษหนัก)
+  ensureEncounter();
+  renderAll();
+}
+
+/* =====================================================================
+   AUTO-BATTLE (กัน setInterval ซ้อนกันเวลาผู้ใช้กดเปิด/ปิดรัวๆ)
+   ===================================================================== */
+let autoBattleHandle = null;
+
+function toggleAutoBattle() {
+  player.autoBattle = !player.autoBattle;
+  if (player.autoBattle) {
+    startAutoBattle();
+  } else {
+    stopAutoBattle();
+  }
+  renderAll();
+}
+
+function startAutoBattle() {
+  if (autoBattleHandle !== null) return; // กันสร้าง interval ซ้ำ
+  autoBattleHandle = setInterval(() => {
+    if (!player.autoBattle) { stopAutoBattle(); return; }
+    onBattleResolved(resolveBattle());
+  }, 1500);
+}
+
+function stopAutoBattle() {
+  if (autoBattleHandle !== null) {
+    clearInterval(autoBattleHandle);
+    autoBattleHandle = null;
+  }
+}
+
+/* =====================================================================
+   RENDERING
+   ===================================================================== */
+function appendLog(lines) {
+  const panel = document.getElementById('logPanel');
+  lines.forEach(line => {
+    const div = document.createElement('div');
+    div.textContent = line;
+    panel.appendChild(div);
+  });
+  // จำกัดจำนวนบรรทัด log ไม่ให้ยาวไม่มีที่สิ้นสุด
+  while (panel.children.length > 300) {
+    panel.removeChild(panel.firstChild);
+  }
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function renderEquipSlot(elId, item) {
+  const el = document.getElementById(elId);
+  el.className = 'item-slot' + (item ? ` item-slot--${item.rarity}` : '');
+  el.innerHTML = '<span class="slot-label"></span>';
+  if (item) {
+    const img = document.createElement('img');
+    img.src = item.icon;
+    img.alt = item.name;
+    img.onerror = () => { img.style.display = 'none'; };
+    el.insertBefore(img, el.firstChild);
+  }
+  const labelText = el.id === 'slotWeapon' ? 'อาวุธ' : el.id === 'slotArmor' ? 'เกราะ' : 'แหวน';
+  el.querySelector('.slot-label').textContent = item ? `+${item.value}` : labelText;
+}
+
+function renderCharacterPanel() {
+  document.getElementById('goldValue').textContent = Math.floor(player.gold);
+  document.getElementById('playerLevel').textContent = getPlayerLevel(player);
+
+  const maxHp = getMaxHp(player);
+  const hpPct = Math.max(0, Math.min(100, (player.currentHp / maxHp) * 100));
+  document.getElementById('hpBarFill').style.width = hpPct + '%';
+  document.getElementById('hpBarLabel').textContent = `${Math.max(0, Math.round(player.currentHp))} / ${maxHp}`;
+
+  document.getElementById('statAtk').textContent = getAtk(player);
+  document.getElementById('statDef').textContent = getDef(player);
+  document.getElementById('statCp').textContent = getCP(player);
+
+  renderEquipSlot('slotWeapon', player.equipment.weapon);
+  renderEquipSlot('slotArmor', player.equipment.armor);
+  renderEquipSlot('slotRing', player.equipment.ring);
+
+  document.getElementById('costHp').textContent = getUpgradeCost('hp');
+  document.getElementById('costAtk').textContent = getUpgradeCost('atk');
+  document.getElementById('costDef').textContent = getUpgradeCost('def');
+
+  document.getElementById('btnUpgradeHp').disabled = player.gold < getUpgradeCost('hp');
+  document.getElementById('btnUpgradeAtk').disabled = player.gold < getUpgradeCost('atk');
+  document.getElementById('btnUpgradeDef').disabled = player.gold < getUpgradeCost('def');
+}
+
+function renderChestPanel() {
+  document.getElementById('chestCount').textContent = player.chests;
+  document.getElementById('btnOpenChest').disabled = player.chests <= 0;
+
+  const sprite = document.getElementById('chestSprite');
+  // ใช้ภาพหีบระดับ common แบบปิดเป็นค่าเริ่มต้นก่อนเปิด (ยังไม่รู้ rarity ล่วงหน้า)
+  sprite.style.backgroundImage = `url('${CHEST_ICONS.common.closed}')`;
+
+  const resultBox = document.getElementById('gachaResult');
+  if (player.pendingGacha) {
+    resultBox.style.display = 'block';
+    const item = player.pendingGacha;
+    document.getElementById('gachaItemIcon').src = item.icon;
+    const nameEl = document.getElementById('gachaItemName');
+    nameEl.textContent = item.name;
+    nameEl.className = `rarity-${item.rarity}`;
+    document.getElementById('gachaItemValue').textContent = `+${item.value} (สลับกันขาย ${getSellValue(item)} Gold)`;
+    sprite.style.backgroundImage = `url('${CHEST_ICONS[item.rarity].open}')`;
+  } else {
+    resultBox.style.display = 'none';
+  }
+}
+
+function renderBattlePanel() {
+  document.getElementById('stageNum').textContent = player.stage;
+  document.getElementById('bgScene').style.backgroundImage = `url('${getBgForStage(player.stage)}')`;
+
+  ensureEncounter();
+  const monster = player.encounter;
+  document.getElementById('monsterSprite').src = monster.icon;
+  document.getElementById('monsterSprite').style.opacity = 1;
+  document.getElementById('monsterName').textContent = monster.name;
+
+  const tierBadge = document.getElementById('tierBadge');
+  tierBadge.textContent = tierLabel(monster.tier);
+  tierBadge.className = `tier-badge tier-${monster.tier}`;
+
+  const hpPct = Math.max(0, Math.min(100, (monster.hp / monster.maxHp) * 100));
+  document.getElementById('monsterHpFill').style.width = hpPct + '%';
+  document.getElementById('monsterHpLabel').textContent = `${Math.max(0, monster.hp)} / ${monster.maxHp}`;
+
+  document.getElementById('btnFight').disabled = player.autoBattle;
+  document.getElementById('btnAutoBattle').textContent = `Auto-Battle: ${player.autoBattle ? 'ON' : 'OFF'}`;
+  document.getElementById('btnAutoBattle').className = `btn ${player.autoBattle ? 'btn--danger' : 'btn--primary'}`;
+}
+
+function renderAll() {
+  renderCharacterPanel();
+  renderChestPanel();
+  renderBattlePanel();
+}
+
+/* =====================================================================
+   EVENT HANDLERS
+   ===================================================================== */
+document.getElementById('btnUpgradeHp').addEventListener('click', () => {
+  const cost = getUpgradeCost('hp');
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  player.upgradeLevels.hp += 1;
+  player.currentHp = getMaxHp(player);
+  renderAll();
+});
+
+document.getElementById('btnUpgradeAtk').addEventListener('click', () => {
+  const cost = getUpgradeCost('atk');
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  player.upgradeLevels.atk += 1;
+  renderAll();
+});
+
+document.getElementById('btnUpgradeDef').addEventListener('click', () => {
+  const cost = getUpgradeCost('def');
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  player.upgradeLevels.def += 1;
+  renderAll();
+});
+
+document.getElementById('btnOpenChest').addEventListener('click', () => {
+  if (player.chests <= 0) return;
+  player.chests -= 1;
+  player.pendingGacha = rollGachaItem(player.stage);
+  appendLog([`เปิดกล่อง: ได้รับ ${player.pendingGacha.name}`]);
+  renderAll();
+});
+
+document.getElementById('btnEquipItem').addEventListener('click', () => {
+  if (!player.pendingGacha) return;
+  const item = player.pendingGacha;
+  player.equipment[item.slot] = item;
+  player.pendingGacha = null;
+  player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+  appendLog([`สวมใส่ ${item.name} เรียบร้อย`]);
+  renderAll();
+});
+
+document.getElementById('btnSellItem').addEventListener('click', () => {
+  if (!player.pendingGacha) return;
+  const item = player.pendingGacha;
+  const value = getSellValue(item);
+  player.gold += value;
+  player.pendingGacha = null;
+  appendLog([`ขาย ${item.name} ได้ ${value} Gold`]);
+  renderAll();
+});
+
+document.getElementById('btnFight').addEventListener('click', () => {
+  if (player.autoBattle) return;
+  onBattleResolved(resolveBattle());
+});
+
+document.getElementById('btnAutoBattle').addEventListener('click', () => {
+  toggleAutoBattle();
+});
+
+/* =====================================================================
+   INIT
+   ===================================================================== */
+ensureEncounter();
+renderAll();
+</script>
+</body>
+</html>
