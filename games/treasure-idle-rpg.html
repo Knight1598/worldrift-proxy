@@ -674,6 +674,38 @@ function ensureEncounter() {
 }
 
 /* =====================================================================
+   SAVE / LOAD (localStorage — เก็บความคืบหน้าไว้เมื่อปิดแท็บ/รีเฟรช)
+   ===================================================================== */
+const SAVE_KEY = 'treasureIdleRpgSave';
+
+function saveGame() {
+  const data = {
+    gold: player.gold,
+    stage: player.stage,
+    baseStats: player.baseStats,
+    upgradeLevels: player.upgradeLevels,
+    currentHp: player.currentHp,
+    equipment: player.equipment,
+    chests: player.chests,
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
+}
+
+function loadGame() {
+  let raw;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { return; }
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    Object.assign(player, {
+      gold: data.gold, stage: data.stage, baseStats: data.baseStats,
+      upgradeLevels: data.upgradeLevels, currentHp: data.currentHp,
+      equipment: data.equipment, chests: data.chests,
+    });
+  } catch (e) { /* เซฟไฟล์เสีย ข้ามไปเริ่มเกมใหม่ */ }
+}
+
+/* =====================================================================
    COMBAT
    ===================================================================== */
 function resolveBattle() {
@@ -876,6 +908,7 @@ function renderAll() {
   renderCharacterPanel();
   renderChestPanel();
   renderBattlePanel();
+  saveGame();
 }
 
 /* =====================================================================
@@ -946,6 +979,7 @@ document.getElementById('btnAutoBattle').addEventListener('click', () => {
 /* =====================================================================
    INIT
    ===================================================================== */
+loadGame();
 ensureEncounter();
 renderAll();
 </script>
