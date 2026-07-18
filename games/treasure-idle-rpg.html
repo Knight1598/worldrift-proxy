@@ -399,6 +399,28 @@
   .gem-shop-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .gem-shop-item .btn { margin-top: 0; font-size: 0.7rem; }
 
+  /* สัตว์เลี้ยง (Pets) */
+  .pet-section { margin-top: 12px; border-top: 2px dashed var(--divider); padding-top: 10px; }
+  .pet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+  .pet-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: #1c1730;
+    border: 2px solid var(--divider);
+    border-radius: 4px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+  .pet-card--equipped { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); }
+  .pet-card .pet-icon { width: 40px; height: 40px; object-fit: contain; }
+  .pet-card .pet-name { font-size: 0.68rem; color: var(--text-main); margin-top: 2px; }
+  .pet-card .pet-lv-stars { font-size: 0.62rem; color: var(--accent-gold); }
+  .pet-card .pet-desc { font-size: 0.58rem; color: #8a84a0; margin: 1px 0 4px; }
+  .pet-card .btn { font-size: 0.62rem; padding: 4px 6px; margin-top: 3px; }
+  .pet-empty { grid-column: 1 / -1; text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 10px 0; }
+
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (กรอบช่องไอเทม/อุปกรณ์)
      วางไฟล์ในโฟลเดอร์ assets/ui/
@@ -816,6 +838,17 @@
         <h3 class="inventory-title">Gem Shop 💎</h3>
         <div class="gem-shop-list" id="gemShopList"></div>
       </div>
+
+      <div class="pet-section">
+        <div class="collapsible-header collapsed" data-target="petBody">
+          <span>สัตว์เลี้ยง</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="petBody">
+          <button class="btn btn--primary" id="btnRollPet">สุ่มสัตว์เลี้ยง (5 💎)</button>
+          <div class="pet-grid" id="petGrid"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ Panel 3: Battle ============ -->
@@ -1200,6 +1233,9 @@ let player = {
   buffFightsLeft: 0, // จำนวนไฟต์ที่เหลือของบัฟจากโพชั่นฟ้า
   buffMultiplier: 1, // ตัวคูณ ATK/DEF ชั่วคราวจากโพชั่นฟ้า
   settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false },
+  pets: {}, // key ของสัตว์เลี้ยงที่มี -> { level, stars } (ดู PET_DEFS)
+  equippedPet: null, // key ของสัตว์เลี้ยงที่ติดตั้งอยู่ (ให้บัฟได้ทีละ 1 ตัว)
+  petFood: 0, // ได้จาก Boss Raid ใช้แทน Gold ในการอัปเลเวลสัตว์เลี้ยง
   // ตัวนับความคืบหน้าภารกิจ (ดู QUESTS) — prestigeCount สะสมตลอดชีพ ส่วนที่เหลือถูกรีเซ็ตกลับ 0
   // ทุกครั้งที่ Prestige (ดู doPrestige) เพื่อให้ทำภารกิจรับรางวัลใหม่ได้ทุกรอบ
   stats: {
@@ -1242,13 +1278,15 @@ function getPrestigeGain(p) { return Math.floor((p.highestStage || 1) / PRESTIGE
 function getMaxHp(p) {
   const base = p.baseStats.hp + p.upgradeLevels.hp * 10 + (p.equipment.ring ? p.equipment.ring.value : 0);
   const skillMult = p.equippedSkill === 'nature' ? 1.15 : 1;
-  return Math.round(base * skillMult * getPrestigeMultiplier(p));
+  const petMult = 1 + getPetBonusValue('hp');
+  return Math.round(base * skillMult * petMult * getPrestigeMultiplier(p));
 }
 function getAtk(p) {
   const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0);
   const skillMult = p.equippedSkill === 'fire' ? 1.08 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
-  return Math.round(base * skillMult * buffMult * getPrestigeMultiplier(p));
+  const petMult = 1 + getPetBonusValue('atk');
+  return Math.round(base * skillMult * buffMult * petMult * getPrestigeMultiplier(p));
 }
 function getDef(p) {
   const base = p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0) + (p.equipment.helmet ? p.equipment.helmet.value : 0);
@@ -1367,6 +1405,88 @@ function buyFromGemShop(itemKey) {
   renderAll();
 }
 
+// ===============================================
+// สัตว์เลี้ยง (Pets) — สุ่มด้วยเพชร (พรีเมียม), ติดตั้งได้ทีละ 1 ตัวเพื่อรับบัฟ
+// ใช้สไปรต์มอนสเตอร์ที่มีอยู่แล้ว (MONSTER_ICONS) แปลงเป็นสัตว์เลี้ยงแทนการตัด asset ใหม่
+// ===============================================
+const PET_DEFS = [
+  { key: 'slime_pet',  name: 'สไลม์น้อย',  icon: MONSTER_ICONS.slime,      rarity: 'common',    buffType: 'atk',            baseBuff: 0.03 },
+  { key: 'bat_pet',    name: 'ค้างคาวน้อย', icon: MONSTER_ICONS.bat,        rarity: 'common',    buffType: 'hp',             baseBuff: 0.04 },
+  { key: 'wolf_pet',   name: 'หมาป่าเงา',   icon: MONSTER_ICONS.dark_wolf,  rarity: 'rare',      buffType: 'atk',            baseBuff: 0.05 },
+  { key: 'golem_pet',  name: 'โกเลมหิน',    icon: MONSTER_ICONS.stone_golem,rarity: 'epic',      buffType: 'hp',             baseBuff: 0.07 },
+  { key: 'demon_pet',  name: 'ปีศาจแดง',    icon: MONSTER_ICONS.red_demon,  rarity: 'epic',      buffType: 'chestDropBonus', baseBuff: 0.05 },
+  { key: 'dragon_pet', name: 'มังกรม่วง',    icon: MONSTER_ICONS.purple_dragon, rarity: 'legendary', buffType: 'atk',        baseBuff: 0.10 },
+];
+const PET_GACHA_COST = 5; // เพชรต่อครั้ง
+const PET_MAX_STARS = 5;
+const PET_RARITY_WEIGHTS = [
+  { key: 'common', weight: 55 },
+  { key: 'rare', weight: 30 },
+  { key: 'epic', weight: 12 },
+  { key: 'legendary', weight: 3 },
+];
+
+function rollPetRarity() {
+  const total = PET_RARITY_WEIGHTS.reduce((s, r) => s + r.weight, 0);
+  let roll = Math.random() * total;
+  for (const r of PET_RARITY_WEIGHTS) {
+    if (roll < r.weight) return r.key;
+    roll -= r.weight;
+  }
+  return PET_RARITY_WEIGHTS[0].key;
+}
+
+function rollPetGacha() {
+  if (player.gems < PET_GACHA_COST) return null;
+  player.gems -= PET_GACHA_COST;
+  const rarity = rollPetRarity();
+  const candidates = PET_DEFS.filter(p => p.rarity === rarity);
+  const pet = candidates[Math.floor(Math.random() * candidates.length)];
+  const owned = player.pets[pet.key];
+  if (owned) {
+    // ได้ตัวซ้ำ: ย่อยเพิ่มดาวแทนที่จะเก็บซ้ำซ้อน (มีสัตว์เลี้ยงแต่ละสายพันธุ์ได้แค่ 1 ตัว)
+    owned.stars = Math.min(PET_MAX_STARS, owned.stars + 1);
+    appendLog([`ได้ ${pet.name} ซ้ำ! ย่อยเพิ่มดาวเป็น ${owned.stars} ★`]);
+  } else {
+    player.pets[pet.key] = { level: 1, stars: 1 };
+    appendLog([`ได้สัตว์เลี้ยงใหม่: ${pet.name}!`]);
+  }
+  return pet;
+}
+
+function getPetLevelUpCost(petKey) {
+  const owned = player.pets[petKey];
+  return owned ? 50 * owned.level : 0;
+}
+
+function levelUpPet(petKey) {
+  const owned = player.pets[petKey];
+  if (!owned) return;
+  const cost = getPetLevelUpCost(petKey);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  owned.level += 1;
+  const def = PET_DEFS.find(p => p.key === petKey);
+  appendLog([`${def.name} อัปเลเวลเป็น Lv.${owned.level}`]);
+  renderAll();
+}
+
+function equipPet(petKey) {
+  if (!player.pets[petKey]) return;
+  player.equippedPet = player.equippedPet === petKey ? null : petKey;
+  player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+  renderAll();
+}
+
+// ค่าบัฟจากสัตว์เลี้ยงที่ติดตั้งอยู่ (0 ถ้าไม่มีตัวติดตั้ง หรือสัตว์เลี้ยงนั้นไม่ตรงกับ buffType ที่ถาม)
+function getPetBonusValue(buffType) {
+  if (!player.equippedPet) return 0;
+  const def = PET_DEFS.find(p => p.key === player.equippedPet);
+  const owned = player.pets[player.equippedPet];
+  if (!def || !owned || def.buffType !== buffType) return 0;
+  return def.baseBuff * owned.level * (1 + (owned.stars - 1) * 0.5);
+}
+
 function ensureEncounter() {
   if (!player.encounter) {
     player.encounter = getStageMonster(player.stage);
@@ -1467,6 +1587,9 @@ function saveGame() {
     settings: player.settings,
     stats: player.stats,
     claimedQuests: player.claimedQuests,
+    pets: player.pets,
+    equippedPet: player.equippedPet,
+    petFood: player.petFood,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -1497,6 +1620,9 @@ function loadGame() {
         { itemsByRarity: Object.assign({ common: 0, good: 0, rare: 0, epic: 0, legendary: 0 }, (data.stats && data.stats.itemsByRarity) || {}) }
       ),
       claimedQuests: data.claimedQuests || [],
+      pets: data.pets || {},
+      equippedPet: data.equippedPet || null,
+      petFood: data.petFood || 0,
     });
   } catch (e) { /* เซฟไฟล์เสีย ข้ามไปเริ่มเกมใหม่ */ }
 }
@@ -1608,9 +1734,9 @@ function finalizeBattle(result) {
       grantChest(3);
       player.gems += 1;
       appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด']);
-    } else if (Math.random() < 0.08) {
-      // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลย
-      // จนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไปในช่วงต้นเกม
+    } else if (Math.random() < 0.08 + getPetBonusValue('chestDropBonus')) {
+      // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม (+ โบนัสจากสัตว์เลี้ยงประเภท chestDropBonus ถ้ามี)
+      // แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลยจนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไป
       grantChest(1);
       appendLog(['มอนสเตอร์ดรอปกล่องสมบัติ +1 ใบ!']);
     }
@@ -1906,6 +2032,7 @@ function renderChestPanel() {
 
   renderInventory();
   renderGemShop();
+  renderPetGrid();
 }
 
 function renderInventory() {
@@ -1961,6 +2088,58 @@ function renderGemShop() {
     btn.dataset.shopKey = shopItem.key;
     row.appendChild(btn);
     list.appendChild(row);
+  });
+}
+
+const PET_BUFF_LABELS = { atk: 'ATK', hp: 'HP สูงสุด', chestDropBonus: 'โอกาสดรอปกล่อง' };
+
+function renderPetGrid() {
+  document.getElementById('btnRollPet').disabled = player.gems < PET_GACHA_COST;
+  const grid = document.getElementById('petGrid');
+  grid.innerHTML = '';
+  const ownedKeys = Object.keys(player.pets);
+  if (ownedKeys.length === 0) {
+    grid.innerHTML = '<div class="pet-empty">ยังไม่มีสัตว์เลี้ยง ลองสุ่มดูสิ!</div>';
+    return;
+  }
+  ownedKeys.forEach(key => {
+    const def = PET_DEFS.find(p => p.key === key);
+    const owned = player.pets[key];
+    const card = document.createElement('div');
+    card.className = 'pet-card' + (player.equippedPet === key ? ' pet-card--equipped' : '');
+
+    const icon = document.createElement('img');
+    icon.className = 'pet-icon';
+    icon.src = def.icon;
+    icon.alt = def.name;
+    icon.onerror = () => { icon.style.display = 'none'; };
+    const name = document.createElement('div');
+    name.className = 'pet-name';
+    name.textContent = def.name;
+    const lvStars = document.createElement('div');
+    lvStars.className = 'pet-lv-stars';
+    lvStars.textContent = `Lv.${owned.level} ${'★'.repeat(owned.stars)}`;
+    const desc = document.createElement('div');
+    desc.className = 'pet-desc';
+    const buffPct = Math.round(def.baseBuff * owned.level * (1 + (owned.stars - 1) * 0.5) * 100);
+    desc.textContent = `+${buffPct}% ${PET_BUFF_LABELS[def.buffType]}`;
+
+    const btnEquip = document.createElement('button');
+    btnEquip.className = 'btn btn--info';
+    btnEquip.textContent = player.equippedPet === key ? 'ถอด' : 'ติดตั้ง';
+    btnEquip.dataset.action = 'equip';
+    btnEquip.dataset.pet = key;
+
+    const upgradeCost = getPetLevelUpCost(key);
+    const btnUpgrade = document.createElement('button');
+    btnUpgrade.className = 'btn btn--success';
+    btnUpgrade.textContent = `อัปเลเวล (${upgradeCost} Gold)`;
+    btnUpgrade.dataset.action = 'upgrade';
+    btnUpgrade.dataset.pet = key;
+    btnUpgrade.disabled = player.gold < upgradeCost;
+
+    card.append(icon, name, lvStars, desc, btnEquip, btnUpgrade);
+    grid.appendChild(card);
   });
 }
 
@@ -2179,6 +2358,21 @@ document.getElementById('gemShopList').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn || !btn.dataset.shopKey) return;
   buyFromGemShop(btn.dataset.shopKey);
+});
+
+document.getElementById('btnRollPet').addEventListener('click', () => {
+  rollPetGacha();
+  renderAll();
+});
+
+document.getElementById('petGrid').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !btn.dataset.pet) return;
+  if (btn.dataset.action === 'equip') {
+    equipPet(btn.dataset.pet);
+  } else if (btn.dataset.action === 'upgrade') {
+    levelUpPet(btn.dataset.pet);
+  }
 });
 
 document.getElementById('skillGrid').addEventListener('click', (e) => {
