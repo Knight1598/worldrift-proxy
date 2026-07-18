@@ -221,6 +221,34 @@
   .settings-row .btn { width: auto; margin-top: 0; padding: 6px 10px; }
   #btnCloseSettings { margin-top: 10px; }
 
+  /* ดันเจี้ยนท้าทาย (Boss Raid) — โหมดพิเศษแยกจากด่านปกติ ดวลดาเมจแบบจำกัดเวลาจริง */
+  .raid-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 55;
+  }
+  .raid-modal-box {
+    background: #201a35;
+    border: 3px solid var(--divider);
+    border-radius: 8px;
+    padding: 18px;
+    width: min(360px, 92vw);
+    text-align: center;
+  }
+  .raid-modal-box h2 { margin: 0 0 12px; color: var(--accent-gold); font-size: 1.05rem; }
+  .raid-desc { font-size: 0.78rem; color: #cfc7ae; margin: 0 0 12px; line-height: 1.5; }
+  .raid-highlight { color: var(--accent-gold); font-weight: bold; }
+  .raid-cooldown-note { font-size: 0.75rem; color: #8a84a0; margin-top: 8px; }
+  #raidActive { position: relative; }
+  .raid-boss-sprite { width: 80px; height: 80px; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(2px 2px 0 #000); }
+  .raid-timer { font-size: 1.3rem; font-weight: bold; color: var(--accent-gold); margin: 6px 0; }
+  #raidResultText { font-size: 0.85rem; margin-bottom: 12px; line-height: 1.5; }
+  #btnCloseRaid { margin-top: 10px; }
+
   .game-wrap {
     max-width: 1200px;
     margin: 0 auto;
@@ -420,6 +448,7 @@
   .pet-card .pet-desc { font-size: 0.58rem; color: #8a84a0; margin: 1px 0 4px; }
   .pet-card .btn { font-size: 0.62rem; padding: 4px 6px; margin-top: 3px; }
   .pet-empty { grid-column: 1 / -1; text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 10px 0; }
+  .pet-food-count { font-size: 0.72rem; color: var(--accent-gold); margin-top: 6px; }
 
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (กรอบช่องไอเทม/อุปกรณ์)
@@ -730,6 +759,31 @@
   </div>
 </div>
 
+<div class="raid-modal" id="raidModal" style="display:none;">
+  <div class="raid-modal-box">
+    <h2>ดันเจี้ยนท้าทาย</h2>
+    <div id="raidIntro">
+      <p class="raid-desc">ทำดาเมจให้ได้มากที่สุดภายใน 30 วินาที ถ้าถึงเกณฑ์ที่กำหนดจะได้รับ <span class="raid-highlight">อาหารสัตว์เลี้ยง</span> และ <span class="raid-highlight">เพชร</span></p>
+      <button class="btn btn--danger" id="btnStartRaid">เริ่ม Raid</button>
+      <div class="raid-cooldown-note" id="raidCooldownNote"></div>
+    </div>
+    <div id="raidActive" style="display:none;">
+      <img class="raid-boss-sprite" id="raidBossSprite" src="" alt="raid boss">
+      <div class="raid-timer" id="raidTimer">30.0s</div>
+      <div class="hp-bar-bg" id="raidHpBarBg">
+        <div class="hp-bar-fill" id="raidHpFill" style="width:100%;"></div>
+        <div class="hp-bar-label" id="raidHpLabel">- / -</div>
+      </div>
+      <button class="btn btn--danger" id="btnRaidAttack">⚔️ โจมตี!</button>
+    </div>
+    <div id="raidResult" style="display:none;">
+      <div class="raid-result-text" id="raidResultText"></div>
+      <button class="btn btn--neutral" id="btnCloseRaidResult">ปิด</button>
+    </div>
+    <button class="btn btn--neutral" id="btnCloseRaid">ปิด</button>
+  </div>
+</div>
+
 <div class="game-wrap">
   <div class="board">
 
@@ -846,6 +900,7 @@
         </div>
         <div class="collapsible-body collapsed" id="petBody">
           <button class="btn btn--primary" id="btnRollPet">สุ่มสัตว์เลี้ยง (5 💎)</button>
+          <div class="pet-food-count">🍖 อาหารสัตว์เลี้ยง: <span id="petFoodCount">0</span></div>
           <div class="pet-grid" id="petGrid"></div>
         </div>
       </div>
@@ -870,6 +925,7 @@
         <button class="btn btn--neutral" id="btnFight">สู้ (Fight)</button>
         <button class="btn btn--primary" id="btnAutoBattle">Auto-Battle: OFF</button>
       </div>
+      <button class="btn btn--danger" id="btnOpenRaid" style="margin-top:10px;">⚔️ ดันเจี้ยนท้าทาย (Boss Raid)</button>
     </section>
 
     <!-- ============ Panel 4: Quests / Achievements ============ -->
@@ -1235,7 +1291,8 @@ let player = {
   settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false },
   pets: {}, // key ของสัตว์เลี้ยงที่มี -> { level, stars } (ดู PET_DEFS)
   equippedPet: null, // key ของสัตว์เลี้ยงที่ติดตั้งอยู่ (ให้บัฟได้ทีละ 1 ตัว)
-  petFood: 0, // ได้จาก Boss Raid ใช้แทน Gold ในการอัปเลเวลสัตว์เลี้ยง
+  petFood: 0, // ได้จาก Boss Raid ใช้ป้อนสัตว์เลี้ยงแทน Gold ได้ (1 อาหาร = 1 เลเวล ฟรี)
+  raidCooldownUntil: 0, // timestamp (Date.now()) ที่จะเข้า Boss Raid รอบถัดไปได้
   // ตัวนับความคืบหน้าภารกิจ (ดู QUESTS) — prestigeCount สะสมตลอดชีพ ส่วนที่เหลือถูกรีเซ็ตกลับ 0
   // ทุกครั้งที่ Prestige (ดู doPrestige) เพื่อให้ทำภารกิจรับรางวัลใหม่ได้ทุกรอบ
   stats: {
@@ -1471,6 +1528,17 @@ function levelUpPet(petKey) {
   renderAll();
 }
 
+// ป้อนอาหารสัตว์เลี้ยง (ได้จาก Boss Raid): ฟรี ไม่ใช้ Gold แลกกับเลเวลได้ 1 อาหาร = 1 เลเวล
+function feedPet(petKey) {
+  const owned = player.pets[petKey];
+  if (!owned || player.petFood <= 0) return;
+  player.petFood -= 1;
+  owned.level += 1;
+  const def = PET_DEFS.find(p => p.key === petKey);
+  appendLog([`ป้อนอาหาร ${def.name} อัปเลเวลเป็น Lv.${owned.level}`]);
+  renderAll();
+}
+
 function equipPet(petKey) {
   if (!player.pets[petKey]) return;
   player.equippedPet = player.equippedPet === petKey ? null : petKey;
@@ -1490,6 +1558,117 @@ function getPetBonusValue(buffType) {
 function ensureEncounter() {
   if (!player.encounter) {
     player.encounter = getStageMonster(player.stage);
+  }
+}
+
+// ===============================================
+// ดันเจี้ยนท้าทาย (Boss Raid) — โหมดพิเศษแยกจากด่านปกติ: ดวลดาเมจแบบจำกัดเวลาจริง (30 วินาที)
+// ไม่ใช้ turn-based engine เดิม (resolveBattle) เพราะต้องการให้ผู้เล่นกดโจมตีเองสดๆ ภายในเวลาจำกัด
+// ใช้ cooldown ภายใน session แทน "รายวันจริง" เพื่อไม่ต้องผูก logic วันที่/timezone ที่เสี่ยงบั๊ก
+// ===============================================
+const RAID_DURATION_MS = 30000;
+const RAID_COOLDOWN_MS = 60000;
+let raidSession = null; // { maxHp, hp, damageDealt, threshold, endsAt, tickHandle } ไม่ persist (เซสชันชั่วคราว)
+
+function getRaidBoss() {
+  // ใช้สไปรต์มอนสเตอร์ระดับสูงสุดที่มีอยู่แล้วเป็นภาพบอส Raid ไม่ต้องตัด asset ใหม่
+  const candidates = ['demon_king', 'purple_dragon', 'armored_golem_warrior'];
+  const key = candidates[Math.floor(Math.random() * candidates.length)];
+  return MONSTERS.find(m => m.key === key);
+}
+
+function isRaidOnCooldown() {
+  return Date.now() < (player.raidCooldownUntil || 0);
+}
+
+function startRaid() {
+  if (isRaidOnCooldown() || raidSession) return;
+  const boss = getRaidBoss();
+  const atk = getAtk(player);
+  raidSession = {
+    boss,
+    maxHp: atk * 60,
+    hp: atk * 60,
+    damageDealt: 0,
+    threshold: atk * 15,
+    endsAt: Date.now() + RAID_DURATION_MS,
+  };
+  document.getElementById('raidBossSprite').src = boss.icon;
+  document.getElementById('raidIntro').style.display = 'none';
+  document.getElementById('raidResult').style.display = 'none';
+  document.getElementById('raidActive').style.display = 'block';
+  renderRaidActive();
+  raidSession.tickHandle = setInterval(raidTick, 100);
+}
+
+function raidTick() {
+  if (!raidSession) return;
+  const msLeft = raidSession.endsAt - Date.now();
+  if (msLeft <= 0 || raidSession.hp <= 0) {
+    endRaid();
+    return;
+  }
+  renderRaidActive();
+}
+
+function raidAttack() {
+  if (!raidSession || raidSession.hp <= 0) return;
+  const atk = getAtk(player);
+  const isCrit = Math.random() < getCritChance(player);
+  let dmg = Math.max(1, atk);
+  if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
+  raidSession.hp = Math.max(0, raidSession.hp - dmg);
+  raidSession.damageDealt += dmg;
+  spawnDamagePopup(document.getElementById('raidBossSprite').parentElement, { kind: isCrit ? 'crit' : 'hit', dmg });
+  triggerHitEffect(document.getElementById('raidBossSprite'));
+  renderRaidActive();
+  if (raidSession.hp <= 0) endRaid();
+}
+
+function renderRaidActive() {
+  if (!raidSession) return;
+  const msLeft = Math.max(0, raidSession.endsAt - Date.now());
+  document.getElementById('raidTimer').textContent = `${(msLeft / 1000).toFixed(1)}s`;
+  const pct = Math.max(0, Math.min(100, (raidSession.hp / raidSession.maxHp) * 100));
+  document.getElementById('raidHpFill').style.width = pct + '%';
+  document.getElementById('raidHpLabel').textContent = `${raidSession.hp} / ${raidSession.maxHp}`;
+}
+
+function endRaid() {
+  if (!raidSession) return;
+  clearInterval(raidSession.tickHandle);
+  const success = raidSession.damageDealt >= raidSession.threshold;
+  player.raidCooldownUntil = Date.now() + RAID_COOLDOWN_MS;
+  document.getElementById('raidActive').style.display = 'none';
+  const resultText = document.getElementById('raidResultText');
+  if (success) {
+    const foodReward = 3;
+    const gemReward = 2;
+    player.petFood += foodReward;
+    player.gems += gemReward;
+    resultText.textContent = `สำเร็จ! ทำดาเมจรวม ${raidSession.damageDealt} ได้รับ 🍖 อาหารสัตว์เลี้ยง +${foodReward} และ 💎 เพชร +${gemReward}`;
+    appendLog([`Boss Raid สำเร็จ! ได้รับอาหารสัตว์เลี้ยง +${foodReward}, เพชร +${gemReward}`]);
+    showToast('🎉 Boss Raid สำเร็จ! ได้รางวัลแล้ว');
+  } else {
+    resultText.textContent = `ยังไม่ถึงเกณฑ์ (ทำดาเมจ ${raidSession.damageDealt} / ${raidSession.threshold}) ลองใหม่รอบหน้านะ!`;
+  }
+  document.getElementById('raidResult').style.display = 'block';
+  document.getElementById('btnCloseRaid').style.display = 'none'; // ใช้ปุ่ม "ปิด" ในผลลัพธ์แทน กันปุ่มซ้อนกัน
+  raidSession = null;
+  renderRaidModal();
+  renderAll();
+}
+
+function renderRaidModal() {
+  const btn = document.getElementById('btnStartRaid');
+  const note = document.getElementById('raidCooldownNote');
+  if (isRaidOnCooldown()) {
+    btn.disabled = true;
+    const secsLeft = Math.ceil((player.raidCooldownUntil - Date.now()) / 1000);
+    note.textContent = `รออีก ${secsLeft} วินาทีก่อนเข้ารอบถัดไป`;
+  } else {
+    btn.disabled = false;
+    note.textContent = '';
   }
 }
 
@@ -1590,6 +1769,7 @@ function saveGame() {
     pets: player.pets,
     equippedPet: player.equippedPet,
     petFood: player.petFood,
+    raidCooldownUntil: player.raidCooldownUntil,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -1623,6 +1803,7 @@ function loadGame() {
       pets: data.pets || {},
       equippedPet: data.equippedPet || null,
       petFood: data.petFood || 0,
+      raidCooldownUntil: data.raidCooldownUntil || 0,
     });
   } catch (e) { /* เซฟไฟล์เสีย ข้ามไปเริ่มเกมใหม่ */ }
 }
@@ -2095,6 +2276,7 @@ const PET_BUFF_LABELS = { atk: 'ATK', hp: 'HP สูงสุด', chestDropBonu
 
 function renderPetGrid() {
   document.getElementById('btnRollPet').disabled = player.gems < PET_GACHA_COST;
+  document.getElementById('petFoodCount').textContent = player.petFood;
   const grid = document.getElementById('petGrid');
   grid.innerHTML = '';
   const ownedKeys = Object.keys(player.pets);
@@ -2138,7 +2320,14 @@ function renderPetGrid() {
     btnUpgrade.dataset.pet = key;
     btnUpgrade.disabled = player.gold < upgradeCost;
 
-    card.append(icon, name, lvStars, desc, btnEquip, btnUpgrade);
+    const btnFeed = document.createElement('button');
+    btnFeed.className = 'btn btn--info';
+    btnFeed.textContent = 'ป้อนอาหาร (ฟรี)';
+    btnFeed.dataset.action = 'feed';
+    btnFeed.dataset.pet = key;
+    btnFeed.disabled = player.petFood <= 0;
+
+    card.append(icon, name, lvStars, desc, btnEquip, btnUpgrade, btnFeed);
     grid.appendChild(card);
   });
 }
@@ -2319,6 +2508,37 @@ document.getElementById('btnCloseSettings').addEventListener('click', () => {
   document.getElementById('settingsModal').style.display = 'none';
 });
 
+document.getElementById('btnOpenRaid').addEventListener('click', () => {
+  document.getElementById('raidIntro').style.display = 'block';
+  document.getElementById('raidActive').style.display = 'none';
+  document.getElementById('raidResult').style.display = 'none';
+  document.getElementById('btnCloseRaid').style.display = 'inline-block';
+  renderRaidModal();
+  document.getElementById('raidModal').style.display = 'flex';
+});
+document.getElementById('btnStartRaid').addEventListener('click', () => {
+  startRaid();
+});
+document.getElementById('btnRaidAttack').addEventListener('click', () => {
+  raidAttack();
+});
+document.getElementById('btnCloseRaidResult').addEventListener('click', () => {
+  document.getElementById('raidResult').style.display = 'none';
+  document.getElementById('raidIntro').style.display = 'block';
+  document.getElementById('btnCloseRaid').style.display = 'inline-block';
+  renderRaidModal();
+});
+document.getElementById('btnCloseRaid').addEventListener('click', () => {
+  if (raidSession) {
+    // ปิดกลางคันถือว่ายกเลิก Raid รอบนี้ (ไม่ได้รางวัล แต่ยังติด cooldown กันเปิด-ปิดรัวๆ เพื่อรีเซ็ตบอส)
+    clearInterval(raidSession.tickHandle);
+    raidSession = null;
+    player.raidCooldownUntil = Date.now() + RAID_COOLDOWN_MS;
+    saveGame();
+  }
+  document.getElementById('raidModal').style.display = 'none';
+});
+
 document.querySelectorAll('.collapsible-header').forEach(header => {
   header.addEventListener('click', () => {
     const body = document.getElementById(header.dataset.target);
@@ -2372,6 +2592,8 @@ document.getElementById('petGrid').addEventListener('click', (e) => {
     equipPet(btn.dataset.pet);
   } else if (btn.dataset.action === 'upgrade') {
     levelUpPet(btn.dataset.pet);
+  } else if (btn.dataset.action === 'feed') {
+    feedPet(btn.dataset.pet);
   }
 });
 
@@ -2401,6 +2623,10 @@ loadGame();
 ensureEncounter();
 renderAll();
 renderSettingsModal();
+// อัปเดตตัวนับ cooldown ของ Boss Raid มุมล่างของหน้าจอ intro ทุกวินาที เผื่อผู้เล่นเปิดโมดัลค้างไว้ดูนับถอยหลัง
+setInterval(() => {
+  if (!raidSession && document.getElementById('raidModal').style.display !== 'none') renderRaidModal();
+}, 1000);
 </script>
 </body>
 </html>
