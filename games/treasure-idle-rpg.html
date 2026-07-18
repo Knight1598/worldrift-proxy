@@ -290,6 +290,28 @@
   .gacha-actions { display: flex; gap: 6px; margin-top: 6px; }
   .gacha-actions .btn { margin-top: 0; }
 
+  /* คลังไอเทม (Inventory) */
+  .inventory-section { margin-top: 12px; }
+  .inventory-title { font-size: 0.85rem; color: #ffd76a; margin: 8px 0 4px; }
+  .inventory-list { max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+  .inventory-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #1c1730;
+    border: 1px solid #4a3a70;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 0.7rem;
+  }
+  .inventory-item img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+  .inventory-item .inv-name { flex: 1; }
+  .inventory-item .btn { width: auto; padding: 3px 8px; margin-top: 0; font-size: 0.62rem; }
+  .inventory-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 10px 0; }
+
+  /* Prestige */
+  .prestige-section { margin-top: 16px; border-top: 2px dashed #5a4a80; padding-top: 10px; }
+
   /* ฉากต่อสู้ */
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังฉากต่อสู้ เปลี่ยนตามช่วงด่าน)
@@ -381,6 +403,8 @@
 
       <div class="stat-line"><span>ATK</span><span id="statAtk">10</span></div>
       <div class="stat-line"><span>DEF</span><span id="statDef">5</span></div>
+      <div class="stat-line"><span>โอกาสคริติคอล</span><span id="statCrit">10%</span></div>
+      <div class="stat-line"><span>โอกาสหลบหลีก</span><span id="statDodge">5%</span></div>
       <div class="stat-line"><span>CP (พลังรบรวม)</span><span id="statCp">0</span></div>
 
       <div class="equip-slots">
@@ -400,6 +424,12 @@
           <button class="btn btn--danger" id="btnUpgradeDef">อัปเกรด DEF (<span id="costDef">-</span> Gold)</button>
         </div>
       </div>
+
+      <div class="prestige-section">
+        <div class="row"><span>Prestige Points</span><span id="prestigePoints">0</span></div>
+        <div class="row"><span>โบนัสถาวร (ATK/DEF/HP)</span><span id="prestigeBonus">+0%</span></div>
+        <button class="btn btn--success" id="btnPrestige">Prestige</button>
+      </div>
     </section>
 
     <!-- ============ Panel 2: Chest / Gacha ============ -->
@@ -417,9 +447,15 @@
           <div id="gachaItemValue">-</div>
           <div class="gacha-actions">
             <button class="btn btn--info" id="btnEquipItem">สวมใส่</button>
+            <button class="btn btn--neutral" id="btnKeepItem">เก็บไว้</button>
             <button class="btn btn--success" id="btnSellItem">ขายรับ Gold</button>
           </div>
         </div>
+      </div>
+
+      <div class="inventory-section">
+        <h3 class="inventory-title">คลังไอเทม (<span id="invCount">0</span>)</h3>
+        <div class="inventory-list" id="inventoryList"></div>
       </div>
     </section>
 
@@ -587,6 +623,8 @@ function getStageMonster(stage) {
   // HP ใช้ mult เต็มเพื่อความ "อึด" ของบอส แต่ ATK/DEF ใช้ sqrt(mult) แทน
   // ป้องกันไม่ให้ DEF ของบอสสูงจนหักล้าง ATK ผู้เล่นจนเหลือดาเมจ 1 แทบทุกครั้ง
   const offenseMult = Math.sqrt(mult);
+  // มอนสเตอร์ระดับสูง (มิด/บิ๊กบอส) มีโอกาสคริติคอลมากขึ้น ส่วนโอกาสหลบหลีกคงที่
+  const CRIT_BY_TIER = { normal: 0.05, midboss: 0.08, bigboss: 0.12 };
 
   return {
     key: base.key,
@@ -597,6 +635,8 @@ function getStageMonster(stage) {
     hp: Math.round(base.hp * stageScale * mult),
     atk: Math.round(base.atk * stageScale * offenseMult),
     def: Math.round(base.def * stageScale * offenseMult),
+    crit: CRIT_BY_TIER[tier],
+    dodge: 0.05,
   };
 }
 
@@ -654,24 +694,61 @@ function getSellValue(item) {
 let player = {
   gold: 100,
   stage: 1,
+  highestStage: 1, // ด่านสูงสุดที่เคยไปถึง (ใช้คำนวณรางวัล Prestige แม้ว่า stage จะถูกรีเซ็ต)
+  prestigePoints: 0, // แต้มถาวรจากการ Prestige ไม่ถูกรีเซ็ต
   baseStats: { hp: 50, atk: 10, def: 5 },
   upgradeLevels: { hp: 0, atk: 0, def: 0 },
   currentHp: 50,
   equipment: { weapon: null, armor: null, ring: null },
+  inventory: [], // ไอเทมที่เก็บไว้แต่ยังไม่ได้สวมใส่ (คลังไอเทม)
   chests: 1, // เริ่มต้นให้ 1 กล่อง เพื่อให้ทดสอบระบบกาชาได้ทันที
   autoBattle: false,
+  animating: false, // กำลังเล่นแอนิเมชันการต่อสู้ทีละยกอยู่หรือไม่
   encounter: null, // มอนสเตอร์ปัจจุบันของด่านนี้ (สุ่มครั้งเดียวต่อด่าน)
-  pendingGacha: null, // ไอเทมที่เพิ่งสุ่มได้ รอ Equip/Sell
+  pendingGacha: null, // ไอเทมที่เพิ่งสุ่มได้ รอ Equip/เก็บไว้/Sell
 };
 
-function getMaxHp(p) { return p.baseStats.hp + p.upgradeLevels.hp * 10 + (p.equipment.ring ? p.equipment.ring.value : 0); }
-function getAtk(p)   { return p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0); }
-function getDef(p)   { return p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0); }
+// ===============================================
+// PRESTIGE — รีเซ็ตด่านเพื่อแลกโบนัสถาวร
+// ===============================================
+const PRESTIGE_STAGE_REQUIREMENT = 10; // ต้องเคยไปถึงด่านนี้อย่างน้อย ถึงจะได้ Prestige Point 1 แต้ม
+function getPrestigeMultiplier(p) { return 1 + p.prestigePoints * 0.05; }
+function getPrestigeGain(p) { return Math.floor((p.highestStage || 1) / PRESTIGE_STAGE_REQUIREMENT); }
+
+function getMaxHp(p) { return Math.round((p.baseStats.hp + p.upgradeLevels.hp * 10 + (p.equipment.ring ? p.equipment.ring.value : 0)) * getPrestigeMultiplier(p)); }
+function getAtk(p)   { return Math.round((p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0)) * getPrestigeMultiplier(p)); }
+function getDef(p)   { return Math.round((p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0)) * getPrestigeMultiplier(p)); }
 function getCP(p)    { return Math.round(getMaxHp(p) * 0.5 + getAtk(p) * 2 + getDef(p) * 1.5); }
 function getPlayerLevel(p) { return 1 + p.upgradeLevels.hp + p.upgradeLevels.atk + p.upgradeLevels.def; }
 function getUpgradeCost(statKey) {
   const n = player.upgradeLevels[statKey];
   return Math.floor(20 * Math.pow(1.15, n));
+}
+
+// โอกาสคริติคอล/หลบหลีกของผู้เล่น เพิ่มขึ้นเล็กน้อยตามจำนวนครั้งที่อัปเกรด ATK/DEF
+function getCritChance(p) { return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005); }
+function getDodgeChance(p) { return Math.min(0.5, 0.05 + p.upgradeLevels.def * 0.005); }
+
+function doPrestige() {
+  const gain = getPrestigeGain(player);
+  if (gain <= 0) return;
+  const totalPoints = player.prestigePoints + gain;
+  player.autoBattle = false;
+  player.gold = 100;
+  player.stage = 1;
+  player.highestStage = 1;
+  player.baseStats = { hp: 50, atk: 10, def: 5 };
+  player.upgradeLevels = { hp: 0, atk: 0, def: 0 };
+  player.equipment = { weapon: null, armor: null, ring: null };
+  player.inventory = [];
+  player.chests = 1;
+  player.encounter = null;
+  player.pendingGacha = null;
+  player.prestigePoints = totalPoints;
+  player.currentHp = getMaxHp(player);
+  appendLog([`✦ Prestige! ได้รับ Prestige Point +${gain} (สะสม ${totalPoints} แต้ม, โบนัสถาวร +${Math.round((getPrestigeMultiplier(player) - 1) * 100)}%)`]);
+  ensureEncounter();
+  renderAll();
 }
 
 function ensureEncounter() {
@@ -689,10 +766,13 @@ function saveGame() {
   const data = {
     gold: player.gold,
     stage: player.stage,
+    highestStage: player.highestStage,
+    prestigePoints: player.prestigePoints,
     baseStats: player.baseStats,
     upgradeLevels: player.upgradeLevels,
     currentHp: player.currentHp,
     equipment: player.equipment,
+    inventory: player.inventory,
     chests: player.chests,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
@@ -705,42 +785,64 @@ function loadGame() {
   try {
     const data = JSON.parse(raw);
     Object.assign(player, {
-      gold: data.gold, stage: data.stage, baseStats: data.baseStats,
+      gold: data.gold, stage: data.stage,
+      highestStage: data.highestStage || data.stage || 1,
+      prestigePoints: data.prestigePoints || 0,
+      baseStats: data.baseStats,
       upgradeLevels: data.upgradeLevels, currentHp: data.currentHp,
-      equipment: data.equipment, chests: data.chests,
+      equipment: data.equipment, inventory: data.inventory || [],
+      chests: data.chests,
     });
   } catch (e) { /* เซฟไฟล์เสีย ข้ามไปเริ่มเกมใหม่ */ }
 }
 
 /* =====================================================================
-   COMBAT
+   COMBAT — คำนวณผลทั้งหมดล่วงหน้าเป็นรายการ "เหตุการณ์" ต่อยก (turn events)
+   รวมโอกาสคริติคอล/หลบหลีก แล้วค่อยเล่นทีละยกแบบมีจังหวะ (ดู playEvents)
    ===================================================================== */
+const CRIT_MULT = 1.75;
+
 function resolveBattle() {
   ensureEncounter();
   const monster = player.encounter;
   let playerHp = getMaxHp(player);
   let monsterHp = monster.hp;
   const atk = getAtk(player), def = getDef(player);
-  const log = [`เจอ ${monster.name} (ด่าน ${player.stage}, ${tierLabel(monster.tier)})`];
+  const playerCrit = getCritChance(player), playerDodge = getDodgeChance(player);
+  const events = [{ text: `เจอ ${monster.name} (ด่าน ${player.stage}, ${tierLabel(monster.tier)})`, playerHp, monsterHp }];
 
   let turn = 0;
   while (playerHp > 0 && monsterHp > 0 && turn < 200) {
     turn++;
-    const dmgToMonster = Math.max(1, atk - monster.def);
-    monsterHp -= dmgToMonster;
-    log.push(`คุณโจมตี ${monster.name} เป็นดาเมจ ${dmgToMonster}`);
-    if (monsterHp <= 0) { log.push(`${monster.name} พ่ายแพ้!`); break; }
+    // ผู้เล่นโจมตีมอนสเตอร์ก่อน
+    if (Math.random() < monster.dodge) {
+      events.push({ text: `${monster.name} หลบการโจมตีของคุณ!`, playerHp, monsterHp });
+    } else {
+      let dmg = Math.max(1, atk - monster.def);
+      const isCrit = Math.random() < playerCrit;
+      if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
+      monsterHp -= dmg;
+      events.push({ text: `คุณโจมตี ${monster.name}${isCrit ? ' คริติคอล!' : ''} เป็นดาเมจ ${dmg}`, playerHp, monsterHp: Math.max(0, monsterHp) });
+    }
+    if (monsterHp <= 0) { events.push({ text: `${monster.name} พ่ายแพ้!`, playerHp, monsterHp: 0 }); break; }
 
-    const dmgToPlayer = Math.max(1, monster.atk - def);
-    playerHp -= dmgToPlayer;
-    log.push(`${monster.name} โจมตีคุณเป็นดาเมจ ${dmgToPlayer}`);
-    if (playerHp <= 0) { log.push('คุณพ่ายแพ้...'); break; }
+    // แล้วมอนสเตอร์โต้กลับ
+    if (Math.random() < playerDodge) {
+      events.push({ text: 'คุณหลบการโจมตีสำเร็จ!', playerHp, monsterHp });
+    } else {
+      let dmg = Math.max(1, monster.atk - def);
+      const isCrit = Math.random() < monster.crit;
+      if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
+      playerHp -= dmg;
+      events.push({ text: `${monster.name} โจมตีคุณ${isCrit ? ' คริติคอล!' : ''} เป็นดาเมจ ${dmg}`, playerHp: Math.max(0, playerHp), monsterHp });
+    }
+    if (playerHp <= 0) { events.push({ text: 'คุณพ่ายแพ้...', playerHp: 0, monsterHp }); break; }
   }
 
   player.currentHp = Math.max(0, playerHp);
   monster.hp = Math.max(0, monsterHp);
 
-  return { victory: monsterHp <= 0 && playerHp > 0, monster, log };
+  return { victory: monsterHp <= 0 && playerHp > 0, monster, events };
 }
 
 function tierLabel(tier) {
@@ -753,8 +855,8 @@ function grantChest(n) {
   player.chests += n;
 }
 
-function onBattleResolved(result) {
-  appendLog(result.log);
+// จบการต่อสู้: แจกรางวัล/เลื่อนด่าน (เรียกหลังแอนิเมชันเล่นจบแล้ว)
+function finalizeBattle(result) {
   if (result.victory) {
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
     const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.2) * bossMult);
@@ -770,41 +872,71 @@ function onBattleResolved(result) {
     }
 
     player.stage += 1;
+    player.highestStage = Math.max(player.highestStage || 1, player.stage);
     player.encounter = null; // สุ่มมอนสเตอร์ใหม่สำหรับด่านถัดไป
   }
   player.currentHp = getMaxHp(player); // ฟื้น HP เต็มก่อนด่านถัดไป/หลังพ่ายแพ้ (แนวเกม idle ไม่ลงโทษหนัก)
   ensureEncounter();
+}
+
+// อัปเดตแถบเลือดทั้งสองฝั่งแบบสด ระหว่างเล่นแอนิเมชันทีละยก (ไม่เรียก renderAll เต็มรูปแบบเพื่อไม่ให้กระตุก)
+function renderLiveHpBars(playerHp, monsterHp, monsterMaxHp) {
+  const maxHp = getMaxHp(player);
+  const hpPct = Math.max(0, Math.min(100, (playerHp / maxHp) * 100));
+  document.getElementById('hpBarFill').style.width = hpPct + '%';
+  document.getElementById('hpBarLabel').textContent = `${Math.max(0, Math.round(playerHp))} / ${maxHp}`;
+
+  const mPct = Math.max(0, Math.min(100, (monsterHp / monsterMaxHp) * 100));
+  document.getElementById('monsterHpFill').style.width = mPct + '%';
+  document.getElementById('monsterHpLabel').textContent = `${Math.max(0, monsterHp)} / ${monsterMaxHp}`;
+}
+
+// เล่นเหตุการณ์ทีละยกลง Battle Log พร้อมหน่วงจังหวะ — จำกัดเวลารวมไว้ไม่ให้
+// การต่อสู้ที่มีหลายสิบยก (เช่นสู้บอสตอนสเตตัสยังไม่พอ) ใช้เวลานานเกินไป
+function playEvents(events, monsterMaxHp, done) {
+  const totalBudgetMs = 3000;
+  const perEventDelay = Math.max(60, Math.min(350, totalBudgetMs / Math.max(1, events.length)));
+  let i = 0;
+  function step() {
+    if (i >= events.length) { done(); return; }
+    const ev = events[i++];
+    appendLog([ev.text]);
+    renderLiveHpBars(ev.playerHp, ev.monsterHp, monsterMaxHp);
+    setTimeout(step, perEventDelay);
+  }
+  step();
+}
+
+// เริ่มสู้ 1 ครั้ง: คำนวณผลทันที แต่ค่อยๆ เล่นแอนิเมชันให้ดู แล้วค่อยสรุปผลตอนจบ
+function startBattle(onComplete) {
+  if (player.animating) return;
+  player.animating = true;
   renderAll();
+  const monsterMaxHp = player.encounter.maxHp;
+  const result = resolveBattle();
+  playEvents(result.events, monsterMaxHp, () => {
+    finalizeBattle(result);
+    player.animating = false;
+    renderAll();
+    if (onComplete) onComplete();
+  });
 }
 
 /* =====================================================================
-   AUTO-BATTLE (กัน setInterval ซ้อนกันเวลาผู้ใช้กดเปิด/ปิดรัวๆ)
+   AUTO-BATTLE (ลูกโซ่ setTimeout ที่ตรวจสอบ player.autoBattle ทุกครั้งก่อน
+   เริ่มยกถัดไป — กันไม่ให้เกิดหลายลูปซ้อนกันแม้ผู้ใช้จะกดเปิด/ปิดรัวๆ)
    ===================================================================== */
-let autoBattleHandle = null;
-
 function toggleAutoBattle() {
   player.autoBattle = !player.autoBattle;
-  if (player.autoBattle) {
-    startAutoBattle();
-  } else {
-    stopAutoBattle();
-  }
   renderAll();
+  if (player.autoBattle) runAutoBattleLoop();
 }
 
-function startAutoBattle() {
-  if (autoBattleHandle !== null) return; // กันสร้าง interval ซ้ำ
-  autoBattleHandle = setInterval(() => {
-    if (!player.autoBattle) { stopAutoBattle(); return; }
-    onBattleResolved(resolveBattle());
-  }, 1500);
-}
-
-function stopAutoBattle() {
-  if (autoBattleHandle !== null) {
-    clearInterval(autoBattleHandle);
-    autoBattleHandle = null;
-  }
+function runAutoBattleLoop() {
+  if (!player.autoBattle) return;
+  startBattle(() => {
+    if (player.autoBattle) setTimeout(runAutoBattleLoop, 400);
+  });
 }
 
 /* =====================================================================
@@ -850,6 +982,8 @@ function renderCharacterPanel() {
 
   document.getElementById('statAtk').textContent = getAtk(player);
   document.getElementById('statDef').textContent = getDef(player);
+  document.getElementById('statCrit').textContent = `${Math.round(getCritChance(player) * 100)}%`;
+  document.getElementById('statDodge').textContent = `${Math.round(getDodgeChance(player) * 100)}%`;
   document.getElementById('statCp').textContent = getCP(player);
 
   renderEquipSlot('slotWeapon', player.equipment.weapon);
@@ -863,6 +997,15 @@ function renderCharacterPanel() {
   document.getElementById('btnUpgradeHp').disabled = player.gold < getUpgradeCost('hp');
   document.getElementById('btnUpgradeAtk').disabled = player.gold < getUpgradeCost('atk');
   document.getElementById('btnUpgradeDef').disabled = player.gold < getUpgradeCost('def');
+
+  document.getElementById('prestigePoints').textContent = player.prestigePoints;
+  document.getElementById('prestigeBonus').textContent = `+${Math.round((getPrestigeMultiplier(player) - 1) * 100)}%`;
+  const prestigeGain = getPrestigeGain(player);
+  const btnPrestige = document.getElementById('btnPrestige');
+  btnPrestige.textContent = prestigeGain > 0
+    ? `Prestige (+${prestigeGain} Point, รีเซ็ตด่าน)`
+    : `Prestige (ต้องเคยถึงด่าน ${PRESTIGE_STAGE_REQUIREMENT}+)`;
+  btnPrestige.disabled = prestigeGain <= 0;
 }
 
 function renderChestPanel() {
@@ -881,11 +1024,46 @@ function renderChestPanel() {
     const nameEl = document.getElementById('gachaItemName');
     nameEl.textContent = item.name;
     nameEl.className = `rarity-${item.rarity}`;
-    document.getElementById('gachaItemValue').textContent = `+${item.value} (สลับกันขาย ${getSellValue(item)} Gold)`;
+    document.getElementById('gachaItemValue').textContent = `+${item.value} (ขายได้ ${getSellValue(item)} Gold)`;
     sprite.style.backgroundImage = `url('${CHEST_ICONS[item.rarity].open}')`;
   } else {
     resultBox.style.display = 'none';
   }
+
+  renderInventory();
+}
+
+function renderInventory() {
+  document.getElementById('invCount').textContent = player.inventory.length;
+  const list = document.getElementById('inventoryList');
+  list.innerHTML = '';
+  if (player.inventory.length === 0) {
+    list.innerHTML = '<div class="inventory-empty">ยังไม่มีไอเทมเก็บไว้</div>';
+    return;
+  }
+  player.inventory.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'inventory-item';
+    const img = document.createElement('img');
+    img.src = item.icon;
+    img.alt = item.name;
+    img.onerror = () => { img.style.display = 'none'; };
+    const name = document.createElement('span');
+    name.className = `inv-name rarity-${item.rarity}`;
+    name.textContent = `${item.name} +${item.value}`;
+    const btnEquip = document.createElement('button');
+    btnEquip.className = 'btn btn--info';
+    btnEquip.textContent = 'สวม';
+    btnEquip.dataset.action = 'equip';
+    btnEquip.dataset.idx = idx;
+    const btnSell = document.createElement('button');
+    btnSell.className = 'btn btn--success';
+    btnSell.textContent = 'ขาย';
+    btnSell.dataset.action = 'sell';
+    btnSell.dataset.idx = idx;
+    row.append(img, name, btnEquip, btnSell);
+    list.appendChild(row);
+  });
 }
 
 function renderBattlePanel() {
@@ -906,7 +1084,7 @@ function renderBattlePanel() {
   document.getElementById('monsterHpFill').style.width = hpPct + '%';
   document.getElementById('monsterHpLabel').textContent = `${Math.max(0, monster.hp)} / ${monster.maxHp}`;
 
-  document.getElementById('btnFight').disabled = player.autoBattle;
+  document.getElementById('btnFight').disabled = player.autoBattle || player.animating;
   document.getElementById('btnAutoBattle').textContent = `Auto-Battle: ${player.autoBattle ? 'ON' : 'OFF'}`;
   document.getElementById('btnAutoBattle').className = `btn ${player.autoBattle ? 'btn--danger' : 'btn--primary'}`;
 }
@@ -957,10 +1135,20 @@ document.getElementById('btnOpenChest').addEventListener('click', () => {
 document.getElementById('btnEquipItem').addEventListener('click', () => {
   if (!player.pendingGacha) return;
   const item = player.pendingGacha;
+  const old = player.equipment[item.slot];
   player.equipment[item.slot] = item;
+  if (old) player.inventory.push(old); // ของเก่าไม่หาย เก็บเข้าคลังไอเทมแทน
   player.pendingGacha = null;
   player.currentHp = Math.min(player.currentHp, getMaxHp(player));
   appendLog([`สวมใส่ ${item.name} เรียบร้อย`]);
+  renderAll();
+});
+
+document.getElementById('btnKeepItem').addEventListener('click', () => {
+  if (!player.pendingGacha) return;
+  player.inventory.push(player.pendingGacha);
+  appendLog([`เก็บ ${player.pendingGacha.name} ไว้ในคลังไอเทม`]);
+  player.pendingGacha = null;
   renderAll();
 });
 
@@ -974,9 +1162,36 @@ document.getElementById('btnSellItem').addEventListener('click', () => {
   renderAll();
 });
 
+document.getElementById('inventoryList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const idx = parseInt(btn.dataset.idx, 10);
+  const item = player.inventory[idx];
+  if (Number.isNaN(idx) || !item) return;
+
+  if (btn.dataset.action === 'equip') {
+    const old = player.equipment[item.slot];
+    player.equipment[item.slot] = item;
+    player.inventory.splice(idx, 1);
+    if (old) player.inventory.push(old); // สลับของเก่ากลับเข้าคลังแทนที่จะทิ้ง
+    player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+    appendLog([`สวมใส่ ${item.name} เรียบร้อย`]);
+  } else if (btn.dataset.action === 'sell') {
+    const value = getSellValue(item);
+    player.gold += value;
+    player.inventory.splice(idx, 1);
+    appendLog([`ขาย ${item.name} ได้ ${value} Gold`]);
+  }
+  renderAll();
+});
+
+document.getElementById('btnPrestige').addEventListener('click', () => {
+  doPrestige();
+});
+
 document.getElementById('btnFight').addEventListener('click', () => {
-  if (player.autoBattle) return;
-  onBattleResolved(resolveBattle());
+  if (player.autoBattle || player.animating) return;
+  startBattle();
 });
 
 document.getElementById('btnAutoBattle').addEventListener('click', () => {
