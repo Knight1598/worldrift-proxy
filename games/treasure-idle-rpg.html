@@ -1200,17 +1200,17 @@ let player = {
   buffFightsLeft: 0, // จำนวนไฟต์ที่เหลือของบัฟจากโพชั่นฟ้า
   buffMultiplier: 1, // ตัวคูณ ATK/DEF ชั่วคราวจากโพชั่นฟ้า
   settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false },
-  // สถิติสะสมตลอดชีพ ไม่ถูกรีเซ็ตแม้ทำ Prestige — ใช้เป็นตัวนับความคืบหน้าภารกิจ (ดู QUESTS)
+  // ตัวนับความคืบหน้าภารกิจ (ดู QUESTS) — prestigeCount สะสมตลอดชีพ ส่วนที่เหลือถูกรีเซ็ตกลับ 0
+  // ทุกครั้งที่ Prestige (ดู doPrestige) เพื่อให้ทำภารกิจรับรางวัลใหม่ได้ทุกรอบ
   stats: {
     monstersKilled: 0,
     bigBossKills: 0,
     chestsOpened: 0,
     upgradesPurchased: 0,
     prestigeCount: 0,
-    maxStageEver: 1, // ต่างจาก highestStage ตรงที่ตัวนี้ไม่ถูกรีเซ็ตตอน Prestige ใช้วัดภารกิจ "ไปถึงด่าน X" โดยเฉพาะ
     itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 },
   },
-  claimedQuests: [], // key ของภารกิจที่กดรับรางวัลไปแล้ว
+  claimedQuests: [], // key ของภารกิจที่กดรับรางวัลไปแล้วในรอบ Prestige ปัจจุบัน
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1296,6 +1296,15 @@ function doPrestige() {
   player.prestigePoints = totalPoints;
   player.currentHp = getMaxHp(player);
   player.stats.prestigeCount += 1;
+  // ภารกิจผูกกับรอบ Prestige: รีเซ็ตความคืบหน้ากลับ 0 ทุกครั้ง (prestigeCount ไม่รีเซ็ตเพราะเป็นสถิติสะสมตลอดชีพ
+  // ไม่ใช่ตัวนับภารกิจ) ให้ผู้เล่นวนกลับมาทำภารกิจรับรางวัลใหม่ได้ทุกรอบ Prestige
+  player.claimedQuests = [];
+  player.stats.monstersKilled = 0;
+  player.stats.bigBossKills = 0;
+  player.stats.chestsOpened = 0;
+  player.stats.upgradesPurchased = 0;
+  player.stats.itemsByRarity = { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 };
+  announcedQuests.clear(); // เคลียร์ toast ที่เคยแจ้งไปแล้ว ให้ภารกิจรอบใหม่แจ้งเตือนได้อีกครั้งตอนทำสำเร็จ
   appendLog([`✦ Prestige! ได้รับ Prestige Point +${gain} (สะสม ${totalPoints} แต้ม, โบนัสถาวร +${Math.round((getPrestigeMultiplier(player) - 1) * 100)}%)`]);
   ensureEncounter();
   renderAll();
@@ -1365,20 +1374,18 @@ function ensureEncounter() {
 }
 
 // ===============================================
-// ภารกิจ (Quests / Achievements) — เป้าหมายระยะสั้นถาวร ทำครั้งเดียวรับรางวัลหนักๆ
-// (กล่องสมบัติ/เพชร) เพื่อให้มีเป้าหมายรอคอยระหว่างกดอัปเกรด/ปล่อย Auto-Battle
+// ภารกิจ (Quests) — เป้าหมายระยะสั้นต่อรอบ Prestige หนึ่งรอบ ให้ผลตอบแทนเป็นกล่องสมบัติ/เพชร
+// ความคืบหน้าทั้งหมด (claimedQuests + ตัวนับใน player.stats) ถูกรีเซ็ตกลับเป็น 0 ทุกครั้งที่
+// กด Prestige (ดู doPrestige) เพื่อให้ผู้เล่นวนกลับมาทำภารกิจรับรางวัลใหม่ได้ทุกรอบ — เป้าหมาย
+// แต่ละอันจึงตั้งให้ทำสำเร็จได้ภายในรอบเดียว (อ้างอิงจาก simulation: รอบเดียวไปได้ราวด่าน 30-65)
 // ===============================================
 const QUESTS = [
-  { key: 'kill_100',    name: 'นักล่ามือใหม่',        desc: 'สังหารมอนสเตอร์ครบ 100 ตัว',        target: 100,  getProgress: p => p.stats.monstersKilled, reward: { chests: 2 } },
-  { key: 'kill_500',    name: 'นักล่าผู้ช่ำชอง',      desc: 'สังหารมอนสเตอร์ครบ 500 ตัว',        target: 500,  getProgress: p => p.stats.monstersKilled, reward: { chests: 5 } },
-  { key: 'kill_1000',   name: 'ผู้พิฆาตแห่งสมรภูมิ',  desc: 'สังหารมอนสเตอร์ครบ 1000 ตัว',       target: 1000, getProgress: p => p.stats.monstersKilled, reward: { chests: 8, gems: 2 } },
-  { key: 'gacha_epic_5',name: 'นักสะสมของหายาก',      desc: 'สุ่มได้ไอเทม Epic ขึ้นไป 5 ครั้ง',   target: 5,    getProgress: p => p.stats.itemsByRarity.epic + p.stats.itemsByRarity.legendary, reward: { gems: 5 } },
-  { key: 'upgrade_50',  name: 'สายเปย์อัปเกรด',       desc: 'อัปเกรดสเตตัสรวมครบ 50 ครั้ง',      target: 50,   getProgress: p => p.stats.upgradesPurchased, reward: { chests: 3 } },
-  { key: 'chest_20',    name: 'นักล่าสมบัติ',          desc: 'เปิดกล่องสมบัติครบ 20 ใบ',          target: 20,   getProgress: p => p.stats.chestsOpened, reward: { gems: 2 } },
-  { key: 'bigboss_5',   name: 'ผู้ปราบยักษ์',          desc: 'สังหาร Big-Boss ครบ 5 ตัว',         target: 5,    getProgress: p => p.stats.bigBossKills, reward: { chests: 5, gems: 3 } },
-  { key: 'prestige_1',  name: 'จุติใหม่',              desc: 'ทำ Prestige สำเร็จครั้งแรก',        target: 1,    getProgress: p => p.stats.prestigeCount, reward: { chests: 5, gems: 5 } },
-  { key: 'stage_25',    name: 'นักผจญภัยฝีมือดี',      desc: 'ไปถึงด่าน 25',                      target: 25,   getProgress: p => p.stats.maxStageEver, reward: { chests: 3 } },
-  { key: 'stage_50',    name: 'ตำนานนักผจญภัย',        desc: 'ไปถึงด่าน 50',                      target: 50,   getProgress: p => p.stats.maxStageEver, reward: { chests: 6, gems: 3 } },
+  { key: 'kill_100',    name: 'นักล่ามือใหม่',        desc: 'สังหารมอนสเตอร์ครบ 100 ตัว',        target: 100, getProgress: p => p.stats.monstersKilled, reward: { chests: 2 } },
+  { key: 'chest_50',    name: 'นักล่าสมบัติ',          desc: 'เปิดกล่องสมบัติครบ 50 ใบ',          target: 50,  getProgress: p => p.stats.chestsOpened, reward: { gems: 3 } },
+  { key: 'upgrade_30',  name: 'สายเปย์อัปเกรด',       desc: 'อัปเกรดสเตตัสรวมครบ 30 ครั้ง',      target: 30,  getProgress: p => p.stats.upgradesPurchased, reward: { chests: 3 } },
+  { key: 'gacha_epic_5',name: 'นักสะสมของหายาก',      desc: 'สุ่มได้ไอเทม Epic ขึ้นไป 5 ครั้ง',   target: 5,   getProgress: p => p.stats.itemsByRarity.epic + p.stats.itemsByRarity.legendary, reward: { gems: 5 } },
+  { key: 'bigboss_3',   name: 'ผู้ปราบยักษ์',          desc: 'สังหาร Big-Boss ครบ 3 ตัว',         target: 3,   getProgress: p => p.stats.bigBossKills, reward: { chests: 4, gems: 2 } },
+  { key: 'stage_20',    name: 'นักผจญภัยฝีมือดี',      desc: 'ไปถึงด่าน 20',                      target: 20,  getProgress: p => p.highestStage, reward: { chests: 3 } },
 ];
 
 function isQuestClaimed(key) { return player.claimedQuests.includes(key); }
@@ -1485,7 +1492,7 @@ function loadGame() {
       buffMultiplier: data.buffMultiplier || 1,
       settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false }, data.settings || {}),
       stats: Object.assign(
-        { monstersKilled: 0, bigBossKills: 0, chestsOpened: 0, upgradesPurchased: 0, prestigeCount: 0, maxStageEver: data.highestStage || 1, itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 } },
+        { monstersKilled: 0, bigBossKills: 0, chestsOpened: 0, upgradesPurchased: 0, prestigeCount: 0, itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 } },
         data.stats || {},
         { itemsByRarity: Object.assign({ common: 0, good: 0, rare: 0, epic: 0, legendary: 0 }, (data.stats && data.stats.itemsByRarity) || {}) }
       ),
@@ -1610,7 +1617,6 @@ function finalizeBattle(result) {
 
     player.stage += 1;
     player.highestStage = Math.max(player.highestStage || 1, player.stage);
-    player.stats.maxStageEver = Math.max(player.stats.maxStageEver || 1, player.stage);
     player.encounter = null; // สุ่มมอนสเตอร์ใหม่สำหรับด่านถัดไป
   }
   if (player.buffFightsLeft > 0) {
