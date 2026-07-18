@@ -574,6 +574,27 @@
   .skill-btn .skill-name { font-size: 0.6rem; }
   .skill-btn.skill-btn--active { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); color: var(--accent-gold); }
 
+  /* วัตถุโบราณ (Relics) — ของสะสมถาวรระดับ Endgame */
+  .relic-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
+  .relic-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 6px; }
+  .relic-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: #1c1730;
+    border: 2px solid var(--divider);
+    border-radius: 4px;
+    padding: 6px 2px;
+    text-align: center;
+  }
+  .relic-card img { width: 30px; height: 30px; object-fit: contain; }
+  .relic-card .relic-name { font-size: 0.55rem; color: #cfc7ae; }
+  .relic-card--found { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); cursor: help; }
+  .relic-card--found .relic-name { color: var(--accent-gold); }
+  .relic-card--undiscovered img { filter: grayscale(1) brightness(0.35); }
+  .relic-card--undiscovered .relic-name { color: #55506a; }
+
   /* ฉากต่อสู้ */
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังฉากต่อสู้ เปลี่ยนตามช่วงด่าน)
@@ -796,6 +817,14 @@
   </div>
 </div>
 
+<div class="raid-modal" id="welcomeBackModal" style="display:none;">
+  <div class="raid-modal-box">
+    <h2>🎉 ยินดีต้อนรับกลับ!</h2>
+    <p class="raid-desc" id="welcomeBackText"></p>
+    <button class="btn btn--primary" id="btnCloseWelcomeBack">รับเลย!</button>
+  </div>
+</div>
+
 <div class="game-wrap">
   <div class="board">
 
@@ -872,6 +901,16 @@
         </div>
         <div class="collapsible-body collapsed" id="skillBody">
           <div class="skill-grid" id="skillGrid"></div>
+        </div>
+      </div>
+
+      <div class="relic-section">
+        <div class="collapsible-header collapsed" data-target="relicBody">
+          <span>วัตถุโบราณ (<span id="relicCount">0</span>/<span id="relicTotal">0</span>)</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="relicBody">
+          <div class="relic-grid" id="relicGrid"></div>
         </div>
       </div>
     </section>
@@ -1374,6 +1413,8 @@ let player = {
     itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 },
   },
   claimedQuests: [], // key ของภารกิจที่กดรับรางวัลไปแล้วในรอบ Prestige ปัจจุบัน
+  relics: [], // key ของวัตถุโบราณที่หาเจอแล้ว (ดู RELIC_DEFS) — ถาวร ไม่ถูกรีเซ็ตตอน Prestige
+  lastSeenAt: Date.now(), // timestamp ล่าสุดที่เซฟเกม ใช้คำนวณ Offline Earnings ตอนโหลดกลับมา
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1392,6 +1433,19 @@ const PASSIVE_SKILLS = [
   { key: 'shield', name: 'เกราะป้องกัน',  desc: '+10% DEF',                   icon: 'assets/skills/shield.png' },
 ];
 function getEquippedSkill(p) { return PASSIVE_SKILLS.find(s => s.key === p.equippedSkill) || null; }
+
+// ===============================================
+// วัตถุโบราณ (Relics) — ของสะสมถาวรระดับ Endgame ดรอปจาก Demon King ที่ด่านคูณ 100 (100, 200, 300, ...)
+// เอฟเฟกต์เป็นความสามารถเชิงกลไก ไม่ใช่แค่บวกสเตตัส และไม่ถูกรีเซ็ตตอน Prestige (ต่างจากภารกิจ)
+// ===============================================
+const RELIC_DEFS = [
+  { key: 'demon_crown',    name: 'มงกุฎจอมมาร',          desc: 'มีโอกาส 3% ที่จะข้ามด่านปกติไปเจอบอสทันที', icon: 'assets/skills/dark_aura.png' },
+  { key: 'broken_sword',   name: 'ดาบผู้กล้าแตกหัก',      desc: 'มีโอกาส 5% ที่การโจมตีจะติด One-hit Kill ใส่มอนสเตอร์ปกติ (ไม่รวมบอส)', icon: 'assets/skills/physical.png' },
+  { key: 'hourglass',      name: 'นาฬิกาทรายแห่งกาลเวลา', desc: 'ลดคูลดาวน์ของ Boss Raid ลงครึ่งหนึ่ง', icon: 'assets/ui/gem_purple.png' },
+  { key: 'immortal_heart', name: 'หัวใจอมตะ',            desc: 'มีโอกาส 15% ที่จะรอดจากดาเมจถึงตาย เหลือ HP 1', icon: 'assets/skills/holy.png' },
+];
+const RELIC_DROP_CHANCE = 0.2;
+function hasRelic(key) { return player.relics.includes(key); }
 
 // ===============================================
 // PRESTIGE — รีเซ็ตด่านเพื่อแลกโบนัสถาวร
@@ -1631,6 +1685,13 @@ function getPetBonusValue(buffType) {
 
 function ensureEncounter() {
   if (!player.encounter) {
+    // วัตถุโบราณ "มงกุฎจอมมาร": มีโอกาส 3% ข้ามด่านปกติที่เหลือไปเจอบอส (ด่านคูณ 5) ทันที
+    if (hasRelic('demon_crown') && player.stage % 5 !== 0 && Math.random() < 0.03) {
+      const nextBossStage = Math.ceil(player.stage / 5) * 5;
+      player.stage = nextBossStage;
+      player.highestStage = Math.max(player.highestStage || 1, player.stage);
+      appendLog([`👑 มงกุฎจอมมาร: ข้ามไปด่าน ${nextBossStage} เจอบอสทันที!`]);
+    }
     player.encounter = getStageMonster(player.stage);
   }
 }
@@ -1638,11 +1699,17 @@ function ensureEncounter() {
 // ===============================================
 // ดันเจี้ยนท้าทาย (Boss Raid) — โหมดพิเศษแยกจากด่านปกติ: ดวลดาเมจแบบจำกัดเวลาจริง (30 วินาที)
 // ไม่ใช้ turn-based engine เดิม (resolveBattle) เพราะต้องการให้ผู้เล่นกดโจมตีเองสดๆ ภายในเวลาจำกัด
-// ใช้ cooldown ภายใน session แทน "รายวันจริง" เพื่อไม่ต้องผูก logic วันที่/timezone ที่เสี่ยงบั๊ก
+// คูลดาวน์ใช้ Date.now() ประทับเวลาจริงเก็บลง localStorage (ผ่าน saveGame/loadGame ตามปกติ) จึงเดินต่อ
+// แม้ปิดแท็บ/เบราว์เซอร์ไป ไม่ใช่แค่นับใน session — ตั้งไว้ 30 นาทีให้รางวัล (เพชร/อาหารสัตว์เลี้ยง) มีค่าคุ้มรอ
 // ===============================================
 const RAID_DURATION_MS = 30000;
-const RAID_COOLDOWN_MS = 60000;
+const RAID_COOLDOWN_MS = 30 * 60 * 1000;
 let raidSession = null; // { maxHp, hp, damageDealt, threshold, endsAt, tickHandle } ไม่ persist (เซสชันชั่วคราว)
+
+// วัตถุโบราณ "นาฬิกาทรายแห่งกาลเวลา" ลดคูลดาวน์ลงครึ่งหนึ่ง
+function getRaidCooldownMs() {
+  return hasRelic('hourglass') ? RAID_COOLDOWN_MS / 2 : RAID_COOLDOWN_MS;
+}
 
 function getRaidBoss() {
   // ใช้สไปรต์มอนสเตอร์ระดับสูงสุดที่มีอยู่แล้วเป็นภาพบอส Raid ไม่ต้องตัด asset ใหม่
@@ -1712,7 +1779,7 @@ function endRaid() {
   if (!raidSession) return;
   clearInterval(raidSession.tickHandle);
   const success = raidSession.damageDealt >= raidSession.threshold;
-  player.raidCooldownUntil = Date.now() + RAID_COOLDOWN_MS;
+  player.raidCooldownUntil = Date.now() + getRaidCooldownMs();
   document.getElementById('raidActive').style.display = 'none';
   const resultText = document.getElementById('raidResultText');
   if (success) {
@@ -1816,6 +1883,38 @@ function showToast(text) {
 }
 
 /* =====================================================================
+   OFFLINE EARNINGS — คำนวณรายได้ตอนออฟไลน์ (ปิดแท็บ/ปิดเบราว์เซอร์ไป) ตอนโหลดเซฟกลับมา
+   ===================================================================== */
+// ปรับจูนตัวเลขได้ตรงนี้:
+// OFFLINE_GOLD_PER_SEC_PER_CP: อัตราทอง/วินาทีที่ได้ตอนออฟไลน์ ต่อ 1 หน่วย CP ของผู้เล่น ณ ขณะนั้น
+//   (ตั้งใจให้ได้น้อยกว่าเล่นเองสด ๆ ราวครึ่งหนึ่ง เพื่อให้ยังคุ้มที่จะเข้ามาเล่นเอง ไม่ใช่แค่ปล่อยทิ้งไว้)
+// OFFLINE_CHEST_CHANCE_PER_HOUR: โอกาส (0-1) ที่จะได้กล่องสมบัติ 1 ใบ ต่อ 1 ชั่วโมงที่ออฟไลน์ (สะสมเป็นค่าคาดหวัง)
+// OFFLINE_MAX_HOURS: เพดานเวลาออฟไลน์ที่นับให้ กันผู้เล่นดองเซฟไว้นานเกินไปแล้วมากอบโกยทีเดียว
+const OFFLINE_GOLD_PER_SEC_PER_CP = 0.02;
+const OFFLINE_CHEST_CHANCE_PER_HOUR = 0.3;
+const OFFLINE_MAX_HOURS = 12;
+const OFFLINE_MIN_SECONDS_TO_SHOW = 60; // ออฟไลน์ไม่ถึง 1 นาที ไม่ต้องเด้ง modal (กันเด้งกวนตอน refresh หน้าเฉยๆ)
+
+let pendingOfflineReport = null; // ผลลัพธ์ที่คำนวณตอน loadGame() รอให้ INIT เอาไปโชว์ modal หลัง renderAll() ครั้งแรก
+
+// คืนค่า null ถ้าเวลาที่หายไปสั้นเกินกว่าจะนับ ไม่งั้นคืน {hours, gold, chests} พร้อมใส่รางวัลเข้า player แล้ว
+function computeOfflineEarnings(elapsedMs) {
+  if (!elapsedMs || elapsedMs < OFFLINE_MIN_SECONDS_TO_SHOW * 1000) return null;
+  const cappedMs = Math.min(elapsedMs, OFFLINE_MAX_HOURS * 3600 * 1000);
+  const cappedSeconds = cappedMs / 1000;
+  const hours = cappedMs / 3600000;
+
+  const goldEarned = Math.floor(getCP(player) * OFFLINE_GOLD_PER_SEC_PER_CP * cappedSeconds);
+  const expectedChests = hours * OFFLINE_CHEST_CHANCE_PER_HOUR;
+  const chestsEarned = Math.floor(expectedChests) + (Math.random() < (expectedChests % 1) ? 1 : 0);
+
+  player.gold += goldEarned;
+  if (chestsEarned > 0) grantChest(chestsEarned);
+
+  return { hours: Math.round(hours * 10) / 10, gold: goldEarned, chests: chestsEarned };
+}
+
+/* =====================================================================
    SAVE / LOAD (localStorage — เก็บความคืบหน้าไว้เมื่อปิดแท็บ/รีเฟรช)
    ===================================================================== */
 const SAVE_KEY = 'treasureIdleRpgSave';
@@ -1844,6 +1943,8 @@ function saveGame() {
     equippedPet: player.equippedPet,
     petFood: player.petFood,
     raidCooldownUntil: player.raidCooldownUntil,
+    relics: player.relics,
+    lastSeenAt: Date.now(), // ประทับเวลาสดใหม่ทุกครั้งที่เซฟ ใช้เทียบตอนโหลดกลับมาว่าออฟไลน์ไปนานแค่ไหน
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -1878,7 +1979,12 @@ function loadGame() {
       equippedPet: data.equippedPet || null,
       petFood: data.petFood || 0,
       raidCooldownUntil: data.raidCooldownUntil || 0,
+      relics: data.relics || [],
     });
+    if (data.lastSeenAt) {
+      pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
+    }
+    player.lastSeenAt = Date.now();
   } catch (e) { /* เซฟไฟล์เสีย ข้ามไปเริ่มเกมใหม่ */ }
 }
 
@@ -1905,6 +2011,7 @@ function resolveBattle() {
   const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1);
   // รวม % ฮีลจากไม้เท้า (perk) และสกิลออร่ามืด (dark) เข้าด้วยกัน ถ้ามีทั้งคู่จะฮีลรวมทีเดียว
   const lifestealPct = (weapon && weapon.perk === 'lifesteal' ? weapon.perkValue : 0) + (skillKey === 'dark' ? 0.08 : 0);
+  let usedImmortalHeartThisFight = false; // จำกัดวัตถุโบราณ "หัวใจอมตะ" ให้ใช้ได้แค่ครั้งเดียวต่อไฟต์
   const events = [{ text: `เจอ ${monster.name} (ด่าน ${player.stage}, ${tierLabel(monster.tier)})`, playerHp, monsterHp }];
 
   let turn = 0;
@@ -1913,6 +2020,10 @@ function resolveBattle() {
     // ผู้เล่นโจมตีมอนสเตอร์ก่อน
     if (Math.random() < monster.dodge) {
       events.push({ text: `${monster.name} หลบการโจมตีของคุณ!`, playerHp, monsterHp, target: 'monster', kind: 'dodge' });
+    } else if (monster.tier === 'normal' && hasRelic('broken_sword') && Math.random() < 0.05) {
+      // วัตถุโบราณ "ดาบผู้กล้าแตกหัก": โอกาส 5% ติด One-hit Kill กับมอนสเตอร์ปกติ (ไม่รวมบอส)
+      monsterHp = 0;
+      events.push({ text: `⚔️ ดาบผู้กล้าแตกหัก: โจมตี ${monster.name} จนดับสนิททันที!`, playerHp, monsterHp: 0, target: 'monster', kind: 'crit', dmg: monster.maxHp });
     } else {
       let dmg = Math.max(1, Math.round(atk - effectiveMonsterDef));
       const isCrit = Math.random() < playerCrit;
@@ -1951,7 +2062,17 @@ function resolveBattle() {
       playerHp -= dmg;
       events.push({ text: `${monster.name} โจมตีคุณ${isCrit ? ' คริติคอล!' : ''} เป็นดาเมจ ${dmg}`, playerHp: Math.max(0, playerHp), monsterHp, target: 'player', kind: isCrit ? 'crit' : 'hit', dmg });
     }
-    if (playerHp <= 0) { events.push({ text: 'คุณพ่ายแพ้...', playerHp: 0, monsterHp }); break; }
+    if (playerHp <= 0) {
+      // วัตถุโบราณ "หัวใจอมตะ": โอกาส 15% รอดจากดาเมจถึงตาย เหลือ HP 1 แทน (ใช้ได้ครั้งเดียวต่อไฟต์)
+      if (hasRelic('immortal_heart') && !usedImmortalHeartThisFight && Math.random() < 0.15) {
+        usedImmortalHeartThisFight = true;
+        playerHp = 1;
+        events.push({ text: '💗 หัวใจอมตะ: รอดจากดาเมจถึงตาย เหลือ HP 1!', playerHp: 1, monsterHp, target: 'player', kind: 'heal', dmg: 1 });
+      } else {
+        events.push({ text: 'คุณพ่ายแพ้...', playerHp: 0, monsterHp });
+        break;
+      }
+    }
   }
 
   player.currentHp = Math.max(0, playerHp);
@@ -1989,6 +2110,16 @@ function finalizeBattle(result) {
       grantChest(3);
       player.gems += 1;
       appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด']);
+      // วัตถุโบราณ: ดรอปจาก Demon King โดยเฉพาะ ที่ด่านคูณ 100 (100, 200, 300, ...) เท่านั้น โอกาส 20%
+      if (result.monster.key === 'demon_king' && player.stage % 100 === 0) {
+        const undiscovered = RELIC_DEFS.filter(r => !hasRelic(r.key));
+        if (undiscovered.length > 0 && Math.random() < RELIC_DROP_CHANCE) {
+          const relic = undiscovered[Math.floor(Math.random() * undiscovered.length)];
+          player.relics.push(relic.key);
+          appendLog([`✨ พบวัตถุโบราณ: ${relic.name}!`]);
+          showToast(`✨ พบวัตถุโบราณ: ${relic.name}!`);
+        }
+      }
     } else if (Math.random() < 0.08 + getPetBonusValue('chestDropBonus')) {
       // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม (+ โบนัสจากสัตว์เลี้ยงประเภท chestDropBonus ถ้ามี)
       // แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลยจนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไป
@@ -2219,6 +2350,7 @@ function renderCharacterPanel() {
   btnPrestige.disabled = prestigeGain <= 0;
 
   renderSkillGrid();
+  renderRelicGrid();
 }
 
 function renderQuestPanel() {
@@ -2286,6 +2418,28 @@ function renderSkillGrid() {
     name.textContent = skill.name;
     btn.append(img, name);
     grid.appendChild(btn);
+  });
+}
+
+function renderRelicGrid() {
+  document.getElementById('relicCount').textContent = player.relics.length;
+  document.getElementById('relicTotal').textContent = RELIC_DEFS.length;
+  const grid = document.getElementById('relicGrid');
+  grid.innerHTML = '';
+  RELIC_DEFS.forEach(relic => {
+    const found = hasRelic(relic.key);
+    const card = document.createElement('div');
+    card.className = 'relic-card ' + (found ? 'relic-card--found' : 'relic-card--undiscovered');
+    if (found) card.title = relic.desc;
+    const img = document.createElement('img');
+    img.src = relic.icon;
+    img.alt = found ? relic.name : '???';
+    img.onerror = () => { img.style.display = 'none'; };
+    const name = document.createElement('span');
+    name.className = 'relic-name';
+    name.textContent = found ? relic.name : '???';
+    card.append(img, name);
+    grid.appendChild(card);
   });
 }
 
@@ -2635,7 +2789,7 @@ document.getElementById('btnCloseRaid').addEventListener('click', () => {
     // ปิดกลางคันถือว่ายกเลิก Raid รอบนี้ (ไม่ได้รางวัล แต่ยังติด cooldown กันเปิด-ปิดรัวๆ เพื่อรีเซ็ตบอส)
     clearInterval(raidSession.tickHandle);
     raidSession = null;
-    player.raidCooldownUntil = Date.now() + RAID_COOLDOWN_MS;
+    player.raidCooldownUntil = Date.now() + getRaidCooldownMs();
     saveGame();
   }
   document.getElementById('raidModal').style.display = 'none';
@@ -2729,6 +2883,18 @@ renderSettingsModal();
 setInterval(() => {
   if (!raidSession && document.getElementById('raidModal').style.display !== 'none') renderRaidModal();
 }, 1000);
+
+if (pendingOfflineReport) {
+  document.getElementById('welcomeBackText').innerHTML =
+    `คุณออฟไลน์ไป <span class="raid-highlight">${pendingOfflineReport.hours} ชั่วโมง</span><br>` +
+    `ได้รับ 💰 ${pendingOfflineReport.gold} Gold` +
+    (pendingOfflineReport.chests > 0 ? ` และ 🎁 กล่องสมบัติ +${pendingOfflineReport.chests} ใบ` : '');
+  document.getElementById('welcomeBackModal').style.display = 'flex';
+  renderAll();
+}
+document.getElementById('btnCloseWelcomeBack').addEventListener('click', () => {
+  document.getElementById('welcomeBackModal').style.display = 'none';
+});
 </script>
 </body>
 </html>
