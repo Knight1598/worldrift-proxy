@@ -48,6 +48,14 @@
   :root {
     --panel-radius: 6px;
     --gap: 12px;
+    /* ชุดสีหลักของเกม กำหนดไว้เป็นจุดเดียวแทนแปะสีกระจายทีละจุดเหมือนก่อนหน้านี้ */
+    --bg-page: #0a0b12;
+    --text-main: #f1ecd8;
+    --accent-gold: #ffd76a;
+    --divider: #6a5a90;
+    --panel-wood-fill: #7d3f19;
+    --panel-stone-fill: #63687a;
+    --panel-gold-fill: #333947;
   }
 
   * { box-sizing: border-box; }
@@ -55,8 +63,8 @@
   html, body {
     margin: 0;
     padding: 0;
-    background: #10121c;
-    color: #f1ecd8;
+    background: var(--bg-page);
+    color: var(--text-main);
     /* เดิมใช้ 'Courier New' เป็นฟอนต์หลัก แต่ฟอนต์นี้ไม่มีตัวอักษรไทย
        เบราว์เซอร์เลยต้องสลับไปใช้ฟอนต์อื่นเฉพาะข้อความไทย ทำให้อังกฤษ/ไทย
        ในหน้าเดียวกันดูคนละสไตล์ปนกัน — เปลี่ยนมาใช้ฟอนต์ที่ครอบคลุมทั้งไทย
@@ -94,7 +102,7 @@
     animation: floatUp 0.9s ease-out forwards;
     z-index: 5;
   }
-  .dmg-popup--crit  { color: #ffd76a; font-size: 1.5rem; }
+  .dmg-popup--crit  { color: var(--accent-gold); font-size: 1.5rem; }
   .dmg-popup--dodge { color: #7ad1ff; font-style: italic; font-size: 0.9rem; }
   .dmg-popup--heal  { color: #6be36b; }
 
@@ -172,7 +180,7 @@
     margin: 10px 0;
     font-size: 1.4rem;
     letter-spacing: 2px;
-    color: #ffd76a;
+    color: var(--accent-gold);
     text-shadow: 2px 2px 0 #000;
     position: relative;
   }
@@ -182,7 +190,7 @@
     top: 50%;
     transform: translateY(-50%);
     background: none;
-    border: 2px solid #5a4a80;
+    border: 2px solid var(--divider);
     border-radius: 50%;
     width: 34px;
     height: 34px;
@@ -190,7 +198,7 @@
     padding: 4px;
   }
   .settings-gear-btn img { width: 100%; height: 100%; object-fit: contain; }
-  .settings-gear-btn:hover { border-color: #ffd76a; }
+  .settings-gear-btn:hover { border-color: var(--accent-gold); }
 
   .settings-modal {
     position: fixed;
@@ -203,15 +211,43 @@
   }
   .settings-modal-box {
     background: #201a35;
-    border: 3px solid #5a4a80;
+    border: 3px solid var(--divider);
     border-radius: 8px;
     padding: 18px;
     width: min(340px, 90vw);
   }
-  .settings-modal-box h2 { margin: 0 0 12px; color: #ffd76a; font-size: 1.05rem; }
+  .settings-modal-box h2 { margin: 0 0 12px; color: var(--accent-gold); font-size: 1.05rem; }
   .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; font-size: 0.8rem; }
   .settings-row .btn { width: auto; margin-top: 0; padding: 6px 10px; }
   #btnCloseSettings { margin-top: 10px; }
+
+  /* ดันเจี้ยนท้าทาย (Boss Raid) — โหมดพิเศษแยกจากด่านปกติ ดวลดาเมจแบบจำกัดเวลาจริง */
+  .raid-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 55;
+  }
+  .raid-modal-box {
+    background: #201a35;
+    border: 3px solid var(--divider);
+    border-radius: 8px;
+    padding: 18px;
+    width: min(360px, 92vw);
+    text-align: center;
+  }
+  .raid-modal-box h2 { margin: 0 0 12px; color: var(--accent-gold); font-size: 1.05rem; }
+  .raid-desc { font-size: 0.78rem; color: #cfc7ae; margin: 0 0 12px; line-height: 1.5; }
+  .raid-highlight { color: var(--accent-gold); font-weight: bold; }
+  .raid-cooldown-note { font-size: 0.75rem; color: #8a84a0; margin-top: 8px; }
+  #raidActive { position: relative; }
+  .raid-boss-sprite { width: 80px; height: 80px; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(2px 2px 0 #000); }
+  .raid-timer { font-size: 1.3rem; font-weight: bold; color: var(--accent-gold); margin: 6px 0; }
+  #raidResultText { font-size: 0.85rem; margin-bottom: 12px; line-height: 1.5; }
+  #btnCloseRaid { margin-top: 10px; }
 
   .game-wrap {
     max-width: 1200px;
@@ -237,37 +273,48 @@
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังกรอบพาเนลแต่ละใบ)
      วางไฟล์ในโฟลเดอร์ assets/ui/
      =============================================== */
+  /* เดิมใช้ background-image + background-size:100% 100% ยืดภาพกรอบเล็กๆ (~90px)
+     เต็มพาเนลที่สูงเป็นพันพิกเซลบนมือถือ ทำให้กรอบ/หมุดมุมเบลอเป็นก้อน — เปลี่ยนมาใช้
+     border-image แบบ 9-slice แทน: ตรึงความหนาของกรอบให้คงที่ไม่ว่าพาเนลจะสูงแค่ไหน
+     ส่วนพื้นที่ภายในใช้ background-color เรียบแทน (สีจากค่าพิกเซลจริงในภาพต้นฉบับ) */
   .panel {
     border-radius: var(--panel-radius);
     padding: 14px;
-    background-color: #2a2140;
     background-repeat: no-repeat;
-    background-size: 100% 100%;
-    border: 4px solid #000;
-    box-shadow: inset 0 0 0 2px #4a3a70;
+    background-clip: padding-box;
+    border-width: 14px;
+    border-style: solid;
+    border-image-repeat: round;
+    box-shadow: inset 0 0 0 2px var(--divider);
     min-height: 260px;
   }
   .panel--character {
     grid-area: char;
-    /* ใส่รูปภาพตรงนี้: กรอบไม้ */
-    background-image: url('assets/ui/panel_wood.png');
+    background-color: var(--panel-wood-fill);
+    border-image-source: url('assets/ui/panel_wood.png');
+    border-image-slice: 24;
+    border-image-width: 14px;
   }
   .panel--chest {
     grid-area: chest;
-    /* ใส่รูปภาพตรงนี้: กรอบหิน */
-    background-image: url('assets/ui/panel_stone.png');
+    background-color: var(--panel-stone-fill);
+    border-image-source: url('assets/ui/panel_stone.png');
+    border-image-slice: 24;
+    border-image-width: 14px;
   }
   .panel--battle {
     grid-area: battle;
-    /* ใส่รูปภาพตรงนี้: กรอบทอง */
-    background-image: url('assets/ui/panel_gold.png');
+    background-color: var(--panel-gold-fill);
+    border-image-source: url('assets/ui/panel_gold.png');
+    border-image-slice: 22;
+    border-image-width: 14px;
   }
 
   .panel h2 {
     margin: 0 0 10px;
     font-size: 1rem;
-    color: #ffd76a;
-    border-bottom: 2px dashed #5a4a80;
+    color: var(--accent-gold);
+    border-bottom: 2px dashed var(--divider);
     padding-bottom: 6px;
   }
 
@@ -283,7 +330,7 @@
   .gold-display {
     text-align: center;
     font-size: 1rem;
-    color: #ffd76a;
+    color: var(--accent-gold);
     margin-bottom: 10px;
   }
   .gold-display img { width: 18px; height: 18px; vertical-align: middle; margin-right: 4px; }
@@ -320,7 +367,26 @@
     text-shadow: 1px 1px 0 #000;
   }
 
-  .stat-line { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 3px 0; }
+  .stat-line { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 3px 0; gap: 6px; }
+  /* จัดสเตตัสเป็น 2 คอลัมน์แทนเรียงคอลัมน์เดียว 5 แถว ลดความสูงลงเกือบครึ่ง */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; margin: 6px 0; }
+  .stat-grid .stat-line { margin: 2px 0; font-size: 0.8rem; }
+  .stat-cp-row { grid-column: 1 / -1; border-top: 1px dashed var(--divider); margin-top: 6px !important; padding-top: 6px; font-weight: bold; font-size: 0.85rem !important; }
+
+  /* หัวข้อกาง/ยุบได้ (Prestige, สกิล Passive) เพื่อลดความยาวพาเนลตอนเปิดหน้าครั้งแรก */
+  .collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    color: var(--accent-gold);
+    font-size: 0.9rem;
+    padding: 2px 0;
+    user-select: none;
+  }
+  .collapse-arrow { display: inline-block; transition: transform 0.2s ease; }
+  .collapsible-header.collapsed .collapse-arrow { transform: rotate(-90deg); }
+  .collapsible-body.collapsed { display: none; }
 
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังปุ่มแต่ละสี)
@@ -357,9 +423,32 @@
   .potion-row .btn { margin-top: 0; font-size: 0.68rem; }
 
   /* Gem Shop */
-  .gem-shop-section { margin-top: 12px; border-top: 2px dashed #6a5a9a; padding-top: 10px; }
+  .gem-shop-section { margin-top: 12px; border-top: 2px dashed var(--divider); padding-top: 10px; }
   .gem-shop-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .gem-shop-item .btn { margin-top: 0; font-size: 0.7rem; }
+
+  /* สัตว์เลี้ยง (Pets) */
+  .pet-section { margin-top: 12px; border-top: 2px dashed var(--divider); padding-top: 10px; }
+  .pet-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }
+  .pet-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: #1c1730;
+    border: 2px solid var(--divider);
+    border-radius: 4px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+  .pet-card--equipped { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); }
+  .pet-card .pet-icon { width: 40px; height: 40px; object-fit: contain; }
+  .pet-card .pet-name { font-size: 0.68rem; color: var(--text-main); margin-top: 2px; }
+  .pet-card .pet-lv-stars { font-size: 0.62rem; color: var(--accent-gold); }
+  .pet-card .pet-desc { font-size: 0.58rem; color: #8a84a0; margin: 1px 0 4px; }
+  .pet-card .btn { font-size: 0.62rem; padding: 4px 6px; margin-top: 3px; }
+  .pet-empty { grid-column: 1 / -1; text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 10px 0; }
+  .pet-food-count { font-size: 0.72rem; color: var(--accent-gold); margin-top: 6px; }
 
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (กรอบช่องไอเทม/อุปกรณ์)
@@ -415,7 +504,7 @@
   .gacha-result {
     width: 100%;
     background: #1c1730;
-    border: 2px dashed #6a5a9a;
+    border: 2px dashed var(--divider);
     border-radius: 4px;
     padding: 8px;
     text-align: center;
@@ -433,14 +522,14 @@
 
   /* คลังไอเทม (Inventory) */
   .inventory-section { margin-top: 12px; }
-  .inventory-title { font-size: 0.85rem; color: #ffd76a; margin: 8px 0 4px; }
+  .inventory-title { font-size: 0.85rem; color: var(--accent-gold); margin: 8px 0 4px; }
   .inventory-list { max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
   .inventory-item {
     display: flex;
     align-items: center;
     gap: 6px;
     background: #1c1730;
-    border: 1px solid #4a3a70;
+    border: 1px solid var(--divider);
     border-radius: 4px;
     padding: 4px 6px;
     font-size: 0.7rem;
@@ -451,10 +540,10 @@
   .inventory-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 10px 0; }
 
   /* Prestige */
-  .prestige-section { margin-top: 16px; border-top: 2px dashed #5a4a80; padding-top: 10px; }
+  .prestige-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
 
   /* สกิล Passive */
-  .skill-section { margin-top: 16px; border-top: 2px dashed #5a4a80; padding-top: 10px; }
+  .skill-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
   .skill-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
   .skill-btn {
     display: flex;
@@ -462,7 +551,7 @@
     align-items: center;
     gap: 2px;
     background: #1c1730;
-    border: 2px solid #4a3a70;
+    border: 2px solid var(--divider);
     border-radius: 4px;
     padding: 6px 2px;
     cursor: pointer;
@@ -471,7 +560,7 @@
   }
   .skill-btn img { width: 32px; height: 32px; object-fit: contain; }
   .skill-btn .skill-name { font-size: 0.6rem; }
-  .skill-btn.skill-btn--active { border-color: #ffd76a; box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); color: #ffd76a; }
+  .skill-btn.skill-btn--active { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); color: var(--accent-gold); }
 
   /* ฉากต่อสู้ */
   /* ===============================================
@@ -525,6 +614,101 @@
 
   .battle-buttons { display: flex; gap: 6px; }
 
+  /* ภารกิจ (Quests / Achievements) — แจกกล่องสมบัติ/เพชร เมื่อทำสำเร็จ เป้าหมายระยะสั้นกันน่าเบื่อ */
+  .panel--quests {
+    grid-column: 1 / -1;
+    background-color: var(--panel-gold-fill);
+    border-image-source: url('assets/ui/panel_gold.png');
+    border-image-slice: 22;
+    border-image-width: 14px;
+    min-height: 0;
+  }
+  .panel--quests h2 { display: flex; align-items: center; gap: 8px; }
+  .quest-badge {
+    display: none;
+    font-size: 0.7rem;
+    background: #d3372c;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-shadow: none;
+  }
+  .quest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 340px; overflow-y: auto; }
+  .quest-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #1c1730;
+    border: 2px solid var(--divider);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .quest-row--ready { border-color: var(--accent-gold); box-shadow: 0 0 8px 1px rgba(255,215,106,0.5); }
+  .quest-row--claimed { opacity: 0.55; }
+  .quest-info { flex: 1; min-width: 0; }
+  .quest-name { font-size: 0.85rem; font-weight: bold; color: var(--accent-gold); }
+  .quest-desc { font-size: 0.72rem; color: #cfc7ae; margin: 2px 0 4px; }
+  .quest-progress-bar-bg { width: 100%; height: 8px; background: #000; border-radius: 4px; overflow: hidden; }
+  .quest-progress-bar-fill { height: 100%; background: linear-gradient(90deg, #ffd76a, #ff9d2f); transition: width 0.3s ease; }
+  .quest-progress-label { font-size: 0.68rem; color: #cfc7ae; margin-top: 2px; }
+  .quest-claim-btn { width: auto; white-space: nowrap; font-size: 0.72rem; padding: 8px 10px; margin-top: 0; flex-shrink: 0; }
+
+  /* เอฟเฟกต์ "dopamine hit" ตอนกดรับรางวัลภารกิจ: pop + เรืองแสงวูบ + ตัวเลขรางวัลลอยขึ้น */
+  @keyframes questClaimPop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.04); box-shadow: 0 0 14px 4px rgba(255,204,51,0.75); }
+    100% { transform: scale(1); box-shadow: none; }
+  }
+  .quest-row--just-claimed { animation: questClaimPop 0.5s ease-out; }
+  .reward-float-popup {
+    position: absolute;
+    right: 10px;
+    top: -4px;
+    color: var(--accent-gold);
+    font-weight: bold;
+    font-size: 0.8rem;
+    text-shadow: 1px 1px 0 #000;
+    pointer-events: none;
+    white-space: nowrap;
+    animation: floatUp 0.9s ease-out forwards;
+  }
+
+  /* Toast notification — แจ้งเตือนเล็กๆ มุมบนเวลาภารกิจสำเร็จ/รับรางวัล */
+  .toast-container {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    width: min(360px, 92vw);
+  }
+  @keyframes toastIn {
+    0%   { opacity: 0; transform: translateY(-14px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes toastOut {
+    0%   { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-8px); }
+  }
+  .toast {
+    background: var(--panel-gold-fill);
+    border: 2px solid var(--accent-gold);
+    color: var(--text-main);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 0.82rem;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    animation: toastIn 0.25s ease-out;
+  }
+  .toast--out { animation: toastOut 0.3s ease-in forwards; }
+
   /* Battle log */
   .log-panel {
     grid-column: 1 / -1;
@@ -539,7 +723,7 @@
     line-height: 1.5;
   }
   .log-panel div { border-bottom: 1px solid #222; padding: 2px 0; }
-  .log-panel div:last-child { color: #ffd76a; }
+  .log-panel div:last-child { color: var(--accent-gold); }
 </style>
 </head>
 <body>
@@ -550,6 +734,8 @@
     <img src="assets/ui/icon_gear.png" alt="settings" onerror="this.style.display='none'">
   </button>
 </h1>
+
+<div class="toast-container" id="toastContainer"></div>
 
 <div class="settings-modal" id="settingsModal" style="display:none;">
   <div class="settings-modal-box">
@@ -563,9 +749,38 @@
       <button class="btn btn--info" id="btnCycleAutoSpeed">ปกติ</button>
     </div>
     <div class="settings-row">
+      <span>จัดการอุปกรณ์อัตโนมัติ</span>
+      <button class="btn btn--neutral" id="btnToggleAutoEquip">ปิดอยู่</button>
+    </div>
+    <div class="settings-row">
       <button class="btn btn--danger" id="btnResetSave">รีเซ็ตเซฟทั้งหมด</button>
     </div>
     <button class="btn btn--neutral" id="btnCloseSettings">ปิด</button>
+  </div>
+</div>
+
+<div class="raid-modal" id="raidModal" style="display:none;">
+  <div class="raid-modal-box">
+    <h2>ดันเจี้ยนท้าทาย</h2>
+    <div id="raidIntro">
+      <p class="raid-desc">ทำดาเมจให้ได้มากที่สุดภายใน 30 วินาที ถ้าถึงเกณฑ์ที่กำหนดจะได้รับ <span class="raid-highlight">อาหารสัตว์เลี้ยง</span> และ <span class="raid-highlight">เพชร</span></p>
+      <button class="btn btn--danger" id="btnStartRaid">เริ่ม Raid</button>
+      <div class="raid-cooldown-note" id="raidCooldownNote"></div>
+    </div>
+    <div id="raidActive" style="display:none;">
+      <img class="raid-boss-sprite" id="raidBossSprite" src="" alt="raid boss">
+      <div class="raid-timer" id="raidTimer">30.0s</div>
+      <div class="hp-bar-bg" id="raidHpBarBg">
+        <div class="hp-bar-fill" id="raidHpFill" style="width:100%;"></div>
+        <div class="hp-bar-label" id="raidHpLabel">- / -</div>
+      </div>
+      <button class="btn btn--danger" id="btnRaidAttack">⚔️ โจมตี!</button>
+    </div>
+    <div id="raidResult" style="display:none;">
+      <div class="raid-result-text" id="raidResultText"></div>
+      <button class="btn btn--neutral" id="btnCloseRaidResult">ปิด</button>
+    </div>
+    <button class="btn btn--neutral" id="btnCloseRaid">ปิด</button>
   </div>
 </div>
 
@@ -595,11 +810,13 @@
         <button class="btn btn--info" id="btnUseBluePotion">🧪ฟ้า บัฟ 3 ไฟต์ (มี <span id="bluePotionCount">0</span>)</button>
       </div>
 
-      <div class="stat-line"><span>ATK</span><span id="statAtk">10</span></div>
-      <div class="stat-line"><span>DEF</span><span id="statDef">5</span></div>
-      <div class="stat-line"><span>โอกาสคริติคอล</span><span id="statCrit">10%</span></div>
-      <div class="stat-line"><span>โอกาสหลบหลีก</span><span id="statDodge">5%</span></div>
-      <div class="stat-line"><span>CP (พลังรบรวม)</span><span id="statCp">0</span></div>
+      <div class="stat-grid">
+        <div class="stat-line"><span>ATK</span><span id="statAtk">10</span></div>
+        <div class="stat-line"><span>DEF</span><span id="statDef">5</span></div>
+        <div class="stat-line"><span>คริติคอล</span><span id="statCrit">10%</span></div>
+        <div class="stat-line"><span>หลบหลีก</span><span id="statDodge">5%</span></div>
+        <div class="stat-line stat-cp-row"><span>CP (พลังรบรวม)</span><span id="statCp">0</span></div>
+      </div>
 
       <div class="equip-slots">
         <div class="item-slot" id="slotWeapon"><span class="slot-label">อาวุธ</span></div>
@@ -623,14 +840,25 @@
       </div>
 
       <div class="prestige-section">
-        <div class="row"><span>Prestige Points</span><span id="prestigePoints">0</span></div>
-        <div class="row"><span>โบนัสถาวร (ATK/DEF/HP)</span><span id="prestigeBonus">+0%</span></div>
-        <button class="btn btn--success" id="btnPrestige">Prestige</button>
+        <div class="collapsible-header collapsed" data-target="prestigeBody">
+          <span>Prestige</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="prestigeBody">
+          <div class="row"><span>Prestige Points</span><span id="prestigePoints">0</span></div>
+          <div class="row"><span>โบนัสถาวร (ATK/DEF/HP)</span><span id="prestigeBonus">+0%</span></div>
+          <button class="btn btn--success" id="btnPrestige">Prestige</button>
+        </div>
       </div>
 
       <div class="skill-section">
-        <h3 class="inventory-title">สกิล Passive</h3>
-        <div class="skill-grid" id="skillGrid"></div>
+        <div class="collapsible-header collapsed" data-target="skillBody">
+          <span>สกิล Passive</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="skillBody">
+          <div class="skill-grid" id="skillGrid"></div>
+        </div>
       </div>
     </section>
 
@@ -664,6 +892,18 @@
         <h3 class="inventory-title">Gem Shop 💎</h3>
         <div class="gem-shop-list" id="gemShopList"></div>
       </div>
+
+      <div class="pet-section">
+        <div class="collapsible-header" data-target="petBody">
+          <span>🐾 สัตว์เลี้ยง</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body" id="petBody">
+          <button class="btn btn--primary" id="btnRollPet">สุ่มสัตว์เลี้ยง (5 💎)</button>
+          <div class="pet-food-count">🍖 อาหารสัตว์เลี้ยง: <span id="petFoodCount">0</span></div>
+          <div class="pet-grid" id="petGrid"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ Panel 3: Battle ============ -->
@@ -685,6 +925,13 @@
         <button class="btn btn--neutral" id="btnFight">สู้ (Fight)</button>
         <button class="btn btn--primary" id="btnAutoBattle">Auto-Battle: OFF</button>
       </div>
+      <button class="btn btn--danger" id="btnOpenRaid" style="margin-top:10px;">⚔️ ดันเจี้ยนท้าทาย (Boss Raid)</button>
+    </section>
+
+    <!-- ============ Panel 4: Quests / Achievements ============ -->
+    <section class="panel panel--quests">
+      <h2>ภารกิจ <span class="quest-badge" id="questBadge"></span></h2>
+      <div class="quest-list" id="questList"></div>
     </section>
 
     <!-- ============ Battle Log ============ -->
@@ -865,9 +1112,11 @@ function getStageMonster(stage) {
   let tier = 'normal';
   if (stage % 10 === 0)      { mult = 5; tier = 'bigboss'; }
   else if (stage % 5 === 0)  { mult = 3; tier = 'midboss'; }
-  // HP ใช้ mult เต็มเพื่อความ "อึด" ของบอส แต่ ATK/DEF ใช้ sqrt(mult) แทน
-  // ป้องกันไม่ให้ DEF ของบอสสูงจนหักล้าง ATK ผู้เล่นจนเหลือดาเมจ 1 แทบทุกครั้ง
-  const offenseMult = Math.sqrt(mult);
+  // HP ใช้ mult เต็มเพื่อความ "อึด" ของบอส และ ATK ใช้ sqrt(mult) ให้ยังหนักหน่วงสมกับเป็นบอส
+  // แต่ DEF ไม่ใส่ boss bonus เพิ่มเลย (สเกลแบบเดียวกับมอนสเตอร์ปกติ) — จากการจำลองพบว่าเดิมที่ DEF
+  // ก็ได้ sqrt(mult) เหมือน ATK ทำให้ DEF ของบอสไล่ตาม/แซง ATK ผู้เล่นเร็วกว่าที่ผู้เล่นจะอัปเกรดทัน
+  // (ราวด่าน 30-50) จนดาเมจตกลงไปอยู่ที่ 1 เกือบตลอด (dmg = max(1, atk-def)) กลายเป็นบอสที่ต้องยืนตีเป็นพันครั้ง
+  const atkOffenseMult = Math.sqrt(mult);
   // มอนสเตอร์ระดับสูง (มิด/บิ๊กบอส) มีโอกาสคริติคอลมากขึ้น ส่วนโอกาสหลบหลีกคงที่
   const CRIT_BY_TIER = { normal: 0.05, midboss: 0.08, bigboss: 0.12 };
 
@@ -879,8 +1128,8 @@ function getStageMonster(stage) {
     element: base.element,
     maxHp: Math.round(base.hp * stageScale * mult),
     hp: Math.round(base.hp * stageScale * mult),
-    atk: Math.round(base.atk * stageScale * offenseMult),
-    def: Math.round(base.def * stageScale * offenseMult),
+    atk: Math.round(base.atk * stageScale * atkOffenseMult),
+    def: Math.round(base.def * stageScale),
     crit: CRIT_BY_TIER[tier],
     dodge: 0.05,
   };
@@ -986,6 +1235,32 @@ function getSellValue(item) {
   return Math.floor(item.value * 4);
 }
 
+// เปิดใช้ผ่าน Settings > จัดการอุปกรณ์อัตโนมัติ: ถ้าไอเทมที่สุ่มได้จากกล่องสมบัติมีค่าสถานะสูงกว่า
+// ของที่สวมอยู่ในช่องเดียวกัน ให้สวมใส่ทันที (ขายของเก่าเป็น Gold) ไม่งั้นขายไอเทมใหม่ทิ้งทันที
+// กันคลังไอเทมรก — คืนค่า true ถ้าจัดการให้แล้ว (ไม่ต้องโชว์ปุ่ม สวมใส่/เก็บไว้/ขาย ให้กดเอง)
+function autoResolveItemIfEnabled(item) {
+  if (!player.settings.autoEquipEnabled) return false;
+  const old = player.equipment[item.slot];
+  if (!old || item.value > old.value) {
+    player.equipment[item.slot] = item;
+    player.pendingGacha = null;
+    player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+    if (old) {
+      const refund = getSellValue(old);
+      player.gold += refund;
+      appendLog([`สวมใส่อัตโนมัติ: ${item.name} (ขาย ${old.name} เก่าได้ ${refund} Gold)`]);
+    } else {
+      appendLog([`สวมใส่อัตโนมัติ: ${item.name}`]);
+    }
+  } else {
+    const refund = getSellValue(item);
+    player.gold += refund;
+    player.pendingGacha = null;
+    appendLog([`ขายอัตโนมัติ: ${item.name} ได้ ${refund} Gold (สเตตัสต่ำกว่าที่สวมอยู่)`]);
+  }
+  return true;
+}
+
 function formatItemValue(item) {
   return (item.slot === 'gloves' || item.slot === 'boots') ? `+${item.value}%` : `+${item.value}`;
 }
@@ -1013,7 +1288,22 @@ let player = {
   gems: 0, // เพชร (Premium Currency) ได้จากการชนะ Big-Boss
   buffFightsLeft: 0, // จำนวนไฟต์ที่เหลือของบัฟจากโพชั่นฟ้า
   buffMultiplier: 1, // ตัวคูณ ATK/DEF ชั่วคราวจากโพชั่นฟ้า
-  settings: { animationsEnabled: true, autoBattleSpeed: 'normal' },
+  settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false },
+  pets: {}, // key ของสัตว์เลี้ยงที่มี -> { level, stars } (ดู PET_DEFS)
+  equippedPet: null, // key ของสัตว์เลี้ยงที่ติดตั้งอยู่ (ให้บัฟได้ทีละ 1 ตัว)
+  petFood: 0, // ได้จาก Boss Raid ใช้ป้อนสัตว์เลี้ยงแทน Gold ได้ (1 อาหาร = 1 เลเวล ฟรี)
+  raidCooldownUntil: 0, // timestamp (Date.now()) ที่จะเข้า Boss Raid รอบถัดไปได้
+  // ตัวนับความคืบหน้าภารกิจ (ดู QUESTS) — prestigeCount สะสมตลอดชีพ ส่วนที่เหลือถูกรีเซ็ตกลับ 0
+  // ทุกครั้งที่ Prestige (ดู doPrestige) เพื่อให้ทำภารกิจรับรางวัลใหม่ได้ทุกรอบ
+  stats: {
+    monstersKilled: 0,
+    bigBossKills: 0,
+    chestsOpened: 0,
+    upgradesPurchased: 0,
+    prestigeCount: 0,
+    itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 },
+  },
+  claimedQuests: [], // key ของภารกิจที่กดรับรางวัลไปแล้วในรอบ Prestige ปัจจุบัน
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1037,19 +1327,23 @@ function getEquippedSkill(p) { return PASSIVE_SKILLS.find(s => s.key === p.equip
 // PRESTIGE — รีเซ็ตด่านเพื่อแลกโบนัสถาวร
 // ===============================================
 const PRESTIGE_STAGE_REQUIREMENT = 10; // ต้องเคยไปถึงด่านนี้อย่างน้อย ถึงจะได้ Prestige Point 1 แต้ม
-function getPrestigeMultiplier(p) { return 1 + p.prestigePoints * 0.05; }
+// 5% -> 8%/แต้ม: จากการจำลองพบว่าโบนัสเดิมอ่อนเกินไปที่จะทำให้ Prestige รอบถัดไปไปได้ไกลขึ้นอย่างมีนัยสำคัญ
+// (ต้อง Prestige หลายสิบรอบกว่าจะรู้สึกถึงผล) ค่าใหม่ทำให้แต่ละรอบ Prestige ผลักดันให้ไปได้ไกลขึ้นจริง
+function getPrestigeMultiplier(p) { return 1 + p.prestigePoints * 0.08; }
 function getPrestigeGain(p) { return Math.floor((p.highestStage || 1) / PRESTIGE_STAGE_REQUIREMENT); }
 
 function getMaxHp(p) {
   const base = p.baseStats.hp + p.upgradeLevels.hp * 10 + (p.equipment.ring ? p.equipment.ring.value : 0);
   const skillMult = p.equippedSkill === 'nature' ? 1.15 : 1;
-  return Math.round(base * skillMult * getPrestigeMultiplier(p));
+  const petMult = 1 + getPetBonusValue('hp');
+  return Math.round(base * skillMult * petMult * getPrestigeMultiplier(p));
 }
 function getAtk(p) {
   const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0);
   const skillMult = p.equippedSkill === 'fire' ? 1.08 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
-  return Math.round(base * skillMult * buffMult * getPrestigeMultiplier(p));
+  const petMult = 1 + getPetBonusValue('atk');
+  return Math.round(base * skillMult * buffMult * petMult * getPrestigeMultiplier(p));
 }
 function getDef(p) {
   const base = p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0) + (p.equipment.helmet ? p.equipment.helmet.value : 0);
@@ -1096,6 +1390,16 @@ function doPrestige() {
   player.pendingGacha = null;
   player.prestigePoints = totalPoints;
   player.currentHp = getMaxHp(player);
+  player.stats.prestigeCount += 1;
+  // ภารกิจผูกกับรอบ Prestige: รีเซ็ตความคืบหน้ากลับ 0 ทุกครั้ง (prestigeCount ไม่รีเซ็ตเพราะเป็นสถิติสะสมตลอดชีพ
+  // ไม่ใช่ตัวนับภารกิจ) ให้ผู้เล่นวนกลับมาทำภารกิจรับรางวัลใหม่ได้ทุกรอบ Prestige
+  player.claimedQuests = [];
+  player.stats.monstersKilled = 0;
+  player.stats.bigBossKills = 0;
+  player.stats.chestsOpened = 0;
+  player.stats.upgradesPurchased = 0;
+  player.stats.itemsByRarity = { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 };
+  announcedQuests.clear(); // เคลียร์ toast ที่เคยแจ้งไปแล้ว ให้ภารกิจรอบใหม่แจ้งเตือนได้อีกครั้งตอนทำสำเร็จ
   appendLog([`✦ Prestige! ได้รับ Prestige Point +${gain} (สะสม ${totalPoints} แต้ม, โบนัสถาวร +${Math.round((getPrestigeMultiplier(player) - 1) * 100)}%)`]);
   ensureEncounter();
   renderAll();
@@ -1140,6 +1444,7 @@ function buyFromGemShop(itemKey) {
     appendLog(['ซื้อโพชั่นฟ้า x1 จาก Gem Shop']);
   } else if (itemKey === 'guaranteed_epic') {
     player.pendingGacha = rollGachaItemMinRarity(player.stage, 'epic');
+    player.stats.itemsByRarity[player.pendingGacha.rarity] += 1;
     appendLog([`เปิดกล่องการันตี: ได้รับ ${player.pendingGacha.name}`]);
   } else if (itemKey === 'respec_upgrades') {
     let totalSpent = 0;
@@ -1157,10 +1462,283 @@ function buyFromGemShop(itemKey) {
   renderAll();
 }
 
+// ===============================================
+// สัตว์เลี้ยง (Pets) — สุ่มด้วยเพชร (พรีเมียม), ติดตั้งได้ทีละ 1 ตัวเพื่อรับบัฟ
+// ใช้สไปรต์มอนสเตอร์ที่มีอยู่แล้ว (MONSTER_ICONS) แปลงเป็นสัตว์เลี้ยงแทนการตัด asset ใหม่
+// ===============================================
+const PET_DEFS = [
+  { key: 'slime_pet',  name: 'สไลม์น้อย',  icon: MONSTER_ICONS.slime,      rarity: 'common',    buffType: 'atk',            baseBuff: 0.03 },
+  { key: 'bat_pet',    name: 'ค้างคาวน้อย', icon: MONSTER_ICONS.bat,        rarity: 'common',    buffType: 'hp',             baseBuff: 0.04 },
+  { key: 'wolf_pet',   name: 'หมาป่าเงา',   icon: MONSTER_ICONS.dark_wolf,  rarity: 'rare',      buffType: 'atk',            baseBuff: 0.05 },
+  { key: 'golem_pet',  name: 'โกเลมหิน',    icon: MONSTER_ICONS.stone_golem,rarity: 'epic',      buffType: 'hp',             baseBuff: 0.07 },
+  { key: 'demon_pet',  name: 'ปีศาจแดง',    icon: MONSTER_ICONS.red_demon,  rarity: 'epic',      buffType: 'chestDropBonus', baseBuff: 0.05 },
+  { key: 'dragon_pet', name: 'มังกรม่วง',    icon: MONSTER_ICONS.purple_dragon, rarity: 'legendary', buffType: 'atk',        baseBuff: 0.10 },
+];
+const PET_GACHA_COST = 5; // เพชรต่อครั้ง
+const PET_MAX_STARS = 5;
+const PET_RARITY_WEIGHTS = [
+  { key: 'common', weight: 55 },
+  { key: 'rare', weight: 30 },
+  { key: 'epic', weight: 12 },
+  { key: 'legendary', weight: 3 },
+];
+
+function rollPetRarity() {
+  const total = PET_RARITY_WEIGHTS.reduce((s, r) => s + r.weight, 0);
+  let roll = Math.random() * total;
+  for (const r of PET_RARITY_WEIGHTS) {
+    if (roll < r.weight) return r.key;
+    roll -= r.weight;
+  }
+  return PET_RARITY_WEIGHTS[0].key;
+}
+
+function rollPetGacha() {
+  if (player.gems < PET_GACHA_COST) return null;
+  player.gems -= PET_GACHA_COST;
+  const rarity = rollPetRarity();
+  const candidates = PET_DEFS.filter(p => p.rarity === rarity);
+  const pet = candidates[Math.floor(Math.random() * candidates.length)];
+  const owned = player.pets[pet.key];
+  if (owned) {
+    // ได้ตัวซ้ำ: ย่อยเพิ่มดาวแทนที่จะเก็บซ้ำซ้อน (มีสัตว์เลี้ยงแต่ละสายพันธุ์ได้แค่ 1 ตัว)
+    owned.stars = Math.min(PET_MAX_STARS, owned.stars + 1);
+    appendLog([`ได้ ${pet.name} ซ้ำ! ย่อยเพิ่มดาวเป็น ${owned.stars} ★`]);
+  } else {
+    player.pets[pet.key] = { level: 1, stars: 1 };
+    appendLog([`ได้สัตว์เลี้ยงใหม่: ${pet.name}!`]);
+  }
+  return pet;
+}
+
+function getPetLevelUpCost(petKey) {
+  const owned = player.pets[petKey];
+  return owned ? 50 * owned.level : 0;
+}
+
+function levelUpPet(petKey) {
+  const owned = player.pets[petKey];
+  if (!owned) return;
+  const cost = getPetLevelUpCost(petKey);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  owned.level += 1;
+  const def = PET_DEFS.find(p => p.key === petKey);
+  appendLog([`${def.name} อัปเลเวลเป็น Lv.${owned.level}`]);
+  renderAll();
+}
+
+// ป้อนอาหารสัตว์เลี้ยง (ได้จาก Boss Raid): ฟรี ไม่ใช้ Gold แลกกับเลเวลได้ 1 อาหาร = 1 เลเวล
+function feedPet(petKey) {
+  const owned = player.pets[petKey];
+  if (!owned || player.petFood <= 0) return;
+  player.petFood -= 1;
+  owned.level += 1;
+  const def = PET_DEFS.find(p => p.key === petKey);
+  appendLog([`ป้อนอาหาร ${def.name} อัปเลเวลเป็น Lv.${owned.level}`]);
+  renderAll();
+}
+
+function equipPet(petKey) {
+  if (!player.pets[petKey]) return;
+  player.equippedPet = player.equippedPet === petKey ? null : petKey;
+  player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+  renderAll();
+}
+
+// ค่าบัฟจากสัตว์เลี้ยงที่ติดตั้งอยู่ (0 ถ้าไม่มีตัวติดตั้ง หรือสัตว์เลี้ยงนั้นไม่ตรงกับ buffType ที่ถาม)
+function getPetBonusValue(buffType) {
+  if (!player.equippedPet) return 0;
+  const def = PET_DEFS.find(p => p.key === player.equippedPet);
+  const owned = player.pets[player.equippedPet];
+  if (!def || !owned || def.buffType !== buffType) return 0;
+  return def.baseBuff * owned.level * (1 + (owned.stars - 1) * 0.5);
+}
+
 function ensureEncounter() {
   if (!player.encounter) {
     player.encounter = getStageMonster(player.stage);
   }
+}
+
+// ===============================================
+// ดันเจี้ยนท้าทาย (Boss Raid) — โหมดพิเศษแยกจากด่านปกติ: ดวลดาเมจแบบจำกัดเวลาจริง (30 วินาที)
+// ไม่ใช้ turn-based engine เดิม (resolveBattle) เพราะต้องการให้ผู้เล่นกดโจมตีเองสดๆ ภายในเวลาจำกัด
+// ใช้ cooldown ภายใน session แทน "รายวันจริง" เพื่อไม่ต้องผูก logic วันที่/timezone ที่เสี่ยงบั๊ก
+// ===============================================
+const RAID_DURATION_MS = 30000;
+const RAID_COOLDOWN_MS = 60000;
+let raidSession = null; // { maxHp, hp, damageDealt, threshold, endsAt, tickHandle } ไม่ persist (เซสชันชั่วคราว)
+
+function getRaidBoss() {
+  // ใช้สไปรต์มอนสเตอร์ระดับสูงสุดที่มีอยู่แล้วเป็นภาพบอส Raid ไม่ต้องตัด asset ใหม่
+  const candidates = ['demon_king', 'purple_dragon', 'armored_golem_warrior'];
+  const key = candidates[Math.floor(Math.random() * candidates.length)];
+  return MONSTERS.find(m => m.key === key);
+}
+
+function isRaidOnCooldown() {
+  return Date.now() < (player.raidCooldownUntil || 0);
+}
+
+function startRaid() {
+  if (isRaidOnCooldown() || raidSession) return;
+  const boss = getRaidBoss();
+  const atk = getAtk(player);
+  raidSession = {
+    boss,
+    maxHp: atk * 60,
+    hp: atk * 60,
+    damageDealt: 0,
+    threshold: atk * 15,
+    endsAt: Date.now() + RAID_DURATION_MS,
+  };
+  document.getElementById('raidBossSprite').src = boss.icon;
+  document.getElementById('raidIntro').style.display = 'none';
+  document.getElementById('raidResult').style.display = 'none';
+  document.getElementById('raidActive').style.display = 'block';
+  renderRaidActive();
+  raidSession.tickHandle = setInterval(raidTick, 100);
+}
+
+function raidTick() {
+  if (!raidSession) return;
+  const msLeft = raidSession.endsAt - Date.now();
+  if (msLeft <= 0 || raidSession.hp <= 0) {
+    endRaid();
+    return;
+  }
+  renderRaidActive();
+}
+
+function raidAttack() {
+  if (!raidSession || raidSession.hp <= 0) return;
+  const atk = getAtk(player);
+  const isCrit = Math.random() < getCritChance(player);
+  let dmg = Math.max(1, atk);
+  if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
+  raidSession.hp = Math.max(0, raidSession.hp - dmg);
+  raidSession.damageDealt += dmg;
+  spawnDamagePopup(document.getElementById('raidBossSprite').parentElement, { kind: isCrit ? 'crit' : 'hit', dmg });
+  triggerHitEffect(document.getElementById('raidBossSprite'));
+  renderRaidActive();
+  if (raidSession.hp <= 0) endRaid();
+}
+
+function renderRaidActive() {
+  if (!raidSession) return;
+  const msLeft = Math.max(0, raidSession.endsAt - Date.now());
+  document.getElementById('raidTimer').textContent = `${(msLeft / 1000).toFixed(1)}s`;
+  const pct = Math.max(0, Math.min(100, (raidSession.hp / raidSession.maxHp) * 100));
+  document.getElementById('raidHpFill').style.width = pct + '%';
+  document.getElementById('raidHpLabel').textContent = `${raidSession.hp} / ${raidSession.maxHp}`;
+}
+
+function endRaid() {
+  if (!raidSession) return;
+  clearInterval(raidSession.tickHandle);
+  const success = raidSession.damageDealt >= raidSession.threshold;
+  player.raidCooldownUntil = Date.now() + RAID_COOLDOWN_MS;
+  document.getElementById('raidActive').style.display = 'none';
+  const resultText = document.getElementById('raidResultText');
+  if (success) {
+    const foodReward = 3;
+    const gemReward = 2;
+    player.petFood += foodReward;
+    player.gems += gemReward;
+    resultText.textContent = `สำเร็จ! ทำดาเมจรวม ${raidSession.damageDealt} ได้รับ 🍖 อาหารสัตว์เลี้ยง +${foodReward} และ 💎 เพชร +${gemReward}`;
+    appendLog([`Boss Raid สำเร็จ! ได้รับอาหารสัตว์เลี้ยง +${foodReward}, เพชร +${gemReward}`]);
+    showToast('🎉 Boss Raid สำเร็จ! ได้รางวัลแล้ว');
+  } else {
+    resultText.textContent = `ยังไม่ถึงเกณฑ์ (ทำดาเมจ ${raidSession.damageDealt} / ${raidSession.threshold}) ลองใหม่รอบหน้านะ!`;
+  }
+  document.getElementById('raidResult').style.display = 'block';
+  document.getElementById('btnCloseRaid').style.display = 'none'; // ใช้ปุ่ม "ปิด" ในผลลัพธ์แทน กันปุ่มซ้อนกัน
+  raidSession = null;
+  renderRaidModal();
+  renderAll();
+}
+
+function renderRaidModal() {
+  const btn = document.getElementById('btnStartRaid');
+  const note = document.getElementById('raidCooldownNote');
+  if (isRaidOnCooldown()) {
+    btn.disabled = true;
+    const secsLeft = Math.ceil((player.raidCooldownUntil - Date.now()) / 1000);
+    note.textContent = `รออีก ${secsLeft} วินาทีก่อนเข้ารอบถัดไป`;
+  } else {
+    btn.disabled = false;
+    note.textContent = '';
+  }
+}
+
+// ===============================================
+// ภารกิจ (Quests) — เป้าหมายระยะสั้นต่อรอบ Prestige หนึ่งรอบ ให้ผลตอบแทนเป็นกล่องสมบัติ/เพชร
+// ความคืบหน้าทั้งหมด (claimedQuests + ตัวนับใน player.stats) ถูกรีเซ็ตกลับเป็น 0 ทุกครั้งที่
+// กด Prestige (ดู doPrestige) เพื่อให้ผู้เล่นวนกลับมาทำภารกิจรับรางวัลใหม่ได้ทุกรอบ — เป้าหมาย
+// แต่ละอันจึงตั้งให้ทำสำเร็จได้ภายในรอบเดียว (อ้างอิงจาก simulation: รอบเดียวไปได้ราวด่าน 30-65)
+// ===============================================
+const QUESTS = [
+  { key: 'kill_100',    name: 'นักล่ามือใหม่',        desc: 'สังหารมอนสเตอร์ครบ 100 ตัว',        target: 100, getProgress: p => p.stats.monstersKilled, reward: { chests: 2 } },
+  { key: 'chest_50',    name: 'นักล่าสมบัติ',          desc: 'เปิดกล่องสมบัติครบ 50 ใบ',          target: 50,  getProgress: p => p.stats.chestsOpened, reward: { gems: 3 } },
+  { key: 'upgrade_30',  name: 'สายเปย์อัปเกรด',       desc: 'อัปเกรดสเตตัสรวมครบ 30 ครั้ง',      target: 30,  getProgress: p => p.stats.upgradesPurchased, reward: { chests: 3 } },
+  { key: 'gacha_epic_5',name: 'นักสะสมของหายาก',      desc: 'สุ่มได้ไอเทม Epic ขึ้นไป 5 ครั้ง',   target: 5,   getProgress: p => p.stats.itemsByRarity.epic + p.stats.itemsByRarity.legendary, reward: { gems: 5 } },
+  { key: 'bigboss_3',   name: 'ผู้ปราบยักษ์',          desc: 'สังหาร Big-Boss ครบ 3 ตัว',         target: 3,   getProgress: p => p.stats.bigBossKills, reward: { chests: 4, gems: 2 } },
+  { key: 'stage_20',    name: 'นักผจญภัยฝีมือดี',      desc: 'ไปถึงด่าน 20',                      target: 20,  getProgress: p => p.highestStage, reward: { chests: 3 } },
+];
+
+function isQuestClaimed(key) { return player.claimedQuests.includes(key); }
+function isQuestComplete(quest) { return quest.getProgress(player) >= quest.target; }
+function questRewardText(reward) {
+  const parts = [];
+  if (reward.chests) parts.push(`กล่องสมบัติ +${reward.chests}`);
+  if (reward.gems) parts.push(`เพชร +${reward.gems}`);
+  return parts.join(' และ ');
+}
+
+// จำ (เฉพาะ session นี้ ไม่ persist) ว่าเคยแจ้งเตือนภารกิจไหนไปแล้ว กันไม่ให้ toast ซ้ำทุกครั้งที่ renderAll
+const announcedQuests = new Set();
+function checkQuestCompletion() {
+  QUESTS.forEach(quest => {
+    if (!isQuestClaimed(quest.key) && isQuestComplete(quest) && !announcedQuests.has(quest.key)) {
+      announcedQuests.add(quest.key);
+      showToast(`✓ ภารกิจสำเร็จ: ${quest.name}! กดรับรางวัลได้เลย`);
+    }
+  });
+}
+
+function claimQuest(key) {
+  const quest = QUESTS.find(q => q.key === key);
+  if (!quest || isQuestClaimed(key) || !isQuestComplete(quest)) return;
+  player.claimedQuests.push(key);
+  if (quest.reward.chests) grantChest(quest.reward.chests);
+  if (quest.reward.gems) player.gems += quest.reward.gems;
+  const rewardText = questRewardText(quest.reward);
+  appendLog([`สำเร็จภารกิจ "${quest.name}"! ได้รับ ${rewardText}`]);
+  showToast(`🎁 ${quest.name} — ได้รับ ${rewardText}`);
+  renderAll();
+  const row = document.querySelector(`.quest-row[data-key="${key}"]`);
+  if (row) {
+    row.classList.add('quest-row--just-claimed');
+    const popup = document.createElement('div');
+    popup.className = 'reward-float-popup';
+    popup.textContent = `+${rewardText}`;
+    row.appendChild(popup);
+    popup.addEventListener('animationend', () => popup.remove());
+  }
+}
+
+function showToast(text) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = text;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('toast--out');
+    toast.addEventListener('animationend', () => toast.remove());
+  }, 2600);
 }
 
 /* =====================================================================
@@ -1186,6 +1764,12 @@ function saveGame() {
     buffFightsLeft: player.buffFightsLeft,
     buffMultiplier: player.buffMultiplier,
     settings: player.settings,
+    stats: player.stats,
+    claimedQuests: player.claimedQuests,
+    pets: player.pets,
+    equippedPet: player.equippedPet,
+    petFood: player.petFood,
+    raidCooldownUntil: player.raidCooldownUntil,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -1209,7 +1793,17 @@ function loadGame() {
       gems: data.gems || 0,
       buffFightsLeft: data.buffFightsLeft || 0,
       buffMultiplier: data.buffMultiplier || 1,
-      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal' }, data.settings || {}),
+      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false }, data.settings || {}),
+      stats: Object.assign(
+        { monstersKilled: 0, bigBossKills: 0, chestsOpened: 0, upgradesPurchased: 0, prestigeCount: 0, itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 } },
+        data.stats || {},
+        { itemsByRarity: Object.assign({ common: 0, good: 0, rare: 0, epic: 0, legendary: 0 }, (data.stats && data.stats.itemsByRarity) || {}) }
+      ),
+      claimedQuests: data.claimedQuests || [],
+      pets: data.pets || {},
+      equippedPet: data.equippedPet || null,
+      petFood: data.petFood || 0,
+      raidCooldownUntil: data.raidCooldownUntil || 0,
     });
   } catch (e) { /* เซฟไฟล์เสีย ข้ามไปเริ่มเกมใหม่ */ }
 }
@@ -1305,8 +1899,11 @@ function grantChest(n) {
 // จบการต่อสู้: แจกรางวัล/เลื่อนด่าน (เรียกหลังแอนิเมชันเล่นจบแล้ว)
 function finalizeBattle(result) {
   if (result.victory) {
+    player.stats.monstersKilled += 1;
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
-    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.2) * bossMult);
+    // อัตราสเกล 0.2 -> 0.3 ต่อด่าน: จากการจำลองพบว่ารายได้ทองเดิมโตช้ากว่าค่าอัปเกรดที่โตแบบ
+    // exponential (20*1.15^n ต่อสเตตัส) มากพอที่จะทำให้ผู้เล่นไล่ตามไม่ทันตั้งแต่ราวด่าน 30-40
+    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult);
     player.gold += goldDrop;
     appendLog([`ได้รับ ${goldDrop} Gold`]);
 
@@ -1314,9 +1911,15 @@ function finalizeBattle(result) {
       grantChest(1);
       appendLog(['ได้รับกล่องสมบัติ 1 ใบ']);
     } else if (result.monster.tier === 'bigboss') {
+      player.stats.bigBossKills += 1;
       grantChest(3);
       player.gems += 1;
       appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด']);
+    } else if (Math.random() < 0.08 + getPetBonusValue('chestDropBonus')) {
+      // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม (+ โบนัสจากสัตว์เลี้ยงประเภท chestDropBonus ถ้ามี)
+      // แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลยจนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไป
+      grantChest(1);
+      appendLog(['มอนสเตอร์ดรอปกล่องสมบัติ +1 ใบ!']);
     }
 
     player.stage += 1;
@@ -1516,6 +2119,54 @@ function renderCharacterPanel() {
   renderSkillGrid();
 }
 
+function renderQuestPanel() {
+  const list = document.getElementById('questList');
+  list.innerHTML = '';
+  let readyCount = 0;
+  QUESTS.forEach(quest => {
+    const claimed = isQuestClaimed(quest.key);
+    const progress = Math.min(quest.target, quest.getProgress(player));
+    const complete = progress >= quest.target;
+    if (complete && !claimed) readyCount++;
+
+    const row = document.createElement('div');
+    row.className = 'quest-row' + (claimed ? ' quest-row--claimed' : complete ? ' quest-row--ready' : '');
+    row.dataset.key = quest.key;
+
+    const info = document.createElement('div');
+    info.className = 'quest-info';
+    const name = document.createElement('div');
+    name.className = 'quest-name';
+    name.textContent = quest.name;
+    const desc = document.createElement('div');
+    desc.className = 'quest-desc';
+    desc.textContent = quest.desc;
+    const barBg = document.createElement('div');
+    barBg.className = 'quest-progress-bar-bg';
+    const barFill = document.createElement('div');
+    barFill.className = 'quest-progress-bar-fill';
+    barFill.style.width = `${Math.min(100, (progress / quest.target) * 100)}%`;
+    barBg.appendChild(barFill);
+    const label = document.createElement('div');
+    label.className = 'quest-progress-label';
+    label.textContent = claimed ? 'รับรางวัลแล้ว ✓' : `${progress} / ${quest.target}`;
+    info.append(name, desc, barBg, label);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn--success quest-claim-btn';
+    btn.textContent = claimed ? 'รับแล้ว' : `รับ ${questRewardText(quest.reward)}`;
+    btn.disabled = claimed || !complete;
+    btn.dataset.key = quest.key;
+
+    row.append(info, btn);
+    list.appendChild(row);
+  });
+
+  const badge = document.getElementById('questBadge');
+  badge.textContent = readyCount > 0 ? `${readyCount} ใหม่!` : '';
+  badge.style.display = readyCount > 0 ? 'inline-block' : 'none';
+}
+
 function renderSkillGrid() {
   const grid = document.getElementById('skillGrid');
   grid.innerHTML = '';
@@ -1562,6 +2213,7 @@ function renderChestPanel() {
 
   renderInventory();
   renderGemShop();
+  renderPetGrid();
 }
 
 function renderInventory() {
@@ -1620,6 +2272,66 @@ function renderGemShop() {
   });
 }
 
+const PET_BUFF_LABELS = { atk: 'ATK', hp: 'HP สูงสุด', chestDropBonus: 'โอกาสดรอปกล่อง' };
+
+function renderPetGrid() {
+  document.getElementById('btnRollPet').disabled = player.gems < PET_GACHA_COST;
+  document.getElementById('petFoodCount').textContent = player.petFood;
+  const grid = document.getElementById('petGrid');
+  grid.innerHTML = '';
+  const ownedKeys = Object.keys(player.pets);
+  if (ownedKeys.length === 0) {
+    grid.innerHTML = '<div class="pet-empty">ยังไม่มีสัตว์เลี้ยง ลองสุ่มดูสิ!</div>';
+    return;
+  }
+  ownedKeys.forEach(key => {
+    const def = PET_DEFS.find(p => p.key === key);
+    const owned = player.pets[key];
+    const card = document.createElement('div');
+    card.className = 'pet-card' + (player.equippedPet === key ? ' pet-card--equipped' : '');
+
+    const icon = document.createElement('img');
+    icon.className = 'pet-icon';
+    icon.src = def.icon;
+    icon.alt = def.name;
+    icon.onerror = () => { icon.style.display = 'none'; };
+    const name = document.createElement('div');
+    name.className = 'pet-name';
+    name.textContent = def.name;
+    const lvStars = document.createElement('div');
+    lvStars.className = 'pet-lv-stars';
+    lvStars.textContent = `Lv.${owned.level} ${'★'.repeat(owned.stars)}`;
+    const desc = document.createElement('div');
+    desc.className = 'pet-desc';
+    const buffPct = Math.round(def.baseBuff * owned.level * (1 + (owned.stars - 1) * 0.5) * 100);
+    desc.textContent = `+${buffPct}% ${PET_BUFF_LABELS[def.buffType]}`;
+
+    const btnEquip = document.createElement('button');
+    btnEquip.className = 'btn btn--info';
+    btnEquip.textContent = player.equippedPet === key ? 'ถอด' : 'ติดตั้ง';
+    btnEquip.dataset.action = 'equip';
+    btnEquip.dataset.pet = key;
+
+    const upgradeCost = getPetLevelUpCost(key);
+    const btnUpgrade = document.createElement('button');
+    btnUpgrade.className = 'btn btn--success';
+    btnUpgrade.textContent = `อัปเลเวล (${upgradeCost} Gold)`;
+    btnUpgrade.dataset.action = 'upgrade';
+    btnUpgrade.dataset.pet = key;
+    btnUpgrade.disabled = player.gold < upgradeCost;
+
+    const btnFeed = document.createElement('button');
+    btnFeed.className = 'btn btn--info';
+    btnFeed.textContent = 'ป้อนอาหาร (ฟรี)';
+    btnFeed.dataset.action = 'feed';
+    btnFeed.dataset.pet = key;
+    btnFeed.disabled = player.petFood <= 0;
+
+    card.append(icon, name, lvStars, desc, btnEquip, btnUpgrade, btnFeed);
+    grid.appendChild(card);
+  });
+}
+
 let lastRenderedBg = null; // ใช้ตรวจว่าพื้นหลังเปลี่ยนไปจากเดิมหรือไม่ เพื่อเล่นเอฟเฟกต์เฟด
 
 function renderBattlePanel() {
@@ -1656,6 +2368,8 @@ function renderAll() {
   renderCharacterPanel();
   renderChestPanel();
   renderBattlePanel();
+  renderQuestPanel();
+  checkQuestCompletion();
   saveGame();
 }
 
@@ -1668,6 +2382,7 @@ document.getElementById('btnUpgradeHp').addEventListener('click', () => {
   player.gold -= cost;
   player.upgradeLevels.hp += 1;
   player.currentHp = getMaxHp(player);
+  player.stats.upgradesPurchased += 1;
   renderAll();
 });
 
@@ -1676,6 +2391,7 @@ document.getElementById('btnUpgradeAtk').addEventListener('click', () => {
   if (player.gold < cost) return;
   player.gold -= cost;
   player.upgradeLevels.atk += 1;
+  player.stats.upgradesPurchased += 1;
   renderAll();
 });
 
@@ -1684,6 +2400,7 @@ document.getElementById('btnUpgradeDef').addEventListener('click', () => {
   if (player.gold < cost) return;
   player.gold -= cost;
   player.upgradeLevels.def += 1;
+  player.stats.upgradesPurchased += 1;
   renderAll();
 });
 
@@ -1701,8 +2418,12 @@ document.getElementById('btnOpenChest').addEventListener('click', () => {
 
   setTimeout(() => {
     player.chests -= 1;
-    player.pendingGacha = rollGachaItem(player.stage);
-    appendLog([`เปิดกล่อง: ได้รับ ${player.pendingGacha.name}`]);
+    const item = rollGachaItem(player.stage);
+    player.stats.chestsOpened += 1;
+    player.stats.itemsByRarity[item.rarity] += 1;
+    player.pendingGacha = item;
+    appendLog([`เปิดกล่อง: ได้รับ ${item.name}`]);
+    autoResolveItemIfEnabled(item);
     renderAll();
     const spriteAfter = document.getElementById('chestSprite');
     spriteAfter.classList.remove('chest-shake');
@@ -1771,6 +2492,12 @@ document.getElementById('btnPrestige').addEventListener('click', () => {
   doPrestige();
 });
 
+document.getElementById('questList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.quest-claim-btn');
+  if (!btn || btn.disabled) return;
+  claimQuest(btn.dataset.key);
+});
+
 document.getElementById('btnUseRedPotion').addEventListener('click', () => usePotion('red'));
 document.getElementById('btnUseBluePotion').addEventListener('click', () => usePotion('blue'));
 
@@ -1779,6 +2506,45 @@ document.getElementById('btnOpenSettings').addEventListener('click', () => {
 });
 document.getElementById('btnCloseSettings').addEventListener('click', () => {
   document.getElementById('settingsModal').style.display = 'none';
+});
+
+document.getElementById('btnOpenRaid').addEventListener('click', () => {
+  document.getElementById('raidIntro').style.display = 'block';
+  document.getElementById('raidActive').style.display = 'none';
+  document.getElementById('raidResult').style.display = 'none';
+  document.getElementById('btnCloseRaid').style.display = 'inline-block';
+  renderRaidModal();
+  document.getElementById('raidModal').style.display = 'flex';
+});
+document.getElementById('btnStartRaid').addEventListener('click', () => {
+  startRaid();
+});
+document.getElementById('btnRaidAttack').addEventListener('click', () => {
+  raidAttack();
+});
+document.getElementById('btnCloseRaidResult').addEventListener('click', () => {
+  document.getElementById('raidResult').style.display = 'none';
+  document.getElementById('raidIntro').style.display = 'block';
+  document.getElementById('btnCloseRaid').style.display = 'inline-block';
+  renderRaidModal();
+});
+document.getElementById('btnCloseRaid').addEventListener('click', () => {
+  if (raidSession) {
+    // ปิดกลางคันถือว่ายกเลิก Raid รอบนี้ (ไม่ได้รางวัล แต่ยังติด cooldown กันเปิด-ปิดรัวๆ เพื่อรีเซ็ตบอส)
+    clearInterval(raidSession.tickHandle);
+    raidSession = null;
+    player.raidCooldownUntil = Date.now() + RAID_COOLDOWN_MS;
+    saveGame();
+  }
+  document.getElementById('raidModal').style.display = 'none';
+});
+
+document.querySelectorAll('.collapsible-header').forEach(header => {
+  header.addEventListener('click', () => {
+    const body = document.getElementById(header.dataset.target);
+    const collapsed = body.classList.toggle('collapsed');
+    header.classList.toggle('collapsed', collapsed);
+  });
 });
 document.getElementById('btnToggleAnimations').addEventListener('click', () => {
   player.settings.animationsEnabled = !player.settings.animationsEnabled;
@@ -1791,6 +2557,11 @@ document.getElementById('btnCycleAutoSpeed').addEventListener('click', () => {
   renderSettingsModal();
   saveGame();
 });
+document.getElementById('btnToggleAutoEquip').addEventListener('click', () => {
+  player.settings.autoEquipEnabled = !player.settings.autoEquipEnabled;
+  renderSettingsModal();
+  saveGame();
+});
 document.getElementById('btnResetSave').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเซฟทั้งหมด? การกระทำนี้ย้อนกลับไม่ได้')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน */ }
@@ -1800,12 +2571,30 @@ document.getElementById('btnResetSave').addEventListener('click', () => {
 function renderSettingsModal() {
   document.getElementById('btnToggleAnimations').textContent = player.settings.animationsEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
   document.getElementById('btnCycleAutoSpeed').textContent = AUTO_BATTLE_SPEED_LABELS[player.settings.autoBattleSpeed];
+  document.getElementById('btnToggleAutoEquip').textContent = player.settings.autoEquipEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
 }
 
 document.getElementById('gemShopList').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn || !btn.dataset.shopKey) return;
   buyFromGemShop(btn.dataset.shopKey);
+});
+
+document.getElementById('btnRollPet').addEventListener('click', () => {
+  rollPetGacha();
+  renderAll();
+});
+
+document.getElementById('petGrid').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !btn.dataset.pet) return;
+  if (btn.dataset.action === 'equip') {
+    equipPet(btn.dataset.pet);
+  } else if (btn.dataset.action === 'upgrade') {
+    levelUpPet(btn.dataset.pet);
+  } else if (btn.dataset.action === 'feed') {
+    feedPet(btn.dataset.pet);
+  }
 });
 
 document.getElementById('skillGrid').addEventListener('click', (e) => {
@@ -1834,6 +2623,10 @@ loadGame();
 ensureEncounter();
 renderAll();
 renderSettingsModal();
+// อัปเดตตัวนับ cooldown ของ Boss Raid มุมล่างของหน้าจอ intro ทุกวินาที เผื่อผู้เล่นเปิดโมดัลค้างไว้ดูนับถอยหลัง
+setInterval(() => {
+  if (!raidSession && document.getElementById('raidModal').style.display !== 'none') renderRaidModal();
+}, 1000);
 </script>
 </body>
 </html>
