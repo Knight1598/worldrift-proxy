@@ -331,7 +331,26 @@
     text-shadow: 1px 1px 0 #000;
   }
 
-  .stat-line { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 3px 0; }
+  .stat-line { display: flex; justify-content: space-between; font-size: 0.85rem; margin: 3px 0; gap: 6px; }
+  /* จัดสเตตัสเป็น 2 คอลัมน์แทนเรียงคอลัมน์เดียว 5 แถว ลดความสูงลงเกือบครึ่ง */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; margin: 6px 0; }
+  .stat-grid .stat-line { margin: 2px 0; font-size: 0.8rem; }
+  .stat-cp-row { grid-column: 1 / -1; border-top: 1px dashed #5a4a80; margin-top: 6px !important; padding-top: 6px; font-weight: bold; font-size: 0.85rem !important; }
+
+  /* หัวข้อกาง/ยุบได้ (Prestige, สกิล Passive) เพื่อลดความยาวพาเนลตอนเปิดหน้าครั้งแรก */
+  .collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    color: #ffd76a;
+    font-size: 0.9rem;
+    padding: 2px 0;
+    user-select: none;
+  }
+  .collapse-arrow { display: inline-block; transition: transform 0.2s ease; }
+  .collapsible-header.collapsed .collapse-arrow { transform: rotate(-90deg); }
+  .collapsible-body.collapsed { display: none; }
 
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังปุ่มแต่ละสี)
@@ -606,11 +625,13 @@
         <button class="btn btn--info" id="btnUseBluePotion">🧪ฟ้า บัฟ 3 ไฟต์ (มี <span id="bluePotionCount">0</span>)</button>
       </div>
 
-      <div class="stat-line"><span>ATK</span><span id="statAtk">10</span></div>
-      <div class="stat-line"><span>DEF</span><span id="statDef">5</span></div>
-      <div class="stat-line"><span>โอกาสคริติคอล</span><span id="statCrit">10%</span></div>
-      <div class="stat-line"><span>โอกาสหลบหลีก</span><span id="statDodge">5%</span></div>
-      <div class="stat-line"><span>CP (พลังรบรวม)</span><span id="statCp">0</span></div>
+      <div class="stat-grid">
+        <div class="stat-line"><span>ATK</span><span id="statAtk">10</span></div>
+        <div class="stat-line"><span>DEF</span><span id="statDef">5</span></div>
+        <div class="stat-line"><span>คริติคอล</span><span id="statCrit">10%</span></div>
+        <div class="stat-line"><span>หลบหลีก</span><span id="statDodge">5%</span></div>
+        <div class="stat-line stat-cp-row"><span>CP (พลังรบรวม)</span><span id="statCp">0</span></div>
+      </div>
 
       <div class="equip-slots">
         <div class="item-slot" id="slotWeapon"><span class="slot-label">อาวุธ</span></div>
@@ -634,14 +655,25 @@
       </div>
 
       <div class="prestige-section">
-        <div class="row"><span>Prestige Points</span><span id="prestigePoints">0</span></div>
-        <div class="row"><span>โบนัสถาวร (ATK/DEF/HP)</span><span id="prestigeBonus">+0%</span></div>
-        <button class="btn btn--success" id="btnPrestige">Prestige</button>
+        <div class="collapsible-header collapsed" data-target="prestigeBody">
+          <span>Prestige</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="prestigeBody">
+          <div class="row"><span>Prestige Points</span><span id="prestigePoints">0</span></div>
+          <div class="row"><span>โบนัสถาวร (ATK/DEF/HP)</span><span id="prestigeBonus">+0%</span></div>
+          <button class="btn btn--success" id="btnPrestige">Prestige</button>
+        </div>
       </div>
 
       <div class="skill-section">
-        <h3 class="inventory-title">สกิล Passive</h3>
-        <div class="skill-grid" id="skillGrid"></div>
+        <div class="collapsible-header collapsed" data-target="skillBody">
+          <span>สกิล Passive</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="skillBody">
+          <div class="skill-grid" id="skillGrid"></div>
+        </div>
       </div>
     </section>
 
@@ -1790,6 +1822,14 @@ document.getElementById('btnOpenSettings').addEventListener('click', () => {
 });
 document.getElementById('btnCloseSettings').addEventListener('click', () => {
   document.getElementById('settingsModal').style.display = 'none';
+});
+
+document.querySelectorAll('.collapsible-header').forEach(header => {
+  header.addEventListener('click', () => {
+    const body = document.getElementById(header.dataset.target);
+    const collapsed = body.classList.toggle('collapsed');
+    header.classList.toggle('collapsed', collapsed);
+  });
 });
 document.getElementById('btnToggleAnimations').addEventListener('click', () => {
   player.settings.animationsEnabled = !player.settings.animationsEnabled;
