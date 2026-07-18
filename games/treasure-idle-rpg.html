@@ -698,6 +698,10 @@
       <button class="btn btn--info" id="btnCycleAutoSpeed">ปกติ</button>
     </div>
     <div class="settings-row">
+      <span>จัดการอุปกรณ์อัตโนมัติ</span>
+      <button class="btn btn--neutral" id="btnToggleAutoEquip">ปิดอยู่</button>
+    </div>
+    <div class="settings-row">
       <button class="btn btn--danger" id="btnResetSave">รีเซ็ตเซฟทั้งหมด</button>
     </div>
     <button class="btn btn--neutral" id="btnCloseSettings">ปิด</button>
@@ -1142,6 +1146,32 @@ function getSellValue(item) {
   return Math.floor(item.value * 4);
 }
 
+// เปิดใช้ผ่าน Settings > จัดการอุปกรณ์อัตโนมัติ: ถ้าไอเทมที่สุ่มได้จากกล่องสมบัติมีค่าสถานะสูงกว่า
+// ของที่สวมอยู่ในช่องเดียวกัน ให้สวมใส่ทันที (ขายของเก่าเป็น Gold) ไม่งั้นขายไอเทมใหม่ทิ้งทันที
+// กันคลังไอเทมรก — คืนค่า true ถ้าจัดการให้แล้ว (ไม่ต้องโชว์ปุ่ม สวมใส่/เก็บไว้/ขาย ให้กดเอง)
+function autoResolveItemIfEnabled(item) {
+  if (!player.settings.autoEquipEnabled) return false;
+  const old = player.equipment[item.slot];
+  if (!old || item.value > old.value) {
+    player.equipment[item.slot] = item;
+    player.pendingGacha = null;
+    player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+    if (old) {
+      const refund = getSellValue(old);
+      player.gold += refund;
+      appendLog([`สวมใส่อัตโนมัติ: ${item.name} (ขาย ${old.name} เก่าได้ ${refund} Gold)`]);
+    } else {
+      appendLog([`สวมใส่อัตโนมัติ: ${item.name}`]);
+    }
+  } else {
+    const refund = getSellValue(item);
+    player.gold += refund;
+    player.pendingGacha = null;
+    appendLog([`ขายอัตโนมัติ: ${item.name} ได้ ${refund} Gold (สเตตัสต่ำกว่าที่สวมอยู่)`]);
+  }
+  return true;
+}
+
 function formatItemValue(item) {
   return (item.slot === 'gloves' || item.slot === 'boots') ? `+${item.value}%` : `+${item.value}`;
 }
@@ -1169,7 +1199,7 @@ let player = {
   gems: 0, // เพชร (Premium Currency) ได้จากการชนะ Big-Boss
   buffFightsLeft: 0, // จำนวนไฟต์ที่เหลือของบัฟจากโพชั่นฟ้า
   buffMultiplier: 1, // ตัวคูณ ATK/DEF ชั่วคราวจากโพชั่นฟ้า
-  settings: { animationsEnabled: true, autoBattleSpeed: 'normal' },
+  settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false },
   // สถิติสะสมตลอดชีพ ไม่ถูกรีเซ็ตแม้ทำ Prestige — ใช้เป็นตัวนับความคืบหน้าภารกิจ (ดู QUESTS)
   stats: {
     monstersKilled: 0,
@@ -1453,7 +1483,7 @@ function loadGame() {
       gems: data.gems || 0,
       buffFightsLeft: data.buffFightsLeft || 0,
       buffMultiplier: data.buffMultiplier || 1,
-      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal' }, data.settings || {}),
+      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false }, data.settings || {}),
       stats: Object.assign(
         { monstersKilled: 0, bigBossKills: 0, chestsOpened: 0, upgradesPurchased: 0, prestigeCount: 0, maxStageEver: data.highestStage || 1, itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 } },
         data.stats || {},
@@ -2014,10 +2044,12 @@ document.getElementById('btnOpenChest').addEventListener('click', () => {
 
   setTimeout(() => {
     player.chests -= 1;
-    player.pendingGacha = rollGachaItem(player.stage);
+    const item = rollGachaItem(player.stage);
     player.stats.chestsOpened += 1;
-    player.stats.itemsByRarity[player.pendingGacha.rarity] += 1;
-    appendLog([`เปิดกล่อง: ได้รับ ${player.pendingGacha.name}`]);
+    player.stats.itemsByRarity[item.rarity] += 1;
+    player.pendingGacha = item;
+    appendLog([`เปิดกล่อง: ได้รับ ${item.name}`]);
+    autoResolveItemIfEnabled(item);
     renderAll();
     const spriteAfter = document.getElementById('chestSprite');
     spriteAfter.classList.remove('chest-shake');
@@ -2120,6 +2152,11 @@ document.getElementById('btnCycleAutoSpeed').addEventListener('click', () => {
   renderSettingsModal();
   saveGame();
 });
+document.getElementById('btnToggleAutoEquip').addEventListener('click', () => {
+  player.settings.autoEquipEnabled = !player.settings.autoEquipEnabled;
+  renderSettingsModal();
+  saveGame();
+});
 document.getElementById('btnResetSave').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเซฟทั้งหมด? การกระทำนี้ย้อนกลับไม่ได้')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน */ }
@@ -2129,6 +2166,7 @@ document.getElementById('btnResetSave').addEventListener('click', () => {
 function renderSettingsModal() {
   document.getElementById('btnToggleAnimations').textContent = player.settings.animationsEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
   document.getElementById('btnCycleAutoSpeed').textContent = AUTO_BATTLE_SPEED_LABELS[player.settings.autoBattleSpeed];
+  document.getElementById('btnToggleAutoEquip').textContent = player.settings.autoEquipEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
 }
 
 document.getElementById('gemShopList').addEventListener('click', (e) => {
