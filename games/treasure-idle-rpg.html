@@ -595,6 +595,24 @@
   .relic-card--undiscovered img { filter: grayscale(1) brightness(0.35); }
   .relic-card--undiscovered .relic-name { color: #55506a; }
 
+  /* ตีบวกอุปกรณ์ (Equipment Enhancement) */
+  .enhance-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+  .enhance-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1c1730;
+    border: 1px solid var(--divider);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-size: 0.72rem;
+  }
+  .enhance-row img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
+  .enhance-row .enhance-name { flex: 1; }
+  .enhance-row .enhance-level { color: var(--accent-gold); font-weight: bold; margin-right: 4px; }
+  .enhance-row .btn { width: auto; margin-top: 0; padding: 4px 8px; font-size: 0.65rem; }
+  .enhance-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 8px 0; }
+
   /* ฉากต่อสู้ */
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังฉากต่อสู้ เปลี่ยนตามช่วงด่าน)
@@ -922,6 +940,17 @@
         <div class="collapsible-body collapsed" id="bestiaryBody">
           <p class="raid-desc" style="margin:6px 0;">สังหารมอนสเตอร์แต่ละชนิดครบ <span id="bestiaryTargetLabel">0</span> ตัว ปลดล็อกบัฟ ATK ถาวร +0.3%/ชนิด</p>
           <div class="relic-grid" id="bestiaryGrid"></div>
+        </div>
+      </div>
+
+      <div class="relic-section">
+        <div class="collapsible-header collapsed" data-target="enhanceBody">
+          <span>ตีบวกอุปกรณ์ (🔨 <span id="enhanceStonesCount">0</span>)</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="enhanceBody">
+          <p class="raid-desc" style="margin:6px 0;">ย่อยไอเทมในคลังเป็นหินหลอม แล้วใช้ตีบวกอุปกรณ์ Epic/Legendary ที่สวมอยู่ (สูงสุด +10)</p>
+          <div class="enhance-list" id="enhanceList"></div>
         </div>
       </div>
     </section>
@@ -1350,6 +1379,37 @@ function autoResolveItemIfEnabled(item) {
 
 function formatItemValue(item) {
   return (item.slot === 'gloves' || item.slot === 'boots') ? `+${item.value}%` : `+${item.value}`;
+}
+
+// ===============================================
+// ตีบวกอุปกรณ์ (Equipment Enhancement) — ย่อยไอเทมในคลังเป็นหินหลอม แล้วใช้ตีบวกอุปกรณ์ Epic/Legendary
+// ที่สวมอยู่ให้แรงขึ้น (+1 ถึง +10) ให้ไอเทมเกรดต่ำที่ไม่ได้ใช้แล้วยังมีประโยชน์แทนที่จะขายทิ้งเฉยๆ
+// ===============================================
+const ENHANCE_STONE_VALUE = { common: 1, good: 2, rare: 3, epic: 5, legendary: 8 };
+const ENHANCE_MAX_LEVEL = 10;
+const ENHANCE_VALUE_BOOST_PER_LEVEL = 0.1; // +10% ต่อเลเวล (ทบต้น)
+
+function getEnhanceCost(level) {
+  return Math.floor(10 * Math.pow(1.4, level));
+}
+
+function dismantleItem(item) {
+  return ENHANCE_STONE_VALUE[item.rarity] || 1;
+}
+
+function enhanceItem(slotKey) {
+  const item = player.equipment[slotKey];
+  if (!item || !['epic', 'legendary'].includes(item.rarity)) return;
+  const level = item.enhanceLevel || 0;
+  if (level >= ENHANCE_MAX_LEVEL) return;
+  const cost = getEnhanceCost(level);
+  if (player.enhanceStones < cost) return;
+  player.enhanceStones -= cost;
+  item.enhanceLevel = level + 1;
+  item.value = Math.round(item.value * (1 + ENHANCE_VALUE_BOOST_PER_LEVEL));
+  appendLog([`⚒️ ตีบวก ${item.name} เป็น +${item.enhanceLevel}!`]);
+  player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+  renderAll();
 }
 
 // ===============================================
@@ -2309,7 +2369,8 @@ function renderEquipSlot(slotKey, item) {
     el.insertBefore(img, el.firstChild);
   }
   const isPercentSlot = slotKey === 'gloves' || slotKey === 'boots';
-  el.querySelector('.slot-label').textContent = item ? `+${item.value}${isPercentSlot ? '%' : ''}` : SLOT_NAMES[slotKey];
+  const enhanceTag = item && item.enhanceLevel ? ` (+${item.enhanceLevel})` : '';
+  el.querySelector('.slot-label').textContent = item ? `+${item.value}${isPercentSlot ? '%' : ''}${enhanceTag}` : SLOT_NAMES[slotKey];
 }
 
 function renderSetBonusBox() {
@@ -2388,6 +2449,7 @@ function renderCharacterPanel() {
   renderSkillGrid();
   renderRelicGrid();
   renderBestiaryGrid();
+  renderEnhanceList();
 }
 
 function renderQuestPanel() {
@@ -2504,6 +2566,41 @@ function renderBestiaryGrid() {
   });
 }
 
+function renderEnhanceList() {
+  document.getElementById('enhanceStonesCount').textContent = player.enhanceStones;
+  const list = document.getElementById('enhanceList');
+  list.innerHTML = '';
+  const enhanceable = EQUIP_SLOTS
+    .map(slot => ({ slot, item: player.equipment[slot] }))
+    .filter(e => e.item && ['epic', 'legendary'].includes(e.item.rarity));
+
+  if (enhanceable.length === 0) {
+    list.innerHTML = '<div class="enhance-empty">สวมใส่อุปกรณ์ระดับ Epic ขึ้นไปก่อน ถึงจะตีบวกได้</div>';
+    return;
+  }
+  enhanceable.forEach(({ slot, item }) => {
+    const level = item.enhanceLevel || 0;
+    const row = document.createElement('div');
+    row.className = 'enhance-row';
+    const img = document.createElement('img');
+    img.src = item.icon;
+    img.alt = item.name;
+    img.onerror = () => { img.style.display = 'none'; };
+    const name = document.createElement('span');
+    name.className = 'enhance-name';
+    name.innerHTML = `<span class="enhance-level">+${level}</span>${item.name}`;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn--success';
+    const maxed = level >= ENHANCE_MAX_LEVEL;
+    const cost = getEnhanceCost(level);
+    btn.textContent = maxed ? 'สูงสุดแล้ว' : `ตีบวก (🔨${cost})`;
+    btn.disabled = maxed || player.enhanceStones < cost;
+    btn.dataset.slot = slot;
+    row.append(img, name, btn);
+    list.appendChild(row);
+  });
+}
+
 function renderChestPanel() {
   document.getElementById('chestCount').textContent = player.chests;
   document.getElementById('btnOpenChest').disabled = player.chests <= 0;
@@ -2568,7 +2665,14 @@ function renderInventory() {
     btnSell.dataset.action = 'sell';
     btnSell.dataset.idx = idx;
     btnSell.disabled = !!item.locked;
-    row.append(img, name, btnEquip, btnLock, btnSell);
+    const btnDismantle = document.createElement('button');
+    btnDismantle.className = 'btn btn--neutral';
+    btnDismantle.textContent = `🔨${ENHANCE_STONE_VALUE[item.rarity]}`;
+    btnDismantle.title = `ย่อยเป็นหินหลอม ${ENHANCE_STONE_VALUE[item.rarity]} ก้อน`;
+    btnDismantle.dataset.action = 'dismantle';
+    btnDismantle.dataset.idx = idx;
+    btnDismantle.disabled = !!item.locked;
+    row.append(img, name, btnEquip, btnLock, btnSell, btnDismantle);
     list.appendChild(row);
   });
 }
@@ -2801,12 +2905,24 @@ document.getElementById('inventoryList').addEventListener('click', (e) => {
     appendLog([`ขาย ${item.name} ได้ ${value} Gold`]);
   } else if (btn.dataset.action === 'lock') {
     item.locked = !item.locked;
+  } else if (btn.dataset.action === 'dismantle') {
+    if (item.locked) return; // ล็อกไว้ ห้ามย่อย
+    const stones = dismantleItem(item);
+    player.enhanceStones += stones;
+    player.inventory.splice(idx, 1);
+    appendLog([`ย่อย ${item.name} ได้หินหลอม +${stones}`]);
   }
   renderAll();
 });
 
 document.getElementById('btnPrestige').addEventListener('click', () => {
   doPrestige();
+});
+
+document.getElementById('enhanceList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !btn.dataset.slot) return;
+  enhanceItem(btn.dataset.slot);
 });
 
 document.getElementById('questList').addEventListener('click', (e) => {
