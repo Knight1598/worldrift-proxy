@@ -455,6 +455,18 @@
      วางไฟล์ในโฟลเดอร์ assets/ui/
      =============================================== */
   .equip-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 8px; margin-top: 10px; row-gap: 22px; justify-items: center; }
+
+  /* โบนัสเซ็ตอุปกรณ์ (Set Bonus) — โชว์เมื่อใส่ของ rarity/ธาตุเดียวกันครบ 3 หรือ 6 ชิ้น */
+  .set-bonus-box {
+    margin-top: 14px;
+    background: rgba(255,215,106,0.1);
+    border: 1px dashed var(--accent-gold);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.7rem;
+    color: var(--accent-gold);
+    line-height: 1.6;
+  }
   .item-slot {
     width: 54px;
     height: 54px;
@@ -827,6 +839,8 @@
         <div class="item-slot" id="slotBoots"><span class="slot-label">บูท</span></div>
       </div>
 
+      <div class="set-bonus-box" id="setBonusBox" style="display:none;"></div>
+
       <div style="margin-top:22px;">
         <div class="upgrade-row">
           <button class="btn btn--danger" id="btnUpgradeHp">อัปเกรด HP (<span id="costHp">-</span> Gold)</button>
@@ -1163,14 +1177,19 @@ function rollItem(slotType, stage) {
   return rollItemWithRarity(slotType, stage, rollRarity());
 }
 
+// เฉพาะ rare ขึ้นไปมีโอกาส 40% ติดธาตุ (rare/epic/legendary เท่านั้น ไม่ใช่ common/good) — ใช้ร่วมกันทุก slot
+// (เดิมมีแค่อาวุธ แต่ขยายให้ทุกช่องสวมใส่ทอยธาตุได้ เพื่อให้ระบบ Set Bonus ธาตุเดียวกันเป็นไปได้จริง)
+function rollElementForRarity(rarity) {
+  const rareOrAbove = ['rare', 'epic', 'legendary'].includes(rarity.key);
+  return (rareOrAbove && Math.random() < 0.4) ? ELEMENT_WHEEL[Math.floor(Math.random() * ELEMENT_WHEEL.length)] : null;
+}
+
 function rollItemWithRarity(slotType, stage, rarity) {
   if (slotType === 'weapon') {
     const family = WEAPON_FAMILIES[Math.floor(Math.random() * WEAPON_FAMILIES.length)];
     const stageScale = 1 + (stage - 1) * 0.12;
     const value = Math.max(1, Math.round(SLOT_BASE_VALUE.weapon * rarity.mult * stageScale));
-    // เฉพาะ rare ขึ้นไปมีโอกาส 40% ติดธาตุประจำอาวุธ (rare/epic/legendary เท่านั้น ไม่ใช่ common/good)
-    const rareOrAbove = ['rare', 'epic', 'legendary'].includes(rarity.key);
-    const element = (rareOrAbove && Math.random() < 0.4) ? ELEMENT_WHEEL[Math.floor(Math.random() * ELEMENT_WHEEL.length)] : null;
+    const element = rollElementForRarity(rarity);
     return {
       slot: slotType,
       rarity: rarity.key,
@@ -1188,26 +1207,30 @@ function rollItemWithRarity(slotType, stage, rarity) {
   if (slotType === 'gloves' || slotType === 'boots') {
     // ค่าที่ได้คือ "จำนวน % ที่เพิ่ม" ไม่ใช่ flat stat จึงไม่คูณ stageScale เพื่อกันค่าพุ่งไม่มีที่สิ้นสุด
     const value = Math.max(1, Math.round(PERCENT_SLOT_BASE[slotType] * rarity.mult));
+    const element = rollElementForRarity(rarity);
     return {
       slot: slotType,
       rarity: rarity.key,
       rarityLabel: rarity.label,
       value,
       icon: EQUIPMENT_ICONS[slotType][rarity.key],
-      name: `${rarity.label} ${SLOT_NAMES[slotType]}`,
+      name: `${rarity.label} ${SLOT_NAMES[slotType]}${element ? ` (${element})` : ''}`,
+      element,
     };
   }
 
   const base = SLOT_BASE_VALUE[slotType];
   const stageScale = 1 + (stage - 1) * 0.12;
   const value = Math.max(1, Math.round(base * rarity.mult * stageScale));
+  const element = rollElementForRarity(rarity);
   return {
     slot: slotType,
     rarity: rarity.key,
     rarityLabel: rarity.label,
     value,
     icon: EQUIPMENT_ICONS[slotType][rarity.key],
-    name: `${rarity.label} ${SLOT_NAMES[slotType]}`,
+    name: `${rarity.label} ${SLOT_NAMES[slotType]}${element ? ` (${element})` : ''}`,
+    element,
   };
 }
 
@@ -1263,6 +1286,53 @@ function autoResolveItemIfEnabled(item) {
 
 function formatItemValue(item) {
   return (item.slot === 'gloves' || item.slot === 'boots') ? `+${item.value}%` : `+${item.value}`;
+}
+
+// ===============================================
+// โบนัสเซ็ตอุปกรณ์ (Set Bonus) — ใส่ของ rarity เดียวกัน หรือธาตุเดียวกัน ครบ 3/6 ชิ้น (จาก 6 ช่อง)
+// ให้โบนัสสเตตัสพิเศษ เพื่อให้เลือกใส่ของตามชุดแทนที่จะดูแค่ค่าสเตตัสสูงสุดของแต่ละชิ้น
+// ===============================================
+const EQUIP_SLOTS = ['weapon', 'armor', 'ring', 'helmet', 'gloves', 'boots'];
+const SET_BONUS_RARITY_TIERS = {
+  3: { atk: 0.10 },
+  6: { atk: 0.25, def: 0.15, hp: 0.15 },
+};
+const SET_BONUS_ELEMENT_TIERS = {
+  3: { atk: 0.10 },
+  6: { atk: 0.20, crit: 0.10 },
+};
+
+function getEquippedItemsList(p) {
+  return EQUIP_SLOTS.map(slot => p.equipment[slot]).filter(Boolean);
+}
+
+// หาว่ากลุ่มไหน (rarity หรือ element) ที่มีจำนวนชิ้นตรงกันมากที่สุด และผ่านเกณฑ์ 3/6 ชิ้นหรือไม่
+function getSetBonusInfo(p) {
+  const items = getEquippedItemsList(p);
+  const rarityCounts = {};
+  items.forEach(i => { rarityCounts[i.rarity] = (rarityCounts[i.rarity] || 0) + 1; });
+  const elementCounts = {};
+  items.forEach(i => { if (i.element) elementCounts[i.element] = (elementCounts[i.element] || 0) + 1; });
+
+  function bestOf(counts) {
+    let bestKey = null, bestCount = 0;
+    Object.keys(counts).forEach(k => { if (counts[k] > bestCount) { bestCount = counts[k]; bestKey = k; } });
+    const tier = bestCount >= 6 ? 6 : bestCount >= 3 ? 3 : 0;
+    return { key: bestKey, count: bestCount, tier };
+  }
+
+  return { rarity: bestOf(rarityCounts), element: bestOf(elementCounts) };
+}
+
+// รวมโบนัสจากทั้งเซ็ต rarity และเซ็ตธาตุ (ถ้าเข้าเงื่อนไขทั้งคู่พร้อมกันได้ผลรวมทั้งสองอย่าง)
+function getSetBonusTotals(p) {
+  const info = getSetBonusInfo(p);
+  const totals = { atk: 0, def: 0, hp: 0, crit: 0 };
+  const rarityBonus = SET_BONUS_RARITY_TIERS[info.rarity.tier];
+  const elementBonus = SET_BONUS_ELEMENT_TIERS[info.element.tier];
+  if (rarityBonus) Object.keys(rarityBonus).forEach(k => { totals[k] += rarityBonus[k]; });
+  if (elementBonus) Object.keys(elementBonus).forEach(k => { totals[k] += elementBonus[k]; });
+  return totals;
 }
 
 /* =====================================================================
@@ -1336,20 +1406,23 @@ function getMaxHp(p) {
   const base = p.baseStats.hp + p.upgradeLevels.hp * 10 + (p.equipment.ring ? p.equipment.ring.value : 0);
   const skillMult = p.equippedSkill === 'nature' ? 1.15 : 1;
   const petMult = 1 + getPetBonusValue('hp');
-  return Math.round(base * skillMult * petMult * getPrestigeMultiplier(p));
+  const setMult = 1 + getSetBonusTotals(p).hp;
+  return Math.round(base * skillMult * petMult * setMult * getPrestigeMultiplier(p));
 }
 function getAtk(p) {
   const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0);
   const skillMult = p.equippedSkill === 'fire' ? 1.08 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
   const petMult = 1 + getPetBonusValue('atk');
-  return Math.round(base * skillMult * buffMult * petMult * getPrestigeMultiplier(p));
+  const setMult = 1 + getSetBonusTotals(p).atk;
+  return Math.round(base * skillMult * buffMult * petMult * setMult * getPrestigeMultiplier(p));
 }
 function getDef(p) {
   const base = p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0) + (p.equipment.helmet ? p.equipment.helmet.value : 0);
   const skillMult = p.equippedSkill === 'shield' ? 1.10 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
-  return Math.round(base * skillMult * buffMult * getPrestigeMultiplier(p));
+  const setMult = 1 + getSetBonusTotals(p).def;
+  return Math.round(base * skillMult * buffMult * setMult * getPrestigeMultiplier(p));
 }
 function getCP(p)    { return Math.round(getMaxHp(p) * 0.5 + getAtk(p) * 2 + getDef(p) * 1.5); }
 function getPlayerLevel(p) { return 1 + p.upgradeLevels.hp + p.upgradeLevels.atk + p.upgradeLevels.def; }
@@ -1364,7 +1437,8 @@ function getCritChance(p) {
   const weapon = p.equipment.weapon;
   const weaponBonus = weapon && weapon.perk === 'crit' ? weapon.perkValue : 0;
   const glovesBonus = p.equipment.gloves ? p.equipment.gloves.value / 100 : 0;
-  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + glovesBonus + weaponBonus);
+  const setBonus = getSetBonusTotals(p).crit;
+  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + glovesBonus + weaponBonus + setBonus);
 }
 function getDodgeChance(p) {
   const weapon = p.equipment.weapon;
@@ -2071,6 +2145,33 @@ function renderEquipSlot(slotKey, item) {
   el.querySelector('.slot-label').textContent = item ? `+${item.value}${isPercentSlot ? '%' : ''}` : SLOT_NAMES[slotKey];
 }
 
+function renderSetBonusBox() {
+  const box = document.getElementById('setBonusBox');
+  const info = getSetBonusInfo(player);
+  const lines = [];
+  if (info.rarity.tier > 0) {
+    const rarityLabel = RARITY_TABLE.find(r => r.key === info.rarity.key).label;
+    const bonus = SET_BONUS_RARITY_TIERS[info.rarity.tier];
+    lines.push(`🎯 เซ็ต ${rarityLabel} x${info.rarity.tier}: ${formatSetBonusText(bonus)}`);
+  }
+  if (info.element.tier > 0) {
+    const elementLabel = ELEMENT_NAMES_TH[info.element.key];
+    const bonus = SET_BONUS_ELEMENT_TIERS[info.element.tier];
+    lines.push(`🔥 เซ็ตธาตุ${elementLabel} x${info.element.tier}: ${formatSetBonusText(bonus)}`);
+  }
+  if (lines.length === 0) {
+    box.style.display = 'none';
+  } else {
+    box.style.display = 'block';
+    box.innerHTML = lines.join('<br>');
+  }
+}
+
+function formatSetBonusText(bonus) {
+  const labels = { atk: 'ATK', def: 'DEF', hp: 'HP สูงสุด', crit: 'คริติคอล' };
+  return Object.keys(bonus).map(k => `+${Math.round(bonus[k] * 100)}% ${labels[k]}`).join(', ');
+}
+
 function renderCharacterPanel() {
   document.getElementById('goldValue').textContent = Math.floor(player.gold);
   document.getElementById('gemsValue').textContent = player.gems;
@@ -2098,6 +2199,7 @@ function renderCharacterPanel() {
   renderEquipSlot('helmet', player.equipment.helmet);
   renderEquipSlot('gloves', player.equipment.gloves);
   renderEquipSlot('boots', player.equipment.boots);
+  renderSetBonusBox();
 
   document.getElementById('costHp').textContent = getUpgradeCost('hp');
   document.getElementById('costAtk').textContent = getUpgradeCost('atk');
