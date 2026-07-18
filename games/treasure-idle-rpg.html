@@ -563,6 +563,101 @@
 
   .battle-buttons { display: flex; gap: 6px; }
 
+  /* ภารกิจ (Quests / Achievements) — แจกกล่องสมบัติ/เพชร เมื่อทำสำเร็จ เป้าหมายระยะสั้นกันน่าเบื่อ */
+  .panel--quests {
+    grid-column: 1 / -1;
+    background-color: var(--panel-gold-fill);
+    border-image-source: url('assets/ui/panel_gold.png');
+    border-image-slice: 22;
+    border-image-width: 14px;
+    min-height: 0;
+  }
+  .panel--quests h2 { display: flex; align-items: center; gap: 8px; }
+  .quest-badge {
+    display: none;
+    font-size: 0.7rem;
+    background: #d3372c;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-shadow: none;
+  }
+  .quest-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 340px; overflow-y: auto; }
+  .quest-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #1c1730;
+    border: 2px solid var(--divider);
+    border-radius: 6px;
+    padding: 8px 10px;
+  }
+  .quest-row--ready { border-color: var(--accent-gold); box-shadow: 0 0 8px 1px rgba(255,215,106,0.5); }
+  .quest-row--claimed { opacity: 0.55; }
+  .quest-info { flex: 1; min-width: 0; }
+  .quest-name { font-size: 0.85rem; font-weight: bold; color: var(--accent-gold); }
+  .quest-desc { font-size: 0.72rem; color: #cfc7ae; margin: 2px 0 4px; }
+  .quest-progress-bar-bg { width: 100%; height: 8px; background: #000; border-radius: 4px; overflow: hidden; }
+  .quest-progress-bar-fill { height: 100%; background: linear-gradient(90deg, #ffd76a, #ff9d2f); transition: width 0.3s ease; }
+  .quest-progress-label { font-size: 0.68rem; color: #cfc7ae; margin-top: 2px; }
+  .quest-claim-btn { width: auto; white-space: nowrap; font-size: 0.72rem; padding: 8px 10px; margin-top: 0; flex-shrink: 0; }
+
+  /* เอฟเฟกต์ "dopamine hit" ตอนกดรับรางวัลภารกิจ: pop + เรืองแสงวูบ + ตัวเลขรางวัลลอยขึ้น */
+  @keyframes questClaimPop {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.04); box-shadow: 0 0 14px 4px rgba(255,204,51,0.75); }
+    100% { transform: scale(1); box-shadow: none; }
+  }
+  .quest-row--just-claimed { animation: questClaimPop 0.5s ease-out; }
+  .reward-float-popup {
+    position: absolute;
+    right: 10px;
+    top: -4px;
+    color: var(--accent-gold);
+    font-weight: bold;
+    font-size: 0.8rem;
+    text-shadow: 1px 1px 0 #000;
+    pointer-events: none;
+    white-space: nowrap;
+    animation: floatUp 0.9s ease-out forwards;
+  }
+
+  /* Toast notification — แจ้งเตือนเล็กๆ มุมบนเวลาภารกิจสำเร็จ/รับรางวัล */
+  .toast-container {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    pointer-events: none;
+    width: min(360px, 92vw);
+  }
+  @keyframes toastIn {
+    0%   { opacity: 0; transform: translateY(-14px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes toastOut {
+    0%   { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-8px); }
+  }
+  .toast {
+    background: var(--panel-gold-fill);
+    border: 2px solid var(--accent-gold);
+    color: var(--text-main);
+    border-radius: 6px;
+    padding: 10px 16px;
+    font-size: 0.82rem;
+    text-align: center;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+    animation: toastIn 0.25s ease-out;
+  }
+  .toast--out { animation: toastOut 0.3s ease-in forwards; }
+
   /* Battle log */
   .log-panel {
     grid-column: 1 / -1;
@@ -588,6 +683,8 @@
     <img src="assets/ui/icon_gear.png" alt="settings" onerror="this.style.display='none'">
   </button>
 </h1>
+
+<div class="toast-container" id="toastContainer"></div>
 
 <div class="settings-modal" id="settingsModal" style="display:none;">
   <div class="settings-modal-box">
@@ -736,6 +833,12 @@
         <button class="btn btn--neutral" id="btnFight">สู้ (Fight)</button>
         <button class="btn btn--primary" id="btnAutoBattle">Auto-Battle: OFF</button>
       </div>
+    </section>
+
+    <!-- ============ Panel 4: Quests / Achievements ============ -->
+    <section class="panel panel--quests">
+      <h2>ภารกิจ <span class="quest-badge" id="questBadge"></span></h2>
+      <div class="quest-list" id="questList"></div>
     </section>
 
     <!-- ============ Battle Log ============ -->
@@ -1065,6 +1168,17 @@ let player = {
   buffFightsLeft: 0, // จำนวนไฟต์ที่เหลือของบัฟจากโพชั่นฟ้า
   buffMultiplier: 1, // ตัวคูณ ATK/DEF ชั่วคราวจากโพชั่นฟ้า
   settings: { animationsEnabled: true, autoBattleSpeed: 'normal' },
+  // สถิติสะสมตลอดชีพ ไม่ถูกรีเซ็ตแม้ทำ Prestige — ใช้เป็นตัวนับความคืบหน้าภารกิจ (ดู QUESTS)
+  stats: {
+    monstersKilled: 0,
+    bigBossKills: 0,
+    chestsOpened: 0,
+    upgradesPurchased: 0,
+    prestigeCount: 0,
+    maxStageEver: 1, // ต่างจาก highestStage ตรงที่ตัวนี้ไม่ถูกรีเซ็ตตอน Prestige ใช้วัดภารกิจ "ไปถึงด่าน X" โดยเฉพาะ
+    itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 },
+  },
+  claimedQuests: [], // key ของภารกิจที่กดรับรางวัลไปแล้ว
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1147,6 +1261,7 @@ function doPrestige() {
   player.pendingGacha = null;
   player.prestigePoints = totalPoints;
   player.currentHp = getMaxHp(player);
+  player.stats.prestigeCount += 1;
   appendLog([`✦ Prestige! ได้รับ Prestige Point +${gain} (สะสม ${totalPoints} แต้ม, โบนัสถาวร +${Math.round((getPrestigeMultiplier(player) - 1) * 100)}%)`]);
   ensureEncounter();
   renderAll();
@@ -1191,6 +1306,7 @@ function buyFromGemShop(itemKey) {
     appendLog(['ซื้อโพชั่นฟ้า x1 จาก Gem Shop']);
   } else if (itemKey === 'guaranteed_epic') {
     player.pendingGacha = rollGachaItemMinRarity(player.stage, 'epic');
+    player.stats.itemsByRarity[player.pendingGacha.rarity] += 1;
     appendLog([`เปิดกล่องการันตี: ได้รับ ${player.pendingGacha.name}`]);
   } else if (itemKey === 'respec_upgrades') {
     let totalSpent = 0;
@@ -1212,6 +1328,77 @@ function ensureEncounter() {
   if (!player.encounter) {
     player.encounter = getStageMonster(player.stage);
   }
+}
+
+// ===============================================
+// ภารกิจ (Quests / Achievements) — เป้าหมายระยะสั้นถาวร ทำครั้งเดียวรับรางวัลหนักๆ
+// (กล่องสมบัติ/เพชร) เพื่อให้มีเป้าหมายรอคอยระหว่างกดอัปเกรด/ปล่อย Auto-Battle
+// ===============================================
+const QUESTS = [
+  { key: 'kill_100',    name: 'นักล่ามือใหม่',        desc: 'สังหารมอนสเตอร์ครบ 100 ตัว',        target: 100,  getProgress: p => p.stats.monstersKilled, reward: { chests: 2 } },
+  { key: 'kill_500',    name: 'นักล่าผู้ช่ำชอง',      desc: 'สังหารมอนสเตอร์ครบ 500 ตัว',        target: 500,  getProgress: p => p.stats.monstersKilled, reward: { chests: 5 } },
+  { key: 'kill_1000',   name: 'ผู้พิฆาตแห่งสมรภูมิ',  desc: 'สังหารมอนสเตอร์ครบ 1000 ตัว',       target: 1000, getProgress: p => p.stats.monstersKilled, reward: { chests: 8, gems: 2 } },
+  { key: 'gacha_epic_5',name: 'นักสะสมของหายาก',      desc: 'สุ่มได้ไอเทม Epic ขึ้นไป 5 ครั้ง',   target: 5,    getProgress: p => p.stats.itemsByRarity.epic + p.stats.itemsByRarity.legendary, reward: { gems: 5 } },
+  { key: 'upgrade_50',  name: 'สายเปย์อัปเกรด',       desc: 'อัปเกรดสเตตัสรวมครบ 50 ครั้ง',      target: 50,   getProgress: p => p.stats.upgradesPurchased, reward: { chests: 3 } },
+  { key: 'chest_20',    name: 'นักล่าสมบัติ',          desc: 'เปิดกล่องสมบัติครบ 20 ใบ',          target: 20,   getProgress: p => p.stats.chestsOpened, reward: { gems: 2 } },
+  { key: 'bigboss_5',   name: 'ผู้ปราบยักษ์',          desc: 'สังหาร Big-Boss ครบ 5 ตัว',         target: 5,    getProgress: p => p.stats.bigBossKills, reward: { chests: 5, gems: 3 } },
+  { key: 'prestige_1',  name: 'จุติใหม่',              desc: 'ทำ Prestige สำเร็จครั้งแรก',        target: 1,    getProgress: p => p.stats.prestigeCount, reward: { chests: 5, gems: 5 } },
+  { key: 'stage_25',    name: 'นักผจญภัยฝีมือดี',      desc: 'ไปถึงด่าน 25',                      target: 25,   getProgress: p => p.stats.maxStageEver, reward: { chests: 3 } },
+  { key: 'stage_50',    name: 'ตำนานนักผจญภัย',        desc: 'ไปถึงด่าน 50',                      target: 50,   getProgress: p => p.stats.maxStageEver, reward: { chests: 6, gems: 3 } },
+];
+
+function isQuestClaimed(key) { return player.claimedQuests.includes(key); }
+function isQuestComplete(quest) { return quest.getProgress(player) >= quest.target; }
+function questRewardText(reward) {
+  const parts = [];
+  if (reward.chests) parts.push(`กล่องสมบัติ +${reward.chests}`);
+  if (reward.gems) parts.push(`เพชร +${reward.gems}`);
+  return parts.join(' และ ');
+}
+
+// จำ (เฉพาะ session นี้ ไม่ persist) ว่าเคยแจ้งเตือนภารกิจไหนไปแล้ว กันไม่ให้ toast ซ้ำทุกครั้งที่ renderAll
+const announcedQuests = new Set();
+function checkQuestCompletion() {
+  QUESTS.forEach(quest => {
+    if (!isQuestClaimed(quest.key) && isQuestComplete(quest) && !announcedQuests.has(quest.key)) {
+      announcedQuests.add(quest.key);
+      showToast(`✓ ภารกิจสำเร็จ: ${quest.name}! กดรับรางวัลได้เลย`);
+    }
+  });
+}
+
+function claimQuest(key) {
+  const quest = QUESTS.find(q => q.key === key);
+  if (!quest || isQuestClaimed(key) || !isQuestComplete(quest)) return;
+  player.claimedQuests.push(key);
+  if (quest.reward.chests) grantChest(quest.reward.chests);
+  if (quest.reward.gems) player.gems += quest.reward.gems;
+  const rewardText = questRewardText(quest.reward);
+  appendLog([`สำเร็จภารกิจ "${quest.name}"! ได้รับ ${rewardText}`]);
+  showToast(`🎁 ${quest.name} — ได้รับ ${rewardText}`);
+  renderAll();
+  const row = document.querySelector(`.quest-row[data-key="${key}"]`);
+  if (row) {
+    row.classList.add('quest-row--just-claimed');
+    const popup = document.createElement('div');
+    popup.className = 'reward-float-popup';
+    popup.textContent = `+${rewardText}`;
+    row.appendChild(popup);
+    popup.addEventListener('animationend', () => popup.remove());
+  }
+}
+
+function showToast(text) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = text;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('toast--out');
+    toast.addEventListener('animationend', () => toast.remove());
+  }, 2600);
 }
 
 /* =====================================================================
@@ -1237,6 +1424,8 @@ function saveGame() {
     buffFightsLeft: player.buffFightsLeft,
     buffMultiplier: player.buffMultiplier,
     settings: player.settings,
+    stats: player.stats,
+    claimedQuests: player.claimedQuests,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -1261,6 +1450,12 @@ function loadGame() {
       buffFightsLeft: data.buffFightsLeft || 0,
       buffMultiplier: data.buffMultiplier || 1,
       settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal' }, data.settings || {}),
+      stats: Object.assign(
+        { monstersKilled: 0, bigBossKills: 0, chestsOpened: 0, upgradesPurchased: 0, prestigeCount: 0, maxStageEver: data.highestStage || 1, itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 } },
+        data.stats || {},
+        { itemsByRarity: Object.assign({ common: 0, good: 0, rare: 0, epic: 0, legendary: 0 }, (data.stats && data.stats.itemsByRarity) || {}) }
+      ),
+      claimedQuests: data.claimedQuests || [],
     });
   } catch (e) { /* เซฟไฟล์เสีย ข้ามไปเริ่มเกมใหม่ */ }
 }
@@ -1356,6 +1551,7 @@ function grantChest(n) {
 // จบการต่อสู้: แจกรางวัล/เลื่อนด่าน (เรียกหลังแอนิเมชันเล่นจบแล้ว)
 function finalizeBattle(result) {
   if (result.victory) {
+    player.stats.monstersKilled += 1;
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
     const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.2) * bossMult);
     player.gold += goldDrop;
@@ -1365,6 +1561,7 @@ function finalizeBattle(result) {
       grantChest(1);
       appendLog(['ได้รับกล่องสมบัติ 1 ใบ']);
     } else if (result.monster.tier === 'bigboss') {
+      player.stats.bigBossKills += 1;
       grantChest(3);
       player.gems += 1;
       appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด']);
@@ -1372,6 +1569,7 @@ function finalizeBattle(result) {
 
     player.stage += 1;
     player.highestStage = Math.max(player.highestStage || 1, player.stage);
+    player.stats.maxStageEver = Math.max(player.stats.maxStageEver || 1, player.stage);
     player.encounter = null; // สุ่มมอนสเตอร์ใหม่สำหรับด่านถัดไป
   }
   if (player.buffFightsLeft > 0) {
@@ -1567,6 +1765,54 @@ function renderCharacterPanel() {
   renderSkillGrid();
 }
 
+function renderQuestPanel() {
+  const list = document.getElementById('questList');
+  list.innerHTML = '';
+  let readyCount = 0;
+  QUESTS.forEach(quest => {
+    const claimed = isQuestClaimed(quest.key);
+    const progress = Math.min(quest.target, quest.getProgress(player));
+    const complete = progress >= quest.target;
+    if (complete && !claimed) readyCount++;
+
+    const row = document.createElement('div');
+    row.className = 'quest-row' + (claimed ? ' quest-row--claimed' : complete ? ' quest-row--ready' : '');
+    row.dataset.key = quest.key;
+
+    const info = document.createElement('div');
+    info.className = 'quest-info';
+    const name = document.createElement('div');
+    name.className = 'quest-name';
+    name.textContent = quest.name;
+    const desc = document.createElement('div');
+    desc.className = 'quest-desc';
+    desc.textContent = quest.desc;
+    const barBg = document.createElement('div');
+    barBg.className = 'quest-progress-bar-bg';
+    const barFill = document.createElement('div');
+    barFill.className = 'quest-progress-bar-fill';
+    barFill.style.width = `${Math.min(100, (progress / quest.target) * 100)}%`;
+    barBg.appendChild(barFill);
+    const label = document.createElement('div');
+    label.className = 'quest-progress-label';
+    label.textContent = claimed ? 'รับรางวัลแล้ว ✓' : `${progress} / ${quest.target}`;
+    info.append(name, desc, barBg, label);
+
+    const btn = document.createElement('button');
+    btn.className = 'btn btn--success quest-claim-btn';
+    btn.textContent = claimed ? 'รับแล้ว' : `รับ ${questRewardText(quest.reward)}`;
+    btn.disabled = claimed || !complete;
+    btn.dataset.key = quest.key;
+
+    row.append(info, btn);
+    list.appendChild(row);
+  });
+
+  const badge = document.getElementById('questBadge');
+  badge.textContent = readyCount > 0 ? `${readyCount} ใหม่!` : '';
+  badge.style.display = readyCount > 0 ? 'inline-block' : 'none';
+}
+
 function renderSkillGrid() {
   const grid = document.getElementById('skillGrid');
   grid.innerHTML = '';
@@ -1707,6 +1953,8 @@ function renderAll() {
   renderCharacterPanel();
   renderChestPanel();
   renderBattlePanel();
+  renderQuestPanel();
+  checkQuestCompletion();
   saveGame();
 }
 
@@ -1719,6 +1967,7 @@ document.getElementById('btnUpgradeHp').addEventListener('click', () => {
   player.gold -= cost;
   player.upgradeLevels.hp += 1;
   player.currentHp = getMaxHp(player);
+  player.stats.upgradesPurchased += 1;
   renderAll();
 });
 
@@ -1727,6 +1976,7 @@ document.getElementById('btnUpgradeAtk').addEventListener('click', () => {
   if (player.gold < cost) return;
   player.gold -= cost;
   player.upgradeLevels.atk += 1;
+  player.stats.upgradesPurchased += 1;
   renderAll();
 });
 
@@ -1735,6 +1985,7 @@ document.getElementById('btnUpgradeDef').addEventListener('click', () => {
   if (player.gold < cost) return;
   player.gold -= cost;
   player.upgradeLevels.def += 1;
+  player.stats.upgradesPurchased += 1;
   renderAll();
 });
 
@@ -1753,6 +2004,8 @@ document.getElementById('btnOpenChest').addEventListener('click', () => {
   setTimeout(() => {
     player.chests -= 1;
     player.pendingGacha = rollGachaItem(player.stage);
+    player.stats.chestsOpened += 1;
+    player.stats.itemsByRarity[player.pendingGacha.rarity] += 1;
     appendLog([`เปิดกล่อง: ได้รับ ${player.pendingGacha.name}`]);
     renderAll();
     const spriteAfter = document.getElementById('chestSprite');
@@ -1820,6 +2073,12 @@ document.getElementById('inventoryList').addEventListener('click', (e) => {
 
 document.getElementById('btnPrestige').addEventListener('click', () => {
   doPrestige();
+});
+
+document.getElementById('questList').addEventListener('click', (e) => {
+  const btn = e.target.closest('.quest-claim-btn');
+  if (!btn || btn.disabled) return;
+  claimQuest(btn.dataset.key);
 });
 
 document.getElementById('btnUseRedPotion').addEventListener('click', () => usePotion('red'));
