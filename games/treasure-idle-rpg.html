@@ -913,6 +913,17 @@
           <div class="relic-grid" id="relicGrid"></div>
         </div>
       </div>
+
+      <div class="relic-section">
+        <div class="collapsible-header collapsed" data-target="bestiaryBody">
+          <span>สมุดภาพมอนสเตอร์ (<span id="bestiaryCount">0</span>/<span id="bestiaryTotal">0</span>)</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="bestiaryBody">
+          <p class="raid-desc" style="margin:6px 0;">สังหารมอนสเตอร์แต่ละชนิดครบ <span id="bestiaryTargetLabel">0</span> ตัว ปลดล็อกบัฟ ATK ถาวร +0.3%/ชนิด</p>
+          <div class="relic-grid" id="bestiaryGrid"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ Panel 2: Chest / Gacha ============ -->
@@ -1154,6 +1165,20 @@ const MONSTERS = [
   { key: 'purple_dragon',name: 'Purple Dragon',          icon: MONSTER_ICONS.purple_dragon, stageMin: 60,  stageMax: 999, hp: 150, atk: 30, def: 12, element: 'fire' },
   { key: 'demon_king',   name: 'Demon King',             icon: MONSTER_ICONS.demon_king,    stageMin: 100, stageMax: 999, hp: 400, atk: 45, def: 25, element: 'dark' },
 ];
+
+// ===============================================
+// สมุดภาพมอนสเตอร์ (Bestiary) — สะสมยอดสังหารแต่ละสายพันธุ์ (สะสมตลอดชีพ ไม่รีเซ็ตตอน Prestige)
+// ปราบครบเป้าหมายต่อชนิด ปลดล็อกบัฟ ATK ถาวรเล็กน้อยต่อชนิด สะสมกันได้เรื่อยๆ ยิ่งเก็บครบยิ่งแกร่ง
+// ===============================================
+const BESTIARY_TARGET = 300; // จำนวนที่ต้องสังหารต่อสายพันธุ์เพื่อปลดล็อกบัฟ
+const BESTIARY_ATK_BONUS_PER_ENTRY = 0.003; // +0.3% ATK ถาวรต่อสายพันธุ์ที่ครบเป้า (รวม 15 ชนิด = สูงสุด +4.5%)
+
+function getBestiaryCompletedCount(p) {
+  return MONSTERS.filter(m => (p.bestiary[m.key] || 0) >= BESTIARY_TARGET).length;
+}
+function getBestiaryAtkBonus(p) {
+  return getBestiaryCompletedCount(p) * BESTIARY_ATK_BONUS_PER_ENTRY;
+}
 
 function getStageMonster(stage) {
   const candidates = MONSTERS.filter(m => stage >= m.stageMin && stage <= m.stageMax);
@@ -1415,6 +1440,9 @@ let player = {
   claimedQuests: [], // key ของภารกิจที่กดรับรางวัลไปแล้วในรอบ Prestige ปัจจุบัน
   relics: [], // key ของวัตถุโบราณที่หาเจอแล้ว (ดู RELIC_DEFS) — ถาวร ไม่ถูกรีเซ็ตตอน Prestige
   lastSeenAt: Date.now(), // timestamp ล่าสุดที่เซฟเกม ใช้คำนวณ Offline Earnings ตอนโหลดกลับมา
+  bestiary: {}, // key มอนสเตอร์ -> จำนวนที่เคยสังหาร (สะสมตลอดชีพ ไม่รีเซ็ตตอน Prestige, ดู BESTIARY_TARGET)
+  enhanceStones: 0, // หินหลอม ได้จากย่อยไอเทมในคลัง ใช้ตีบวกอุปกรณ์ Epic/Legendary ที่สวมอยู่
+  equippedTitle: null, // key ของฉายาที่เลือกสวมอยู่ (ดู TITLE_DEFS)
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1469,7 +1497,8 @@ function getAtk(p) {
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
   const petMult = 1 + getPetBonusValue('atk');
   const setMult = 1 + getSetBonusTotals(p).atk;
-  return Math.round(base * skillMult * buffMult * petMult * setMult * getPrestigeMultiplier(p));
+  const bestiaryMult = 1 + getBestiaryAtkBonus(p);
+  return Math.round(base * skillMult * buffMult * petMult * setMult * bestiaryMult * getPrestigeMultiplier(p));
 }
 function getDef(p) {
   const base = p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0) + (p.equipment.helmet ? p.equipment.helmet.value : 0);
@@ -1945,6 +1974,9 @@ function saveGame() {
     raidCooldownUntil: player.raidCooldownUntil,
     relics: player.relics,
     lastSeenAt: Date.now(), // ประทับเวลาสดใหม่ทุกครั้งที่เซฟ ใช้เทียบตอนโหลดกลับมาว่าออฟไลน์ไปนานแค่ไหน
+    bestiary: player.bestiary,
+    enhanceStones: player.enhanceStones,
+    equippedTitle: player.equippedTitle,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -1980,6 +2012,9 @@ function loadGame() {
       petFood: data.petFood || 0,
       raidCooldownUntil: data.raidCooldownUntil || 0,
       relics: data.relics || [],
+      bestiary: data.bestiary || {},
+      enhanceStones: data.enhanceStones || 0,
+      equippedTitle: data.equippedTitle || null,
     });
     if (data.lastSeenAt) {
       pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
@@ -2095,6 +2130,7 @@ function grantChest(n) {
 function finalizeBattle(result) {
   if (result.victory) {
     player.stats.monstersKilled += 1;
+    player.bestiary[result.monster.key] = (player.bestiary[result.monster.key] || 0) + 1;
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
     // อัตราสเกล 0.2 -> 0.3 ต่อด่าน: จากการจำลองพบว่ารายได้ทองเดิมโตช้ากว่าค่าอัปเกรดที่โตแบบ
     // exponential (20*1.15^n ต่อสเตตัส) มากพอที่จะทำให้ผู้เล่นไล่ตามไม่ทันตั้งแต่ราวด่าน 30-40
@@ -2351,6 +2387,7 @@ function renderCharacterPanel() {
 
   renderSkillGrid();
   renderRelicGrid();
+  renderBestiaryGrid();
 }
 
 function renderQuestPanel() {
@@ -2438,6 +2475,30 @@ function renderRelicGrid() {
     const name = document.createElement('span');
     name.className = 'relic-name';
     name.textContent = found ? relic.name : '???';
+    card.append(img, name);
+    grid.appendChild(card);
+  });
+}
+
+function renderBestiaryGrid() {
+  document.getElementById('bestiaryCount').textContent = getBestiaryCompletedCount(player);
+  document.getElementById('bestiaryTotal').textContent = MONSTERS.length;
+  document.getElementById('bestiaryTargetLabel').textContent = BESTIARY_TARGET;
+  const grid = document.getElementById('bestiaryGrid');
+  grid.innerHTML = '';
+  MONSTERS.forEach(monster => {
+    const count = player.bestiary[monster.key] || 0;
+    const done = count >= BESTIARY_TARGET;
+    const card = document.createElement('div');
+    card.className = 'relic-card ' + (done ? 'relic-card--found' : '');
+    card.title = `${monster.name}: ${Math.min(count, BESTIARY_TARGET)}/${BESTIARY_TARGET}`;
+    const img = document.createElement('img');
+    img.src = monster.icon;
+    img.alt = monster.name;
+    img.onerror = () => { img.style.display = 'none'; };
+    const name = document.createElement('span');
+    name.className = 'relic-name';
+    name.textContent = `${Math.min(count, BESTIARY_TARGET)}/${BESTIARY_TARGET}`;
     card.append(img, name);
     grid.appendChild(card);
   });
