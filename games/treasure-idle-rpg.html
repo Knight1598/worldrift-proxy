@@ -1019,9 +1019,11 @@ function getStageMonster(stage) {
   let tier = 'normal';
   if (stage % 10 === 0)      { mult = 5; tier = 'bigboss'; }
   else if (stage % 5 === 0)  { mult = 3; tier = 'midboss'; }
-  // HP ใช้ mult เต็มเพื่อความ "อึด" ของบอส แต่ ATK/DEF ใช้ sqrt(mult) แทน
-  // ป้องกันไม่ให้ DEF ของบอสสูงจนหักล้าง ATK ผู้เล่นจนเหลือดาเมจ 1 แทบทุกครั้ง
-  const offenseMult = Math.sqrt(mult);
+  // HP ใช้ mult เต็มเพื่อความ "อึด" ของบอส และ ATK ใช้ sqrt(mult) ให้ยังหนักหน่วงสมกับเป็นบอส
+  // แต่ DEF ไม่ใส่ boss bonus เพิ่มเลย (สเกลแบบเดียวกับมอนสเตอร์ปกติ) — จากการจำลองพบว่าเดิมที่ DEF
+  // ก็ได้ sqrt(mult) เหมือน ATK ทำให้ DEF ของบอสไล่ตาม/แซง ATK ผู้เล่นเร็วกว่าที่ผู้เล่นจะอัปเกรดทัน
+  // (ราวด่าน 30-50) จนดาเมจตกลงไปอยู่ที่ 1 เกือบตลอด (dmg = max(1, atk-def)) กลายเป็นบอสที่ต้องยืนตีเป็นพันครั้ง
+  const atkOffenseMult = Math.sqrt(mult);
   // มอนสเตอร์ระดับสูง (มิด/บิ๊กบอส) มีโอกาสคริติคอลมากขึ้น ส่วนโอกาสหลบหลีกคงที่
   const CRIT_BY_TIER = { normal: 0.05, midboss: 0.08, bigboss: 0.12 };
 
@@ -1033,8 +1035,8 @@ function getStageMonster(stage) {
     element: base.element,
     maxHp: Math.round(base.hp * stageScale * mult),
     hp: Math.round(base.hp * stageScale * mult),
-    atk: Math.round(base.atk * stageScale * offenseMult),
-    def: Math.round(base.def * stageScale * offenseMult),
+    atk: Math.round(base.atk * stageScale * atkOffenseMult),
+    def: Math.round(base.def * stageScale),
     crit: CRIT_BY_TIER[tier],
     dodge: 0.05,
   };
@@ -1202,7 +1204,9 @@ function getEquippedSkill(p) { return PASSIVE_SKILLS.find(s => s.key === p.equip
 // PRESTIGE — รีเซ็ตด่านเพื่อแลกโบนัสถาวร
 // ===============================================
 const PRESTIGE_STAGE_REQUIREMENT = 10; // ต้องเคยไปถึงด่านนี้อย่างน้อย ถึงจะได้ Prestige Point 1 แต้ม
-function getPrestigeMultiplier(p) { return 1 + p.prestigePoints * 0.05; }
+// 5% -> 8%/แต้ม: จากการจำลองพบว่าโบนัสเดิมอ่อนเกินไปที่จะทำให้ Prestige รอบถัดไปไปได้ไกลขึ้นอย่างมีนัยสำคัญ
+// (ต้อง Prestige หลายสิบรอบกว่าจะรู้สึกถึงผล) ค่าใหม่ทำให้แต่ละรอบ Prestige ผลักดันให้ไปได้ไกลขึ้นจริง
+function getPrestigeMultiplier(p) { return 1 + p.prestigePoints * 0.08; }
 function getPrestigeGain(p) { return Math.floor((p.highestStage || 1) / PRESTIGE_STAGE_REQUIREMENT); }
 
 function getMaxHp(p) {
@@ -1553,7 +1557,9 @@ function finalizeBattle(result) {
   if (result.victory) {
     player.stats.monstersKilled += 1;
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
-    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.2) * bossMult);
+    // อัตราสเกล 0.2 -> 0.3 ต่อด่าน: จากการจำลองพบว่ารายได้ทองเดิมโตช้ากว่าค่าอัปเกรดที่โตแบบ
+    // exponential (20*1.15^n ต่อสเตตัส) มากพอที่จะทำให้ผู้เล่นไล่ตามไม่ทันตั้งแต่ราวด่าน 30-40
+    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult);
     player.gold += goldDrop;
     appendLog([`ได้รับ ${goldDrop} Gold`]);
 
@@ -1565,6 +1571,11 @@ function finalizeBattle(result) {
       grantChest(3);
       player.gems += 1;
       appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด']);
+    } else if (Math.random() < 0.08) {
+      // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลย
+      // จนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไปในช่วงต้นเกม
+      grantChest(1);
+      appendLog(['มอนสเตอร์ดรอปกล่องสมบัติ +1 ใบ!']);
     }
 
     player.stage += 1;
