@@ -48,6 +48,14 @@
   :root {
     --panel-radius: 6px;
     --gap: 12px;
+    /* ชุดสีหลักของเกม กำหนดไว้เป็นจุดเดียวแทนแปะสีกระจายทีละจุดเหมือนก่อนหน้านี้ */
+    --bg-page: #0a0b12;
+    --text-main: #f1ecd8;
+    --accent-gold: #ffd76a;
+    --divider: #6a5a90;
+    --panel-wood-fill: #7d3f19;
+    --panel-stone-fill: #63687a;
+    --panel-gold-fill: #333947;
   }
 
   * { box-sizing: border-box; }
@@ -55,8 +63,8 @@
   html, body {
     margin: 0;
     padding: 0;
-    background: #10121c;
-    color: #f1ecd8;
+    background: var(--bg-page);
+    color: var(--text-main);
     /* เดิมใช้ 'Courier New' เป็นฟอนต์หลัก แต่ฟอนต์นี้ไม่มีตัวอักษรไทย
        เบราว์เซอร์เลยต้องสลับไปใช้ฟอนต์อื่นเฉพาะข้อความไทย ทำให้อังกฤษ/ไทย
        ในหน้าเดียวกันดูคนละสไตล์ปนกัน — เปลี่ยนมาใช้ฟอนต์ที่ครอบคลุมทั้งไทย
@@ -94,7 +102,7 @@
     animation: floatUp 0.9s ease-out forwards;
     z-index: 5;
   }
-  .dmg-popup--crit  { color: #ffd76a; font-size: 1.5rem; }
+  .dmg-popup--crit  { color: var(--accent-gold); font-size: 1.5rem; }
   .dmg-popup--dodge { color: #7ad1ff; font-style: italic; font-size: 0.9rem; }
   .dmg-popup--heal  { color: #6be36b; }
 
@@ -172,7 +180,7 @@
     margin: 10px 0;
     font-size: 1.4rem;
     letter-spacing: 2px;
-    color: #ffd76a;
+    color: var(--accent-gold);
     text-shadow: 2px 2px 0 #000;
     position: relative;
   }
@@ -182,7 +190,7 @@
     top: 50%;
     transform: translateY(-50%);
     background: none;
-    border: 2px solid #5a4a80;
+    border: 2px solid var(--divider);
     border-radius: 50%;
     width: 34px;
     height: 34px;
@@ -190,7 +198,7 @@
     padding: 4px;
   }
   .settings-gear-btn img { width: 100%; height: 100%; object-fit: contain; }
-  .settings-gear-btn:hover { border-color: #ffd76a; }
+  .settings-gear-btn:hover { border-color: var(--accent-gold); }
 
   .settings-modal {
     position: fixed;
@@ -203,12 +211,12 @@
   }
   .settings-modal-box {
     background: #201a35;
-    border: 3px solid #5a4a80;
+    border: 3px solid var(--divider);
     border-radius: 8px;
     padding: 18px;
     width: min(340px, 90vw);
   }
-  .settings-modal-box h2 { margin: 0 0 12px; color: #ffd76a; font-size: 1.05rem; }
+  .settings-modal-box h2 { margin: 0 0 12px; color: var(--accent-gold); font-size: 1.05rem; }
   .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; font-size: 0.8rem; }
   .settings-row .btn { width: auto; margin-top: 0; padding: 6px 10px; }
   #btnCloseSettings { margin-top: 10px; }
@@ -249,26 +257,26 @@
     border-width: 14px;
     border-style: solid;
     border-image-repeat: round;
-    box-shadow: inset 0 0 0 2px #4a3a70;
+    box-shadow: inset 0 0 0 2px var(--divider);
     min-height: 260px;
   }
   .panel--character {
     grid-area: char;
-    background-color: #7d3f19;
+    background-color: var(--panel-wood-fill);
     border-image-source: url('assets/ui/panel_wood.png');
     border-image-slice: 24;
     border-image-width: 14px;
   }
   .panel--chest {
     grid-area: chest;
-    background-color: #63687a;
+    background-color: var(--panel-stone-fill);
     border-image-source: url('assets/ui/panel_stone.png');
     border-image-slice: 24;
     border-image-width: 14px;
   }
   .panel--battle {
     grid-area: battle;
-    background-color: #333947;
+    background-color: var(--panel-gold-fill);
     border-image-source: url('assets/ui/panel_gold.png');
     border-image-slice: 22;
     border-image-width: 14px;
@@ -277,8 +285,8 @@
   .panel h2 {
     margin: 0 0 10px;
     font-size: 1rem;
-    color: #ffd76a;
-    border-bottom: 2px dashed #5a4a80;
+    color: var(--accent-gold);
+    border-bottom: 2px dashed var(--divider);
     padding-bottom: 6px;
   }
 
@@ -294,7 +302,7 @@
   .gold-display {
     text-align: center;
     font-size: 1rem;
-    color: #ffd76a;
+    color: var(--accent-gold);
     margin-bottom: 10px;
   }
   .gold-display img { width: 18px; height: 18px; vertical-align: middle; margin-right: 4px; }
@@ -335,7 +343,7 @@
   /* จัดสเตตัสเป็น 2 คอลัมน์แทนเรียงคอลัมน์เดียว 5 แถว ลดความสูงลงเกือบครึ่ง */
   .stat-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; margin: 6px 0; }
   .stat-grid .stat-line { margin: 2px 0; font-size: 0.8rem; }
-  .stat-cp-row { grid-column: 1 / -1; border-top: 1px dashed #5a4a80; margin-top: 6px !important; padding-top: 6px; font-weight: bold; font-size: 0.85rem !important; }
+  .stat-cp-row { grid-column: 1 / -1; border-top: 1px dashed var(--divider); margin-top: 6px !important; padding-top: 6px; font-weight: bold; font-size: 0.85rem !important; }
 
   /* หัวข้อกาง/ยุบได้ (Prestige, สกิล Passive) เพื่อลดความยาวพาเนลตอนเปิดหน้าครั้งแรก */
   .collapsible-header {
@@ -343,7 +351,7 @@
     justify-content: space-between;
     align-items: center;
     cursor: pointer;
-    color: #ffd76a;
+    color: var(--accent-gold);
     font-size: 0.9rem;
     padding: 2px 0;
     user-select: none;
@@ -387,7 +395,7 @@
   .potion-row .btn { margin-top: 0; font-size: 0.68rem; }
 
   /* Gem Shop */
-  .gem-shop-section { margin-top: 12px; border-top: 2px dashed #6a5a9a; padding-top: 10px; }
+  .gem-shop-section { margin-top: 12px; border-top: 2px dashed var(--divider); padding-top: 10px; }
   .gem-shop-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .gem-shop-item .btn { margin-top: 0; font-size: 0.7rem; }
 
@@ -445,7 +453,7 @@
   .gacha-result {
     width: 100%;
     background: #1c1730;
-    border: 2px dashed #6a5a9a;
+    border: 2px dashed var(--divider);
     border-radius: 4px;
     padding: 8px;
     text-align: center;
@@ -463,14 +471,14 @@
 
   /* คลังไอเทม (Inventory) */
   .inventory-section { margin-top: 12px; }
-  .inventory-title { font-size: 0.85rem; color: #ffd76a; margin: 8px 0 4px; }
+  .inventory-title { font-size: 0.85rem; color: var(--accent-gold); margin: 8px 0 4px; }
   .inventory-list { max-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
   .inventory-item {
     display: flex;
     align-items: center;
     gap: 6px;
     background: #1c1730;
-    border: 1px solid #4a3a70;
+    border: 1px solid var(--divider);
     border-radius: 4px;
     padding: 4px 6px;
     font-size: 0.7rem;
@@ -481,10 +489,10 @@
   .inventory-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 10px 0; }
 
   /* Prestige */
-  .prestige-section { margin-top: 16px; border-top: 2px dashed #5a4a80; padding-top: 10px; }
+  .prestige-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
 
   /* สกิล Passive */
-  .skill-section { margin-top: 16px; border-top: 2px dashed #5a4a80; padding-top: 10px; }
+  .skill-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
   .skill-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
   .skill-btn {
     display: flex;
@@ -492,7 +500,7 @@
     align-items: center;
     gap: 2px;
     background: #1c1730;
-    border: 2px solid #4a3a70;
+    border: 2px solid var(--divider);
     border-radius: 4px;
     padding: 6px 2px;
     cursor: pointer;
@@ -501,7 +509,7 @@
   }
   .skill-btn img { width: 32px; height: 32px; object-fit: contain; }
   .skill-btn .skill-name { font-size: 0.6rem; }
-  .skill-btn.skill-btn--active { border-color: #ffd76a; box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); color: #ffd76a; }
+  .skill-btn.skill-btn--active { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); color: var(--accent-gold); }
 
   /* ฉากต่อสู้ */
   /* ===============================================
@@ -569,7 +577,7 @@
     line-height: 1.5;
   }
   .log-panel div { border-bottom: 1px solid #222; padding: 2px 0; }
-  .log-panel div:last-child { color: #ffd76a; }
+  .log-panel div:last-child { color: var(--accent-gold); }
 </style>
 </head>
 <body>
