@@ -953,6 +953,16 @@
           <div class="enhance-list" id="enhanceList"></div>
         </div>
       </div>
+
+      <div class="relic-section">
+        <div class="collapsible-header collapsed" data-target="titleBody">
+          <span>ฉายา (<span id="titleUnlockedCount">0</span>/<span id="titleTotal">0</span>)</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="titleBody">
+          <div class="enhance-list" id="titleList"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ Panel 2: Chest / Gacha ============ -->
@@ -1503,6 +1513,7 @@ let player = {
   bestiary: {}, // key มอนสเตอร์ -> จำนวนที่เคยสังหาร (สะสมตลอดชีพ ไม่รีเซ็ตตอน Prestige, ดู BESTIARY_TARGET)
   enhanceStones: 0, // หินหลอม ได้จากย่อยไอเทมในคลัง ใช้ตีบวกอุปกรณ์ Epic/Legendary ที่สวมอยู่
   equippedTitle: null, // key ของฉายาที่เลือกสวมอยู่ (ดู TITLE_DEFS)
+  unlockedTitles: [], // key ของฉายาที่ปลดล็อกแล้ว (ถาวร ไม่รีเซ็ตตอน Prestige แม้เงื่อนไขอ้างอิงจะกลับไม่ผ่านทีหลัง)
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1536,6 +1547,42 @@ const RELIC_DROP_CHANCE = 0.2;
 function hasRelic(key) { return player.relics.includes(key); }
 
 // ===============================================
+// ฉายา (Titles) — ปลดล็อกถาวรจากความสำเร็จในระบบอื่นๆ ที่มีอยู่แล้ว (วัตถุโบราณ/สัตว์เลี้ยง/สมุดภาพ/ตีบวก)
+// เลือกสวมได้ทีละ 1 ฉายา ให้บัฟติดตัว — เก็บเป็น "ปลดล็อกแล้ว" ถาวรแยกจากเงื่อนไข เพื่อไม่ให้เสียฉายา
+// ไปถ้าเงื่อนไขอ้างอิง (เช่นอุปกรณ์ที่ตีบวกไว้) ถูกรีเซ็ตทีหลังจาก Prestige
+// ===============================================
+const TITLE_DEFS = [
+  { key: 'demon_slayer',    name: 'ผู้พิชิตจอมมาร',       desc: '+5% ATK',                condition: p => p.relics.length >= 1, buff: { atk: 0.05 } },
+  { key: 'relic_collector', name: 'นักสะสมวัตถุโบราณ',    desc: '+10% ATK/DEF/HP สูงสุด', condition: p => p.relics.length >= RELIC_DEFS.length, buff: { atk: 0.1, def: 0.1, hp: 0.1 } },
+  { key: 'pet_master',      name: 'ปรมาจารย์นักฝึกสัตว์', desc: '+10% พลังบัฟสัตว์เลี้ยง', condition: p => Object.values(p.pets).some(pet => pet.stars >= 5), buff: { petBoost: 0.1 } },
+  { key: 'bestiary_lord',   name: 'จ้าวแห่งสมุดภาพ',      desc: '+8% Gold ที่ได้รับ',      condition: p => getBestiaryCompletedCount(p) >= 5, buff: { goldMult: 0.08 } },
+  { key: 'enhance_god',     name: 'นักตีบวกระดับเทพ',     desc: '+10% โอกาสคริติคอล',      condition: p => Object.values(p.equipment).some(item => item && (item.enhanceLevel || 0) >= ENHANCE_MAX_LEVEL), buff: { crit: 0.1 } },
+];
+
+function checkTitleUnlocks() {
+  TITLE_DEFS.forEach(title => {
+    if (!player.unlockedTitles.includes(title.key) && title.condition(player)) {
+      player.unlockedTitles.push(title.key);
+      showToast(`🏅 ปลดล็อกฉายาใหม่: ${title.name}!`);
+      appendLog([`🏅 ปลดล็อกฉายาใหม่: ${title.name}!`]);
+    }
+  });
+}
+
+function getEquippedTitle(p) {
+  if (!p.equippedTitle || !p.unlockedTitles.includes(p.equippedTitle)) return null;
+  return TITLE_DEFS.find(t => t.key === p.equippedTitle) || null;
+}
+
+function getTitleBonusTotals(p) {
+  const title = getEquippedTitle(p);
+  return title ? title.buff : {};
+}
+function getTitleBonus(p, key) {
+  return getTitleBonusTotals(p)[key] || 0;
+}
+
+// ===============================================
 // PRESTIGE — รีเซ็ตด่านเพื่อแลกโบนัสถาวร
 // ===============================================
 const PRESTIGE_STAGE_REQUIREMENT = 10; // ต้องเคยไปถึงด่านนี้อย่างน้อย ถึงจะได้ Prestige Point 1 แต้ม
@@ -1549,7 +1596,8 @@ function getMaxHp(p) {
   const skillMult = p.equippedSkill === 'nature' ? 1.15 : 1;
   const petMult = 1 + getPetBonusValue('hp');
   const setMult = 1 + getSetBonusTotals(p).hp;
-  return Math.round(base * skillMult * petMult * setMult * getPrestigeMultiplier(p));
+  const titleMult = 1 + getTitleBonus(p, 'hp');
+  return Math.round(base * skillMult * petMult * setMult * titleMult * getPrestigeMultiplier(p));
 }
 function getAtk(p) {
   const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0);
@@ -1558,14 +1606,16 @@ function getAtk(p) {
   const petMult = 1 + getPetBonusValue('atk');
   const setMult = 1 + getSetBonusTotals(p).atk;
   const bestiaryMult = 1 + getBestiaryAtkBonus(p);
-  return Math.round(base * skillMult * buffMult * petMult * setMult * bestiaryMult * getPrestigeMultiplier(p));
+  const titleMult = 1 + getTitleBonus(p, 'atk');
+  return Math.round(base * skillMult * buffMult * petMult * setMult * bestiaryMult * titleMult * getPrestigeMultiplier(p));
 }
 function getDef(p) {
   const base = p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0) + (p.equipment.helmet ? p.equipment.helmet.value : 0);
   const skillMult = p.equippedSkill === 'shield' ? 1.10 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
   const setMult = 1 + getSetBonusTotals(p).def;
-  return Math.round(base * skillMult * buffMult * setMult * getPrestigeMultiplier(p));
+  const titleMult = 1 + getTitleBonus(p, 'def');
+  return Math.round(base * skillMult * buffMult * setMult * titleMult * getPrestigeMultiplier(p));
 }
 function getCP(p)    { return Math.round(getMaxHp(p) * 0.5 + getAtk(p) * 2 + getDef(p) * 1.5); }
 function getPlayerLevel(p) { return 1 + p.upgradeLevels.hp + p.upgradeLevels.atk + p.upgradeLevels.def; }
@@ -1581,7 +1631,8 @@ function getCritChance(p) {
   const weaponBonus = weapon && weapon.perk === 'crit' ? weapon.perkValue : 0;
   const glovesBonus = p.equipment.gloves ? p.equipment.gloves.value / 100 : 0;
   const setBonus = getSetBonusTotals(p).crit;
-  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + glovesBonus + weaponBonus + setBonus);
+  const titleBonus = getTitleBonus(p, 'crit');
+  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + glovesBonus + weaponBonus + setBonus + titleBonus);
 }
 function getDodgeChance(p) {
   const weapon = p.equipment.weapon;
@@ -1764,12 +1815,14 @@ function equipPet(petKey) {
 }
 
 // ค่าบัฟจากสัตว์เลี้ยงที่ติดตั้งอยู่ (0 ถ้าไม่มีตัวติดตั้ง หรือสัตว์เลี้ยงนั้นไม่ตรงกับ buffType ที่ถาม)
+// ฉายา "ปรมาจารย์นักฝึกสัตว์" ขยายพลังบัฟสัตว์เลี้ยงเพิ่มอีก (petBoost)
 function getPetBonusValue(buffType) {
   if (!player.equippedPet) return 0;
   const def = PET_DEFS.find(p => p.key === player.equippedPet);
   const owned = player.pets[player.equippedPet];
   if (!def || !owned || def.buffType !== buffType) return 0;
-  return def.baseBuff * owned.level * (1 + (owned.stars - 1) * 0.5);
+  const base = def.baseBuff * owned.level * (1 + (owned.stars - 1) * 0.5);
+  return base * (1 + getTitleBonus(player, 'petBoost'));
 }
 
 function ensureEncounter() {
@@ -2037,6 +2090,7 @@ function saveGame() {
     bestiary: player.bestiary,
     enhanceStones: player.enhanceStones,
     equippedTitle: player.equippedTitle,
+    unlockedTitles: player.unlockedTitles,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -2075,6 +2129,7 @@ function loadGame() {
       bestiary: data.bestiary || {},
       enhanceStones: data.enhanceStones || 0,
       equippedTitle: data.equippedTitle || null,
+      unlockedTitles: data.unlockedTitles || [],
     });
     if (data.lastSeenAt) {
       pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
@@ -2194,7 +2249,7 @@ function finalizeBattle(result) {
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
     // อัตราสเกล 0.2 -> 0.3 ต่อด่าน: จากการจำลองพบว่ารายได้ทองเดิมโตช้ากว่าค่าอัปเกรดที่โตแบบ
     // exponential (20*1.15^n ต่อสเตตัส) มากพอที่จะทำให้ผู้เล่นไล่ตามไม่ทันตั้งแต่ราวด่าน 30-40
-    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult);
+    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult * (1 + getTitleBonus(player, 'goldMult')));
     player.gold += goldDrop;
     appendLog([`ได้รับ ${goldDrop} Gold`]);
 
@@ -2450,6 +2505,7 @@ function renderCharacterPanel() {
   renderRelicGrid();
   renderBestiaryGrid();
   renderEnhanceList();
+  renderTitleList();
 }
 
 function renderQuestPanel() {
@@ -2597,6 +2653,31 @@ function renderEnhanceList() {
     btn.disabled = maxed || player.enhanceStones < cost;
     btn.dataset.slot = slot;
     row.append(img, name, btn);
+    list.appendChild(row);
+  });
+}
+
+function renderTitleList() {
+  document.getElementById('titleUnlockedCount').textContent = player.unlockedTitles.length;
+  document.getElementById('titleTotal').textContent = TITLE_DEFS.length;
+  const list = document.getElementById('titleList');
+  list.innerHTML = '';
+  TITLE_DEFS.forEach(title => {
+    const unlocked = player.unlockedTitles.includes(title.key);
+    const equipped = player.equippedTitle === title.key;
+    const row = document.createElement('div');
+    row.className = 'enhance-row';
+    const name = document.createElement('span');
+    name.className = 'enhance-name';
+    name.innerHTML = unlocked
+      ? `<span class="enhance-level">${equipped ? '✓' : ''}</span>${title.name} — ${title.desc}`
+      : `<span class="enhance-level">🔒</span>???`;
+    const btn = document.createElement('button');
+    btn.className = 'btn ' + (equipped ? 'btn--danger' : 'btn--info');
+    btn.textContent = !unlocked ? 'ยังไม่ปลดล็อก' : (equipped ? 'ถอด' : 'สวมฉายา');
+    btn.disabled = !unlocked;
+    btn.dataset.key = title.key;
+    row.append(name, btn);
     list.appendChild(row);
   });
 }
@@ -2786,6 +2867,7 @@ function renderBattlePanel() {
 }
 
 function renderAll() {
+  checkTitleUnlocks(); // ต้องเช็คก่อน renderCharacterPanel เพราะ renderTitleList อ่านจาก player.unlockedTitles ที่ persist ไว้โดยตรง
   renderCharacterPanel();
   renderChestPanel();
   renderBattlePanel();
@@ -2923,6 +3005,13 @@ document.getElementById('enhanceList').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn || !btn.dataset.slot) return;
   enhanceItem(btn.dataset.slot);
+});
+
+document.getElementById('titleList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || btn.disabled || !btn.dataset.key) return;
+  player.equippedTitle = player.equippedTitle === btn.dataset.key ? null : btn.dataset.key;
+  renderAll();
 });
 
 document.getElementById('questList').addEventListener('click', (e) => {
