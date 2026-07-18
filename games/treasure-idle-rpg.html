@@ -237,30 +237,41 @@
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังกรอบพาเนลแต่ละใบ)
      วางไฟล์ในโฟลเดอร์ assets/ui/
      =============================================== */
+  /* เดิมใช้ background-image + background-size:100% 100% ยืดภาพกรอบเล็กๆ (~90px)
+     เต็มพาเนลที่สูงเป็นพันพิกเซลบนมือถือ ทำให้กรอบ/หมุดมุมเบลอเป็นก้อน — เปลี่ยนมาใช้
+     border-image แบบ 9-slice แทน: ตรึงความหนาของกรอบให้คงที่ไม่ว่าพาเนลจะสูงแค่ไหน
+     ส่วนพื้นที่ภายในใช้ background-color เรียบแทน (สีจากค่าพิกเซลจริงในภาพต้นฉบับ) */
   .panel {
     border-radius: var(--panel-radius);
     padding: 14px;
-    background-color: #2a2140;
     background-repeat: no-repeat;
-    background-size: 100% 100%;
-    border: 4px solid #000;
+    background-clip: padding-box;
+    border-width: 14px;
+    border-style: solid;
+    border-image-repeat: round;
     box-shadow: inset 0 0 0 2px #4a3a70;
     min-height: 260px;
   }
   .panel--character {
     grid-area: char;
-    /* ใส่รูปภาพตรงนี้: กรอบไม้ */
-    background-image: url('assets/ui/panel_wood.png');
+    background-color: #7d3f19;
+    border-image-source: url('assets/ui/panel_wood.png');
+    border-image-slice: 24;
+    border-image-width: 14px;
   }
   .panel--chest {
     grid-area: chest;
-    /* ใส่รูปภาพตรงนี้: กรอบหิน */
-    background-image: url('assets/ui/panel_stone.png');
+    background-color: #63687a;
+    border-image-source: url('assets/ui/panel_stone.png');
+    border-image-slice: 24;
+    border-image-width: 14px;
   }
   .panel--battle {
     grid-area: battle;
-    /* ใส่รูปภาพตรงนี้: กรอบทอง */
-    background-image: url('assets/ui/panel_gold.png');
+    background-color: #333947;
+    border-image-source: url('assets/ui/panel_gold.png');
+    border-image-slice: 22;
+    border-image-width: 14px;
   }
 
   .panel h2 {
