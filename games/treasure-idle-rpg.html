@@ -242,6 +242,40 @@
   #raidResultText { font-size: 0.85rem; margin-bottom: 12px; line-height: 1.5; }
   #btnCloseRaid { margin-top: 10px; }
 
+  /* วงล้อก็อบลินเสี่ยงโชค (Goblin Slot Machine) */
+  .slot-reels { display: flex; gap: 8px; justify-content: center; margin: 10px 0; }
+  .slot-reel-box {
+    width: 56px; height: 56px;
+    background: rgba(0,0,0,0.35);
+    border: 2px solid var(--accent-gold);
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .slot-reel-icon { width: 40px; height: 40px; object-fit: contain; image-rendering: pixelated; }
+  .slot-result-text { font-size: 0.85rem; margin-top: 8px; min-height: 1.2em; color: #cfc7ae; }
+  .slot-result-text--win { color: var(--accent-gold); font-weight: bold; animation: legendaryGlow 1.2s ease-in-out 2; }
+
+  /* มินิเกมปล้นสมบัติ (Treasure Raid Grid) */
+  .treasure-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 10px 0; }
+  .treasure-tile {
+    aspect-ratio: 1 / 1;
+    font-size: 1.1rem;
+    background: rgba(0,0,0,0.35);
+    border: 2px solid var(--accent-gold);
+    border-radius: 6px;
+    color: #ddd;
+    cursor: pointer;
+  }
+  .treasure-tile:disabled { cursor: default; opacity: 0.6; }
+  .treasure-tile--revealed { background: rgba(255,255,255,0.05); }
+  .treasure-tile--treasure { border-color: #6bff8f; }
+  .treasure-tile--bomb { border-color: #ff5a5a; }
+
+  /* กิจกรรมแทปรัวๆ (Golden Goblin Frenzy Clicker) — ใช้ goblin.png เดิม ทาสีทองด้วย CSS filter แทนตัดสไปรต์ใหม่ */
+  .goblin-sprite { width: 120px; height: 120px; object-fit: contain; image-rendering: pixelated; cursor: pointer; user-select: none; }
+  .goblin-sprite--golden { filter: sepia(1) saturate(4) hue-rotate(-20deg) brightness(1.15) drop-shadow(0 0 10px #ffd76a); }
+
   .game-wrap {
     max-width: 1200px;
     margin: 0 auto;
@@ -1040,6 +1074,26 @@
   </div>
 </div>
 
+<div class="raid-modal" id="treasureGridModal" style="display:none;">
+  <div class="raid-modal-box">
+    <h2>🗺️ ปล้นสมบัติ</h2>
+    <p class="raid-desc">ใช้พลั่วขุดหาสมบัติ 3 ชิ้นที่ซ่อนอยู่ในกระดาน 16 ช่อง แต่ระวังระเบิด! เจอระเบิดจบทันที</p>
+    <div class="raid-desc">พลั่วที่เหลือ: <span id="treasureShovelsLeft">4</span> | เก็บสมบัติได้ <span id="treasureCollectedCount">0</span>/3</div>
+    <div class="treasure-grid" id="treasureGridCells"></div>
+    <button class="btn btn--neutral" id="btnCloseTreasureGrid">ปิด</button>
+  </div>
+</div>
+
+<div class="raid-modal" id="goldenGoblinModal" style="display:none;">
+  <div class="raid-modal-box">
+    <h2>👺 ก็อบลินทองคำ!</h2>
+    <p class="raid-desc">แทะ/จิ้มก็อบลินให้ไวที่สุดก่อนมันจะหนีไป!</p>
+    <div class="raid-timer" id="goblinTimer">5.0s</div>
+    <img class="goblin-sprite goblin-sprite--golden" id="goblinSprite" src="assets/monsters/goblin.png" alt="golden goblin">
+    <div class="raid-desc">แทะแล้ว: <span id="goblinClickCount">0</span> ครั้ง</div>
+  </div>
+</div>
+
 <div class="game-wrap">
   <div class="board">
 
@@ -1111,6 +1165,7 @@
           <button class="char-tab-btn" data-tab="personalBestBody"><span class="char-tab-icon">📊</span>สถิติ</button>
           <button class="char-tab-btn" data-tab="workshopBody"><span class="char-tab-icon">🏭</span>โรงงาน</button>
           <button class="char-tab-btn" data-tab="echoBody"><span class="char-tab-icon">📸</span>เงาอดีต</button>
+          <button class="char-tab-btn" data-tab="slotBody"><span class="char-tab-icon">🎰</span>สล็อต</button>
         </div>
 
         <div class="char-tab-panel" id="prestigeBody">
@@ -1204,6 +1259,19 @@
           <button class="btn btn--info" id="btnSaveEcho">บันทึกเงาปัจจุบัน</button>
           <button class="btn btn--danger" id="btnFightEcho" style="margin-top:6px;">ท้าดวลเงาในอดีต</button>
         </div>
+
+        <div class="char-tab-panel" id="slotBody">
+          <p class="raid-desc" style="margin:0 0 6px;">🎰 หมุนวงล้อด้วยตั๋วสปิน เรียง 3 สัญลักษณ์เดียวกันรับรางวัลใหญ่ ได้ตั๋วจากการปราบบอส หรือซื้อด้วย Gold</p>
+          <div class="row"><span>ตั๋วสปิน</span><span id="spinTicketCount">0</span></div>
+          <button class="btn btn--neutral" id="btnBuySpinTicket">ซื้อตั๋วสปิน (300 Gold)</button>
+          <div class="slot-reels" id="slotReels">
+            <div class="slot-reel-box"><img id="slotReel1" class="slot-reel-icon" src="assets/equipment/potion_red.png" alt=""></div>
+            <div class="slot-reel-box"><img id="slotReel2" class="slot-reel-icon" src="assets/equipment/potion_red.png" alt=""></div>
+            <div class="slot-reel-box"><img id="slotReel3" class="slot-reel-icon" src="assets/equipment/potion_red.png" alt=""></div>
+          </div>
+          <button class="btn btn--primary" id="btnSpinSlot" style="margin-top:8px;">🎰 ดึงคันโยก (Spin)</button>
+          <div class="slot-result-text" id="slotResultText"></div>
+        </div>
       </div>
     </section>
 
@@ -1216,6 +1284,7 @@
         <div class="chest-sprite" id="chestSprite"></div>
         <button class="btn btn--primary" id="btnOpenChest">เปิดกล่อง</button>
         <button class="btn btn--info" id="btnOpenMysteryChest" style="margin-top:6px;"><img class="icon-inline" src="assets/ui/mystery_chest.png" alt="" onerror="this.style.display='none'"> เปิดหีบปริศนา (มี <span id="mysteryChestCount">0</span>)</button>
+        <button class="btn btn--info" id="btnStartTreasureRaid" style="margin-top:6px;">🗺️ ใช้แผนที่ลายแทง (มี <span id="treasureMapCount">0</span>)</button>
 
         <div class="gacha-result" id="gachaResult" style="display:none;">
           <img id="gachaItemIcon" src="" alt="item" onerror="this.style.display='none'">
@@ -1351,6 +1420,9 @@ function playSfxAttack() { playTone(150, 0.09, 'square', 0.10); }
 function playSfxCrit() { playTone(700, 0.05, 'square', 0.14); playTone(1000, 0.09, 'square', 0.11, 0.04); }
 function playSfxChestOpen() { [523, 659, 784, 1047].forEach((freq, i) => playTone(freq, 0.14, 'triangle', 0.10, i * 0.07)); }
 function playSfxClick() { playTone(880, 0.035, 'square', 0.06); }
+function playSfxSlotStop() { playTone(320, 0.05, 'square', 0.09); playTone(440, 0.05, 'square', 0.07, 0.03); }
+function playSfxDig() { playTone(180, 0.07, 'sawtooth', 0.11); }
+function playSfxGoblinTap() { playTone(1100, 0.03, 'square', 0.07); }
 
 /* =====================================================================
    IMAGE ASSET PATHS
@@ -1816,6 +1888,80 @@ function craftFromBossSouls(key) {
 }
 
 // ===============================================
+// สูตรฐาน Gold ต่อการฆ่า 1 ตัว (ไม่รวมโบนัส tier/title/weather) — ใช้อ้างอิงสเกลรางวัลของระบบอื่นๆ
+// ที่อยากให้ "มีค่าคุ้ม" ตามความคืบหน้าของผู้เล่น โดยไม่ต้องคัดลอกสูตรซ้ำ
+// ===============================================
+function getBaseGoldPerKill() {
+  return Math.floor(10 * (1 + (player.stage - 1) * 0.3));
+}
+
+// สุ่มแบบถ่วงน้ำหนัก (weighted random) ใช้ร่วมกันได้ทั้งวงล้อก็อบลินและระบบอื่นในอนาคต
+function pickWeighted(list) {
+  const total = list.reduce((s, x) => s + x.weight, 0);
+  let roll = Math.random() * total;
+  for (const x of list) {
+    if (roll < x.weight) return x;
+    roll -= x.weight;
+  }
+  return list[0];
+}
+
+// ===============================================
+// วงล้อก็อบลินเสี่ยงโชค (Goblin Slot Machine) — สล็อต 3 ช่อง ใช้ตั๋วสปิน 1 ใบต่อครั้ง
+// เรียง 3 สัญลักษณ์เดียวกันได้รางวัล ไม่ผูกกับระบบต่อสู้เลย เป็นแค่ตัวจ่ายรางวัลทางเดียว (ไม่มีสเตตัสสะสม)
+// ===============================================
+const SPIN_TICKET_GOLD_COST = 300; // ราคาคงที่ ไม่สเกลตามด่าน (เหมือน Elixir ที่ใช้ทรัพยากรคงที่)
+const SLOT_SYMBOLS = [
+  { key: 'gem',    label: 'เพชร',        icon: 'assets/ui/gem_blue.png',              weight: 8  },
+  { key: 'gold',   label: 'Gold',        icon: 'assets/ui/icon_gold_coin.png',        weight: 18 },
+  { key: 'chest',  label: 'กล่อง Epic+', icon: 'assets/chests/chest_epic_closed.png', weight: 14 },
+  { key: 'potion', label: 'โพชั่น',      icon: 'assets/equipment/potion_red.png',     weight: 30 },
+  { key: 'sword',  label: 'ดาบ',         icon: 'assets/equipment/sword_iron.png',     weight: 30 },
+];
+const SLOT_GOLD_JACKPOT_MULT = 100; // "Gold x100" เทียบกับ Gold ต่อการฆ่า 1 ตัวปัจจุบัน
+const SLOT_GEM_JACKPOT = 15;
+const SLOT_POTION_JACKPOT_AMOUNT = 3;
+let slotSpinning = false; // สถานะแอนิเมชันหมุน (ไม่ persist เป็นแค่สถานะ UI ชั่วคราว)
+
+function buySpinTicket() {
+  if (player.gold < SPIN_TICKET_GOLD_COST) return;
+  player.gold -= SPIN_TICKET_GOLD_COST;
+  player.spinTickets += 1;
+  renderAll();
+}
+
+// คำนวณผลหมุนล่วงหน้าทันที (ไม่แก้ state ผู้เล่นเลยตรงนี้) แยกจากการเล่นแอนิเมชัน/แจกรางวัลจริง
+// เพื่อให้ตัดสินผลได้ก่อนเริ่มแอนิเมชัน แล้วค่อยเผยผลตอนวงล้อหยุดสุดท้ายให้ตรงจังหวะ
+function computeSlotSpin() {
+  const reels = [pickWeighted(SLOT_SYMBOLS), pickWeighted(SLOT_SYMBOLS), pickWeighted(SLOT_SYMBOLS)];
+  let reward = null;
+  if (reels[0].key === reels[1].key && reels[1].key === reels[2].key) {
+    const key = reels[0].key;
+    if (key === 'gem') reward = { type: 'gem', amount: SLOT_GEM_JACKPOT };
+    else if (key === 'gold') reward = { type: 'gold', amount: getBaseGoldPerKill() * SLOT_GOLD_JACKPOT_MULT };
+    else if (key === 'chest' || key === 'sword') reward = { type: 'item' };
+    else if (key === 'potion') reward = { type: 'potion', amount: SLOT_POTION_JACKPOT_AMOUNT };
+  }
+  return { reels, reward };
+}
+
+function applySlotReward(reward) {
+  if (!reward) return;
+  if (reward.type === 'gem') {
+    player.gems += reward.amount;
+  } else if (reward.type === 'gold') {
+    player.gold += reward.amount;
+  } else if (reward.type === 'item') {
+    player.pendingGacha = rollGachaItemMinRarity(player.stage, 'epic');
+    player.stats.itemsByRarity[player.pendingGacha.rarity] += 1;
+    reward.item = player.pendingGacha;
+  } else if (reward.type === 'potion') {
+    player.potions.red += reward.amount;
+    player.potions.blue += reward.amount;
+  }
+}
+
+// ===============================================
 // หีบสมบัติปริศนา (Mystery Chests) — แยกจากกล่องสมบัติปกติ (ไม่ได้อุปกรณ์ แต่ได้ Gold ก้อนใหญ่หรือโพชั่นสุ่ม)
 // ===============================================
 function openMysteryChest() {
@@ -1834,6 +1980,169 @@ function openMysteryChest() {
     showToast(`🎁 หีบปริศนา: โพชั่น${color === 'red' ? 'แดง' : 'ฟ้า'} x${amount}!`);
   }
   renderAll();
+}
+
+// ===============================================
+// มินิเกมปล้นสมบัติ (Treasure Raid Grid) — ใช้แผนที่ลายแทง 1 ใบ เปิดกระดาน 4x4 คว่ำอยู่
+// มีพลั่ว 4 อัน (คลิกเปิดได้ 4 ช่อง), ซ่อนสมบัติ 3 ชิ้น + ระเบิด 1 ลูก, เจอระเบิดจบทันที
+// เป็นเซสชันชั่วคราวไม่ persist (เหมือน raidSession/towerSession) เพราะเล่นจบในครั้งเดียว
+// ===============================================
+const TREASURE_GRID_SIZE = 16;
+const TREASURE_SHOVELS = 4;
+const TREASURE_PRIZE_KEYS = ['gold', 'gem', 'stone'];
+const TREASURE_PRIZE_LABELS = { gold: '💰', gem: '💎', stone: '🔨' };
+let treasureGridSession = null; // { tiles, shovelsLeft, collected, ended }
+
+function createTreasureGridSession() {
+  const positions = Array.from({ length: TREASURE_GRID_SIZE }, (_, i) => i);
+  for (let i = positions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [positions[i], positions[j]] = [positions[j], positions[i]];
+  }
+  const tiles = new Array(TREASURE_GRID_SIZE).fill(null).map(() => ({ type: 'empty', revealed: false }));
+  TREASURE_PRIZE_KEYS.forEach((key, i) => { tiles[positions[i]] = { type: 'treasure', prizeKey: key, revealed: false }; });
+  tiles[positions[TREASURE_PRIZE_KEYS.length]] = { type: 'bomb', revealed: false };
+  return { tiles, shovelsLeft: TREASURE_SHOVELS, collected: [], ended: false };
+}
+
+function startTreasureRaid() {
+  if (player.treasureMaps <= 0 || treasureGridSession) return;
+  player.treasureMaps -= 1;
+  treasureGridSession = createTreasureGridSession();
+  document.getElementById('treasureGridModal').style.display = 'flex';
+  renderTreasureGridModal();
+  renderAll();
+}
+
+function applyTreasurePrize(key) {
+  if (key === 'gold') {
+    const amt = Math.floor((100 + player.stage * 20) * (1 + Math.random() * 1.5));
+    player.gold += amt;
+    appendLog([`🗺️ ขุดเจอ Gold ก้อนโต +${amt}!`]);
+  } else if (key === 'gem') {
+    player.gems += 5;
+    appendLog(['🗺️ ขุดเจอเพชร +5!']);
+  } else if (key === 'stone') {
+    player.enhanceStones += 8;
+    appendLog(['🗺️ ขุดเจอหินหลอม +8!']);
+  }
+}
+
+function digTreasureTile(index) {
+  const s = treasureGridSession;
+  if (!s || s.ended) return;
+  const tile = s.tiles[index];
+  if (!tile || tile.revealed || s.shovelsLeft <= 0) return;
+  tile.revealed = true;
+  s.shovelsLeft -= 1;
+  playSfxDig();
+  if (tile.type === 'bomb') {
+    s.ended = true;
+    s.tiles.forEach(t => { t.revealed = true; });
+    appendLog(['💣 เจอระเบิด! มินิเกมปล้นสมบัติจบลง']);
+    showToast('💣 บูม! เจอระเบิด');
+  } else if (tile.type === 'treasure') {
+    applyTreasurePrize(tile.prizeKey);
+    s.collected.push(tile.prizeKey);
+    if (s.collected.length >= TREASURE_PRIZE_KEYS.length) s.ended = true;
+  }
+  if (!s.ended && s.shovelsLeft <= 0) s.ended = true;
+  renderTreasureGridModal();
+  renderAll();
+}
+
+function closeTreasureGridModal() {
+  treasureGridSession = null;
+  document.getElementById('treasureGridModal').style.display = 'none';
+}
+
+function renderTreasureGridModal() {
+  const s = treasureGridSession;
+  if (!s) return;
+  document.getElementById('treasureShovelsLeft').textContent = s.shovelsLeft;
+  document.getElementById('treasureCollectedCount').textContent = s.collected.length;
+  const gridEl = document.getElementById('treasureGridCells');
+  gridEl.innerHTML = '';
+  s.tiles.forEach((tile, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'treasure-tile' + (tile.revealed ? ' treasure-tile--revealed' : '');
+    if (tile.revealed) {
+      if (tile.type === 'bomb') { btn.textContent = '💣'; btn.classList.add('treasure-tile--bomb'); btn.disabled = true; }
+      else if (tile.type === 'treasure') { btn.textContent = TREASURE_PRIZE_LABELS[tile.prizeKey]; btn.classList.add('treasure-tile--treasure'); btn.disabled = true; }
+      else { btn.textContent = '·'; btn.disabled = true; }
+    } else {
+      btn.textContent = '❓';
+      btn.disabled = s.ended || s.shovelsLeft <= 0;
+      btn.addEventListener('click', () => digTreasureTile(i));
+    }
+    gridEl.appendChild(btn);
+  });
+}
+
+// ===============================================
+// กิจกรรมแทปรัวๆ (Golden Goblin Frenzy Clicker) — ระหว่างด่านปกติมีโอกาสสุ่มให้ก็อบลินทองคำ
+// กระโดดแทรกเข้ามา 5 วินาที ผู้เล่นต้องแทะให้เร็วที่สุดเพื่อแลกดาเมจ/รางวัลพิเศษ
+// ดักจับที่ startBattle() ก่อนเรียก resolveBattle เสมอ ไม่แตะ resolveBattle/resolveTowerFloor
+// เลยแม้แต่บรรทัดเดียว เพื่อไม่ให้กระทบจังหวะ/ความสมดุลของเอนจินการต่อสู้หลักที่ผ่าน Math Audit มาแล้ว
+// ===============================================
+const GOLDEN_GOBLIN_CHANCE = 0.03;
+const GOLDEN_GOBLIN_DURATION_MS = 5000;
+const GOLDEN_GOBLIN_GOLD_PER_CLICK_MULT = 4;
+const GOLDEN_GOBLIN_GEM_CLICK_THRESHOLD = 30;
+const GOLDEN_GOBLIN_GEM_BONUS = 2;
+let goldenGoblinSession = null; // { clicks, endsAt, tickTimerId } ไม่ persist เป็นเหตุการณ์ชั่วคราวระหว่างเล่นเท่านั้น
+
+function maybeTriggerGoldenGoblin() {
+  if (goldenGoblinSession) return false;
+  if (!player.encounter || player.encounter.tier !== 'normal') return false;
+  if (Math.random() >= GOLDEN_GOBLIN_CHANCE) return false;
+  startGoldenGoblin();
+  return true;
+}
+
+function startGoldenGoblin() {
+  goldenGoblinSession = { clicks: 0, endsAt: Date.now() + GOLDEN_GOBLIN_DURATION_MS, tickTimerId: null };
+  document.getElementById('goldenGoblinModal').style.display = 'flex';
+  renderGoldenGoblinModal();
+  goldenGoblinSession.tickTimerId = setInterval(() => {
+    if (!goldenGoblinSession) return;
+    if (Date.now() >= goldenGoblinSession.endsAt) { endGoldenGoblin(); return; }
+    renderGoldenGoblinModal();
+  }, 100);
+  renderAll(); // ปิดปุ่ม Fight ชั่วคราวระหว่างมีก็อบลินทองคำ
+}
+
+function tapGoldenGoblin() {
+  if (!goldenGoblinSession) return;
+  goldenGoblinSession.clicks += 1;
+  playSfxGoblinTap();
+  triggerHitEffect(document.getElementById('goblinSprite'));
+  renderGoldenGoblinModal();
+}
+
+function renderGoldenGoblinModal() {
+  if (!goldenGoblinSession) return;
+  const msLeft = Math.max(0, goldenGoblinSession.endsAt - Date.now());
+  document.getElementById('goblinTimer').textContent = (msLeft / 1000).toFixed(1) + 's';
+  document.getElementById('goblinClickCount').textContent = goldenGoblinSession.clicks;
+}
+
+function endGoldenGoblin() {
+  clearInterval(goldenGoblinSession.tickTimerId);
+  const clicks = goldenGoblinSession.clicks;
+  const goldReward = getBaseGoldPerKill() * GOLDEN_GOBLIN_GOLD_PER_CLICK_MULT * clicks;
+  player.gold += goldReward;
+  let gemReward = 0;
+  if (clicks >= GOLDEN_GOBLIN_GEM_CLICK_THRESHOLD) {
+    gemReward = GOLDEN_GOBLIN_GEM_BONUS;
+    player.gems += gemReward;
+  }
+  appendLog([`👺 ก็อบลินทองคำหนีไปแล้ว! แทะได้ ${clicks} ครั้ง ได้รับ ${goldReward} Gold${gemReward ? ` และเพชร +${gemReward}` : ''}`]);
+  showToast(`👺 ได้รับ ${goldReward} Gold${gemReward ? ` + เพชร ${gemReward}` : ''}!`);
+  document.getElementById('goldenGoblinModal').style.display = 'none';
+  goldenGoblinSession = null;
+  renderAll();
+  if (player.autoBattle) runAutoBattleLoop(); // ลูป Auto-Battle ที่ถูกพักไว้ตอนก็อบลินขึ้น กลับมาทำงานต่อ
 }
 
 // ===============================================
@@ -1958,6 +2267,8 @@ let player = {
   towerCurios: [], // key ของสะสมพิเศษจากหอคอยที่เก็บได้แล้ว — ถาวร ไม่รีเซ็ตตอน Prestige ไม่มีบัฟสเตตัส
   workshopLevel: 0, // ระดับโรงงานผลิต Gold พาสซีฟ (ดู WORKSHOP_MAX_LEVEL) — ทำงานตอนเปิดเกมอยู่ ต่างจาก Offline Earnings
   echoSnapshot: null, // { atk, def, hp, cp, stage, claimed } สแนปช็อตสเตตัสที่บันทึกไว้ ใช้ท้าดวล Echo Battle
+  spinTickets: 0, // ตั๋วสปินวงล้อก็อบลิน ได้จากบอส หรือซื้อด้วย Gold
+  treasureMaps: 0, // แผนที่ลายแทง ดรอปจากมอนสเตอร์ปกติแบบสุ่ม ใช้เปิดมินิเกมปล้นสมบัติ
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -3334,6 +3645,8 @@ function saveGame() {
     towerCurios: player.towerCurios,
     workshopLevel: player.workshopLevel,
     echoSnapshot: player.echoSnapshot,
+    spinTickets: player.spinTickets,
+    treasureMaps: player.treasureMaps,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -3392,6 +3705,8 @@ function loadGame() {
       towerCurios: data.towerCurios || [],
       workshopLevel: data.workshopLevel || 0,
       echoSnapshot: data.echoSnapshot || null,
+      spinTickets: data.spinTickets || 0,
+      treasureMaps: data.treasureMaps || 0,
     });
     // ย้ายไอเทมรูปแบบเก่า (ยุคก่อน Multi-Stat Equipment ที่เก็บ .value ค่าเดียว) ให้เป็น .baseStats
     // แบบใหม่ กันเซฟเก่าพังตอนโหลด — ทำทั้งของที่สวมอยู่และในคลังไอเทม
@@ -3525,12 +3840,18 @@ function finalizeBattle(result) {
       grantChest(1);
       player.bossSouls += 1;
       appendLog(['ได้รับกล่องสมบัติ 1 ใบ', 'ได้รับวิญญาณบอส +1']);
+      // ตั๋วสปินวงล้อก็อบลิน: โอกาส 30% จาก Mid-Boss
+      if (Math.random() < 0.3) {
+        player.spinTickets += 1;
+        appendLog(['🎰 ได้รับตั๋วสปิน +1!']);
+      }
     } else if (result.monster.tier === 'bigboss') {
       player.stats.bigBossKills += 1;
       grantChest(3);
       player.gems += 1;
       player.bossSouls += 3;
-      appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด', 'ได้รับวิญญาณบอส +3']);
+      player.spinTickets += 1; // Big-Boss การันตีตั๋วสปิน 1 ใบเสมอ
+      appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด', 'ได้รับวิญญาณบอส +3', 'ได้รับตั๋วสปิน +1']);
       // วัตถุโบราณ: ดรอปจาก Demon King โดยเฉพาะ ที่ด่านคูณ 100 (100, 200, 300, ...) เท่านั้น โอกาส 20%
       if (result.monster.key === 'demon_king' && player.stage % 100 === 0) {
         const undiscovered = RELIC_DEFS.filter(r => !hasRelic(r.key));
@@ -3553,6 +3874,12 @@ function finalizeBattle(result) {
         player.petTickets += 1;
         appendLog(['🎫 ได้รับตั๋วสุ่มสัตว์เลี้ยง +1!']);
         showToast('🎫 ได้รับตั๋วสุ่มสัตว์เลี้ยง!');
+      }
+      // แผนที่ลายแทง: โอกาสน้อย (1.5%) จากมอนสเตอร์ปกติ ใช้เปิดมินิเกมปล้นสมบัติ
+      if (Math.random() < 0.015) {
+        player.treasureMaps += 1;
+        appendLog(['🗺️ พบแผนที่ลายแทง!']);
+        showToast('🗺️ พบแผนที่ลายแทง!');
       }
     }
     // หีบสมบัติปริศนา: โอกาสเล็กน้อยจากทุกชัยชนะ (ไม่ว่ามอนสเตอร์ปกติหรือบอส) ดรอปแยกจากกล่องสมบัติปกติ
@@ -3662,6 +3989,8 @@ function playEvents(events, monsterMaxHp, done) {
 // เริ่มสู้ 1 ครั้ง: คำนวณผลทันที แต่ค่อยๆ เล่นแอนิเมชันให้ดู แล้วค่อยสรุปผลตอนจบ
 function startBattle(onComplete) {
   if (player.animating) return;
+  if (goldenGoblinSession) return;
+  if (maybeTriggerGoldenGoblin()) return; // สกัดก่อนสู้ตาที่จะเริ่ม ไม่แตะ resolveBattle เลย ลูปจะกลับมาเริ่มเองใน endGoldenGoblin()
   player.animating = true;
   renderAll();
   const monsterMaxHp = player.encounter.maxHp;
@@ -3829,6 +4158,7 @@ function renderCharacterPanel() {
   renderPersonalBests();
   renderWorkshopBox();
   renderEchoBox();
+  renderSlotBox();
 
   const dailyBtn = document.getElementById('btnOpenDailyLogin');
   dailyBtn.classList.toggle('daily-login-btn--ready', !isDailyLoginClaimedToday(player));
@@ -3893,6 +4223,65 @@ function renderEchoBox() {
     info.textContent = `เงาบันทึกไว้ตอนด่าน ${snap.stage}, CP ${snap.cp}${snap.claimed ? ' (รับรางวัลไปแล้ว)' : ' (ยังไม่เคยเอาชนะ)'}`;
   }
   document.getElementById('btnFightEcho').disabled = !snap;
+}
+
+function renderSlotBox() {
+  document.getElementById('spinTicketCount').textContent = player.spinTickets;
+  document.getElementById('btnBuySpinTicket').disabled = player.gold < SPIN_TICKET_GOLD_COST;
+  document.getElementById('btnSpinSlot').disabled = player.spinTickets <= 0 || slotSpinning;
+}
+
+const SLOT_SPIN_ANIM_MS = 900;
+const SLOT_REEL_STOP_STAGGER_MS = 250;
+const SLOT_REEL_SHUFFLE_MS = 80;
+
+function spinSlotHandler() {
+  if (player.spinTickets <= 0 || slotSpinning) return;
+  slotSpinning = true;
+  player.spinTickets -= 1;
+  const outcome = computeSlotSpin();
+  document.getElementById('slotResultText').textContent = '';
+  document.getElementById('slotResultText').className = 'slot-result-text';
+  renderAll();
+
+  const reelIds = ['slotReel1', 'slotReel2', 'slotReel3'];
+  const shuffleTimers = reelIds.map(id => setInterval(() => {
+    document.getElementById(id).src = pickWeighted(SLOT_SYMBOLS).icon;
+  }, SLOT_REEL_SHUFFLE_MS));
+
+  reelIds.forEach((id, i) => {
+    setTimeout(() => {
+      clearInterval(shuffleTimers[i]);
+      document.getElementById(id).src = outcome.reels[i].icon;
+      playSfxSlotStop();
+      if (i === reelIds.length - 1) setTimeout(() => finishSlotSpin(outcome), 200);
+    }, SLOT_SPIN_ANIM_MS + i * SLOT_REEL_STOP_STAGGER_MS);
+  });
+}
+
+function finishSlotSpin(outcome) {
+  slotSpinning = false;
+  applySlotReward(outcome.reward);
+  const resultEl = document.getElementById('slotResultText');
+  if (!outcome.reward) {
+    resultEl.textContent = 'ไม่ตรงกัน ลองใหม่อีกครั้ง!';
+  } else if (outcome.reward.type === 'gem') {
+    resultEl.textContent = `🎉 แจ็คพอตเพชร! ได้รับเพชร +${outcome.reward.amount}`;
+    resultEl.className = 'slot-result-text slot-result-text--win';
+    showToast(`🎰 แจ็คพอตเพชร +${outcome.reward.amount}!`);
+  } else if (outcome.reward.type === 'gold') {
+    resultEl.textContent = `🎉 แจ็คพอต Gold! ได้รับ +${outcome.reward.amount} Gold`;
+    resultEl.className = 'slot-result-text slot-result-text--win';
+    showToast(`🎰 แจ็คพอต Gold +${outcome.reward.amount}!`);
+  } else if (outcome.reward.type === 'item') {
+    resultEl.textContent = `🎉 ได้ไอเทม Epic+ การันตี! (${outcome.reward.item.name}) ไปดูที่แผงกล่องสมบัติ`;
+    resultEl.className = 'slot-result-text slot-result-text--win';
+    showToast('🎰 ได้ไอเทม Epic+ การันตี!');
+  } else if (outcome.reward.type === 'potion') {
+    resultEl.textContent = `🎉 ได้โพชั่นแดง+ฟ้า อย่างละ ${outcome.reward.amount}!`;
+    resultEl.className = 'slot-result-text slot-result-text--win';
+  }
+  renderAll();
 }
 
 function renderAwakeningBox() {
@@ -4145,6 +4534,9 @@ function renderChestPanel() {
   document.getElementById('mysteryChestCount').textContent = player.mysteryChests;
   document.getElementById('btnOpenMysteryChest').disabled = player.mysteryChests <= 0;
 
+  document.getElementById('treasureMapCount').textContent = player.treasureMaps;
+  document.getElementById('btnStartTreasureRaid').disabled = player.treasureMaps <= 0 || !!treasureGridSession;
+
   renderInventory();
   renderGemShop();
   renderPetGrid();
@@ -4362,7 +4754,7 @@ function renderBattlePanel() {
   document.getElementById('monsterHpFill').style.width = hpPct + '%';
   document.getElementById('monsterHpLabel').textContent = `${Math.max(0, monster.hp)} / ${monster.maxHp}`;
 
-  document.getElementById('btnFight').disabled = player.autoBattle || player.animating;
+  document.getElementById('btnFight').disabled = player.autoBattle || player.animating || !!goldenGoblinSession;
   document.getElementById('btnAutoBattle').textContent = `Auto-Battle: ${player.autoBattle ? 'ON' : 'OFF'}`;
   document.getElementById('btnAutoBattle').className = `btn ${player.autoBattle ? 'btn--danger' : 'btn--primary'}`;
 }
@@ -4657,6 +5049,14 @@ document.getElementById('btnUpgradeWorkshop').addEventListener('click', () => up
 document.getElementById('btnSaveEcho').addEventListener('click', () => saveEchoSnapshot());
 document.getElementById('btnFightEcho').addEventListener('click', () => fightEcho());
 
+document.getElementById('btnBuySpinTicket').addEventListener('click', () => buySpinTicket());
+document.getElementById('btnSpinSlot').addEventListener('click', () => spinSlotHandler());
+
+document.getElementById('btnStartTreasureRaid').addEventListener('click', () => startTreasureRaid());
+document.getElementById('btnCloseTreasureGrid').addEventListener('click', () => closeTreasureGridModal());
+
+document.getElementById('goblinSprite').addEventListener('click', () => tapGoldenGoblin());
+
 document.getElementById('btnGenerateShareText').addEventListener('click', () => {
   const text = generateShareText(player);
   const box = document.getElementById('shareTextarea');
@@ -4685,7 +5085,7 @@ document.querySelectorAll('.collapsible-header').forEach(header => {
 
 // แถบเมนูด้านข้างของพาเนลตัวละคร (Prestige/ปลุกพลัง/ตีบวก/สกิล/ฉายา/วัตถุโบราณ/สมุดภาพ/ผสมยา)
 // แสดงทีละแท็บแทนการกาง accordion ซ้อนกันหลายอันเหมือนเดิม เรียงลำดับตามความสำคัญ/ความถี่ในการใช้งาน
-const CHAR_TAB_IDS = ['prestigeBody', 'awakeningBody', 'enhanceBody', 'skillBody', 'titleBody', 'relicBody', 'bestiaryBody', 'alchemyBody', 'achievementBody', 'personalBestBody', 'workshopBody', 'echoBody'];
+const CHAR_TAB_IDS = ['prestigeBody', 'awakeningBody', 'enhanceBody', 'skillBody', 'titleBody', 'relicBody', 'bestiaryBody', 'alchemyBody', 'achievementBody', 'personalBestBody', 'workshopBody', 'echoBody', 'slotBody'];
 function selectCharTab(tabId) {
   CHAR_TAB_IDS.forEach(id => {
     document.getElementById(id).classList.toggle('char-tab-panel--active', id === tabId);
