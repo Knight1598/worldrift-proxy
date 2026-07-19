@@ -1072,6 +1072,8 @@
           <button class="char-tab-btn" data-tab="relicBody"><span class="char-tab-icon">🏺</span>วัตถุโบราณ</button>
           <button class="char-tab-btn" data-tab="bestiaryBody"><span class="char-tab-icon">📖</span>สมุดภาพ</button>
           <button class="char-tab-btn" data-tab="alchemyBody"><span class="char-tab-icon">⚗️</span>ผสมยา</button>
+          <button class="char-tab-btn" data-tab="achievementBody"><span class="char-tab-icon">🏆</span>ความสำเร็จ</button>
+          <button class="char-tab-btn" data-tab="personalBestBody"><span class="char-tab-icon">📊</span>สถิติ</button>
         </div>
 
         <div class="char-tab-panel" id="prestigeBody">
@@ -1125,6 +1127,28 @@
             <span class="alchemy-desc">ใช้ Elixir ทันที</span>
             <button class="btn btn--success" id="btnUseElixir">ใช้ Elixir</button>
           </div>
+          <p class="raid-desc" style="margin:10px 0 6px;">Mega Elixir — นำ Elixir 2 ขวด + วิญญาณบอส 10 มาต้มเข้มข้น: ฟื้น HP เต็ม + บัฟ ATK/DEF +70% 8 ไฟต์</p>
+          <div class="alchemy-row">
+            <span class="alchemy-desc">Mega Elixir ที่มี: <span id="megaElixirCount">0</span></span>
+            <button class="btn btn--info" id="btnCraftMegaElixir">ต้ม (Elixir x2 + 💀10)</button>
+          </div>
+          <div class="alchemy-row">
+            <span class="alchemy-desc">ใช้ Mega Elixir ทันที</span>
+            <button class="btn btn--success" id="btnUseMegaElixir">ใช้ Mega Elixir</button>
+          </div>
+        </div>
+
+        <div class="char-tab-panel" id="achievementBody">
+          <div class="raid-desc" style="margin:0 0 6px;">🏆 ป้ายความสำเร็จ (<span id="achievementCount">0</span>/<span id="achievementTotal">0</span>) — สะสมถาวรตลอดชีพ ไม่มีบัฟสเตตัส แค่เก็บไว้โชว์</div>
+          <div class="relic-grid" id="achievementGrid"></div>
+        </div>
+
+        <div class="char-tab-panel" id="personalBestBody">
+          <div class="raid-desc" style="margin:0 0 10px;">📊 สถิติส่วนตัว — สถิติที่ดีที่สุดตลอดชีพ ไม่รีเซ็ตตอน Prestige</div>
+          <div class="row"><span>ชั้นสูงสุดที่เคยไปถึง</span><span id="pbHighestStage">1</span></div>
+          <div class="row"><span>CP สูงสุดที่เคยมี</span><span id="pbHighestCP">0</span></div>
+          <div class="row"><span>Gold สูงสุดที่เคยถือ</span><span id="pbMostGold">0</span></div>
+          <div class="row"><span>ดาเมจครั้งเดียวสูงสุด</span><span id="pbBiggestHit">0</span></div>
         </div>
       </div>
     </section>
@@ -1860,6 +1884,11 @@ let player = {
   mysteryChests: 0, // หีบปริศนา ดรอปจากการต่อสู้เป็นบางครั้ง เปิดแล้วได้ Gold ก้อนใหญ่หรือโพชั่นสุ่ม
   weatherKey: null, // สภาพอากาศปัจจุบัน (ดู WEATHER_TYPES) — หมุนเวียนอัตโนมัติ ไม่ถาวร ไม่สะสม
   weatherChangesAt: 0, // timestamp (Date.now()) ที่จะสุ่มสภาพอากาศใหม่
+  // สถิติส่วนตัว (Personal Best) — สถิติที่ดีที่สุดตลอดชีพ ไม่รีเซ็ตตอน Prestige (ต่างจาก highestStage
+  // ที่เป็นสถิติ "รอบปัจจุบัน" ใช้คำนวณ Prestige Point เท่านั้น)
+  personalBests: { highestStageEver: 1, highestCP: 0, mostGoldHeld: 0, biggestHit: 0 },
+  unlockedAchievements: [], // key ของป้ายความสำเร็จที่ปลดล็อกแล้ว (ดู ACHIEVEMENT_DEFS) — ถาวร ไม่มีบัฟสเตตัส แค่สะสม
+  megaElixirs: 0, // ได้จากผสม Elixir 2 ขวด + วิญญาณบอส 10 (ดู MEGA_ALCHEMY_RECIPE)
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1926,6 +1955,38 @@ function getTitleBonusTotals(p) {
 }
 function getTitleBonus(p, key) {
   return getTitleBonusTotals(p)[key] || 0;
+}
+
+// ===============================================
+// ป้ายความสำเร็จ (Achievement Trophies) — สะสมถาวรล้วนๆ ไม่มีบัฟสเตตัสติดตัวเหมือนฉายา (Titles)
+// ต่างจากภารกิจ (Quests) ที่เป็นเป้าหมายระยะสั้นต่อรอบ Prestige — อันนี้คือ "หมุดหมายตลอดชีพ" เก็บไว้โชว์
+// ใช้เงื่อนไขจากสถิติที่ถาวรอยู่แล้ว (ไม่รีเซ็ตตอน Prestige) เท่านั้น เพื่อไม่ต้องเพิ่มตัวนับใหม่โดยไม่จำเป็น
+// ===============================================
+const ACHIEVEMENT_DEFS = [
+  { key: 'stage_10',        name: 'ก้าวแรก',            desc: 'ไปถึงด่าน 10', condition: p => p.personalBests.highestStageEver >= 10 },
+  { key: 'stage_50',        name: 'นักผจญภัย',          desc: 'ไปถึงด่าน 50', condition: p => p.personalBests.highestStageEver >= 50 },
+  { key: 'stage_100',       name: 'ผู้กล้าไร้เทียมทาน',  desc: 'ไปถึงด่าน 100', condition: p => p.personalBests.highestStageEver >= 100 },
+  { key: 'first_prestige',  name: 'วัฏจักรแรก',         desc: 'ทำ Prestige ครั้งแรก', condition: p => p.stats.prestigeCount >= 1 },
+  { key: 'prestige_10',     name: 'เซียน Prestige',      desc: 'ทำ Prestige ครบ 10 ครั้ง', condition: p => p.stats.prestigeCount >= 10 },
+  { key: 'rich_10k',        name: 'เศรษฐี',             desc: 'มี Gold ครบ 10,000 พร้อมกัน', condition: p => p.personalBests.mostGoldHeld >= 10000 },
+  { key: 'all_relics',      name: 'นักล่าวัตถุโบราณ',    desc: 'เก็บวัตถุโบราณครบทุกชิ้น', condition: p => p.relics.length >= RELIC_DEFS.length },
+  { key: 'all_titles',      name: 'ผู้ทรงเกียรติ',       desc: 'ปลดล็อกฉายาครบทุกอัน', condition: p => p.unlockedTitles.length >= TITLE_DEFS.length },
+  { key: 'awakened_once',   name: 'ตื่นแล้ว',           desc: 'ปลุกพลังแฝงระดับแรก', condition: p => p.awakeningLevel >= 1 },
+  { key: 'awakened_max',    name: 'พลังแฝงเต็มขั้น',     desc: 'ปลุกพลังแฝงครบทุกระดับ', condition: p => p.awakeningLevel >= AWAKENING_TIERS.length },
+  { key: 'tower_10',        name: 'นักไต่หอคอย',        desc: 'ไต่หอคอยไร้ขีดจำกัดถึงชั้น 10', condition: p => p.towerHighestFloor >= 10 },
+  { key: 'tower_30',        name: 'จ้าวหอคอย',          desc: 'ไต่หอคอยไร้ขีดจำกัดถึงชั้น 30', condition: p => p.towerHighestFloor >= 30 },
+  { key: 'bestiary_full',   name: 'นักสัตววิทยา',        desc: 'สมุดภาพมอนสเตอร์ครบทุกชนิด', condition: p => getBestiaryCompletedCount(p) >= MONSTERS.length },
+  { key: 'big_hit_1000',    name: 'ดาเมจมหาศาล',        desc: 'ทำดาเมจครั้งเดียวถึง 1,000', condition: p => p.personalBests.biggestHit >= 1000 },
+];
+
+function checkAchievements() {
+  ACHIEVEMENT_DEFS.forEach(ach => {
+    if (!player.unlockedAchievements.includes(ach.key) && ach.condition(player)) {
+      player.unlockedAchievements.push(ach.key);
+      showToast(`🏆 ปลดล็อกความสำเร็จ: ${ach.name}!`);
+      appendLog([`🏆 ปลดล็อกความสำเร็จ: ${ach.name}!`]);
+    }
+  });
 }
 
 // ===============================================
@@ -2022,6 +2083,30 @@ function useElixir() {
   player.buffFightsLeft = ELIXIR_BUFF_FIGHTS;
   player.buffMultiplier = ELIXIR_BUFF_MULT;
   appendLog([`⚗️ ใช้ Elixir: ฟื้น HP เต็ม + ATK/DEF +40% เป็นเวลา ${ELIXIR_BUFF_FIGHTS} ไฟต์`]);
+  renderAll();
+}
+
+// สูตรผสมยาขั้นสูง (ต่อยอดจาก Alchemy เดิม): ใช้ Elixir ที่มีอยู่แล้ว + วิญญาณบอส (ทรัพยากรจากระบบ Boss
+// Souls) มาต้มเข้มข้นเป็น Mega Elixir บัฟแรงและนานกว่า — เชื่อมสองระบบที่มีอยู่แล้วเข้าด้วยกันแทนสร้างของใหม่ทั้งหมด
+const MEGA_ALCHEMY_RECIPE = { elixirs: 2, bossSouls: 10 };
+const MEGA_ELIXIR_BUFF_MULT = 1.7; // ATK/DEF +70%
+const MEGA_ELIXIR_BUFF_FIGHTS = 8;
+function craftMegaElixir() {
+  if (player.elixirs < MEGA_ALCHEMY_RECIPE.elixirs || player.bossSouls < MEGA_ALCHEMY_RECIPE.bossSouls) return;
+  player.elixirs -= MEGA_ALCHEMY_RECIPE.elixirs;
+  player.bossSouls -= MEGA_ALCHEMY_RECIPE.bossSouls;
+  player.megaElixirs += 1;
+  appendLog([`⚗️ ต้ม Mega Elixir สำเร็จ (ใช้ Elixir x${MEGA_ALCHEMY_RECIPE.elixirs} + วิญญาณบอส x${MEGA_ALCHEMY_RECIPE.bossSouls})`]);
+  renderAll();
+}
+function useMegaElixir() {
+  if (player.animating || player.autoBattle) return;
+  if (player.megaElixirs <= 0) return;
+  player.megaElixirs -= 1;
+  player.currentHp = getMaxHp(player);
+  player.buffFightsLeft = MEGA_ELIXIR_BUFF_FIGHTS;
+  player.buffMultiplier = MEGA_ELIXIR_BUFF_MULT;
+  appendLog([`⚗️ ใช้ Mega Elixir: ฟื้น HP เต็ม + ATK/DEF +70% เป็นเวลา ${MEGA_ELIXIR_BUFF_FIGHTS} ไฟต์`]);
   renderAll();
 }
 
@@ -2507,6 +2592,7 @@ function raidAttack() {
   if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
   raidSession.hp = Math.max(0, raidSession.hp - dmg);
   raidSession.damageDealt += dmg;
+  player.personalBests.biggestHit = Math.max(player.personalBests.biggestHit, dmg);
   if (isCrit) playSfxCrit(); else playSfxAttack();
   spawnDamagePopup(document.getElementById('raidBossSprite').parentElement, { kind: isCrit ? 'crit' : 'hit', dmg });
   triggerHitEffect(document.getElementById('raidBossSprite'));
@@ -2881,6 +2967,9 @@ function saveGame() {
     mysteryChests: player.mysteryChests,
     weatherKey: player.weatherKey,
     weatherChangesAt: player.weatherChangesAt,
+    personalBests: player.personalBests,
+    unlockedAchievements: player.unlockedAchievements,
+    megaElixirs: player.megaElixirs,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -2931,6 +3020,9 @@ function loadGame() {
       mysteryChests: data.mysteryChests || 0,
       weatherKey: data.weatherKey || null,
       weatherChangesAt: data.weatherChangesAt || 0,
+      personalBests: Object.assign({ highestStageEver: data.highestStage || 1, highestCP: 0, mostGoldHeld: 0, biggestHit: 0 }, data.personalBests || {}),
+      unlockedAchievements: data.unlockedAchievements || [],
+      megaElixirs: data.megaElixirs || 0,
     });
     // ย้ายไอเทมรูปแบบเก่า (ยุคก่อน Multi-Stat Equipment ที่เก็บ .value ค่าเดียว) ให้เป็น .baseStats
     // แบบใหม่ กันเซฟเก่าพังตอนโหลด — ทำทั้งของที่สวมอยู่และในคลังไอเทม
@@ -3100,6 +3192,7 @@ function finalizeBattle(result) {
 
     player.stage += 1;
     player.highestStage = Math.max(player.highestStage || 1, player.stage);
+    player.personalBests.highestStageEver = Math.max(player.personalBests.highestStageEver, player.stage); // สถิติตลอดชีพ ไม่รีเซ็ตตอน Prestige
     player.encounter = null; // สุ่มมอนสเตอร์ใหม่สำหรับด่านถัดไป
   } else {
     // บทลงโทษเมื่อพ่ายแพ้: ถอยหลัง 1 ด่าน (ต่ำสุดด่าน 1) กันไม่ให้ auto-battle ชนกำแพงด่านเดิมซ้ำๆ
@@ -3177,6 +3270,9 @@ function playEvents(events, monsterMaxHp, done) {
     renderLiveHpBars(ev.playerHp, ev.monsterHp, monsterMaxHp);
     if (ev.kind === 'crit') playSfxCrit();
     else if (ev.kind === 'hit') playSfxAttack();
+    if (ev.target === 'monster' && (ev.kind === 'hit' || ev.kind === 'crit') && ev.dmg) {
+      player.personalBests.biggestHit = Math.max(player.personalBests.biggestHit, ev.dmg);
+    }
     if (animationsOn) {
       if (ev.target === 'monster') {
         spawnDamagePopup(document.getElementById('bgScene'), ev);
@@ -3304,6 +3400,10 @@ function renderCharacterPanel() {
   document.getElementById('gemsValue').textContent = player.gems;
   document.getElementById('playerLevel').textContent = getPlayerLevel(player);
 
+  // สถิติส่วนตัว (Personal Best) — เช็คทุกครั้งที่ render เพราะ Gold/CP เปลี่ยนได้ตลอด ไม่ต้องรอ event เฉพาะจุด
+  player.personalBests.highestCP = Math.max(player.personalBests.highestCP, getCP(player));
+  player.personalBests.mostGoldHeld = Math.max(player.personalBests.mostGoldHeld, Math.floor(player.gold));
+
   document.getElementById('redPotionCount').textContent = player.potions.red;
   document.getElementById('bluePotionCount').textContent = player.potions.blue;
   document.getElementById('btnUseRedPotion').disabled = player.potions.red <= 0 || player.animating || player.autoBattle;
@@ -3352,6 +3452,9 @@ function renderCharacterPanel() {
   renderTitleList();
   renderAlchemyBox();
   renderAwakeningBox();
+  checkAchievements(); // ต้องเช็คหลังอัปเดต personalBests ข้างบนแล้ว ก่อน renderAchievementGrid ที่อ่านผลลัพธ์ต่อ
+  renderAchievementGrid();
+  renderPersonalBests();
 
   const dailyBtn = document.getElementById('btnOpenDailyLogin');
   dailyBtn.classList.toggle('daily-login-btn--ready', !isDailyLoginClaimedToday(player));
@@ -3363,6 +3466,38 @@ function renderAlchemyBox() {
   document.getElementById('elixirCount').textContent = player.elixirs;
   document.getElementById('btnCraftElixir').disabled = player.potions.red < ALCHEMY_RECIPE.red || player.potions.blue < ALCHEMY_RECIPE.blue;
   document.getElementById('btnUseElixir').disabled = player.elixirs <= 0 || player.animating || player.autoBattle;
+
+  document.getElementById('megaElixirCount').textContent = player.megaElixirs;
+  document.getElementById('btnCraftMegaElixir').disabled = player.elixirs < MEGA_ALCHEMY_RECIPE.elixirs || player.bossSouls < MEGA_ALCHEMY_RECIPE.bossSouls;
+  document.getElementById('btnUseMegaElixir').disabled = player.megaElixirs <= 0 || player.animating || player.autoBattle;
+}
+
+function renderAchievementGrid() {
+  document.getElementById('achievementCount').textContent = player.unlockedAchievements.length;
+  document.getElementById('achievementTotal').textContent = ACHIEVEMENT_DEFS.length;
+  const grid = document.getElementById('achievementGrid');
+  grid.innerHTML = '';
+  ACHIEVEMENT_DEFS.forEach(ach => {
+    const unlocked = player.unlockedAchievements.includes(ach.key);
+    const card = document.createElement('div');
+    card.className = 'relic-card ' + (unlocked ? 'relic-card--found' : 'relic-card--undiscovered');
+    if (unlocked) card.title = ach.desc;
+    const icon = document.createElement('span');
+    icon.style.fontSize = '22px';
+    icon.textContent = unlocked ? '🏆' : '❔';
+    const name = document.createElement('span');
+    name.className = 'relic-name';
+    name.textContent = unlocked ? ach.name : '???';
+    card.append(icon, name);
+    grid.appendChild(card);
+  });
+}
+
+function renderPersonalBests() {
+  document.getElementById('pbHighestStage').textContent = player.personalBests.highestStageEver;
+  document.getElementById('pbHighestCP').textContent = player.personalBests.highestCP;
+  document.getElementById('pbMostGold').textContent = player.personalBests.mostGoldHeld;
+  document.getElementById('pbBiggestHit').textContent = player.personalBests.biggestHit;
 }
 
 function renderAwakeningBox() {
@@ -4073,6 +4208,8 @@ document.getElementById('btnCloseDailyLogin').addEventListener('click', () => {
 
 document.getElementById('btnCraftElixir').addEventListener('click', () => craftElixir());
 document.getElementById('btnUseElixir').addEventListener('click', () => useElixir());
+document.getElementById('btnCraftMegaElixir').addEventListener('click', () => craftMegaElixir());
+document.getElementById('btnUseMegaElixir').addEventListener('click', () => useMegaElixir());
 
 document.querySelectorAll('.collapsible-header').forEach(header => {
   header.addEventListener('click', () => {
@@ -4084,7 +4221,7 @@ document.querySelectorAll('.collapsible-header').forEach(header => {
 
 // แถบเมนูด้านข้างของพาเนลตัวละคร (Prestige/ปลุกพลัง/ตีบวก/สกิล/ฉายา/วัตถุโบราณ/สมุดภาพ/ผสมยา)
 // แสดงทีละแท็บแทนการกาง accordion ซ้อนกันหลายอันเหมือนเดิม เรียงลำดับตามความสำคัญ/ความถี่ในการใช้งาน
-const CHAR_TAB_IDS = ['prestigeBody', 'awakeningBody', 'enhanceBody', 'skillBody', 'titleBody', 'relicBody', 'bestiaryBody', 'alchemyBody'];
+const CHAR_TAB_IDS = ['prestigeBody', 'awakeningBody', 'enhanceBody', 'skillBody', 'titleBody', 'relicBody', 'bestiaryBody', 'alchemyBody', 'achievementBody', 'personalBestBody'];
 function selectCharTab(tabId) {
   CHAR_TAB_IDS.forEach(id => {
     document.getElementById(id).classList.toggle('char-tab-panel--active', id === tabId);
