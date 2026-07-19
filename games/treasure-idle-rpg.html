@@ -551,11 +551,30 @@
   .inventory-item .btn { width: auto; padding: 3px 8px; margin-top: 0; font-size: 0.62rem; }
   .inventory-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 10px 0; }
 
-  /* Prestige */
-  .prestige-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
+  /* แถบเมนูด้านข้าง (side tab bar) — รวมระบบย่อยทั้งหมดของตัวละคร (Prestige/สกิล/วัตถุโบราณ/ฯลฯ)
+     เรียงตามความสำคัญ แทนที่ระบบ accordion แบบเดิมที่ต้องกางทีละอันจนพาเนลยาวเกินไป */
+  .char-tabs-wrap { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
+  .char-tab-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 10px; }
+  .char-tab-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    background: #1c1730;
+    border: 2px solid var(--divider);
+    border-radius: 4px;
+    padding: 5px 2px;
+    cursor: pointer;
+    color: #8a84a0;
+    font-size: 0.55rem;
+    line-height: 1.2;
+  }
+  .char-tab-btn .char-tab-icon { font-size: 1.05rem; }
+  .char-tab-btn.char-tab-btn--active { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); color: var(--accent-gold); }
+  .char-tab-panel { display: none; }
+  .char-tab-panel.char-tab-panel--active { display: block; }
 
   /* สกิล Passive */
-  .skill-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
   .skill-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
   .skill-btn {
     display: flex;
@@ -1043,76 +1062,26 @@
         </div>
       </div>
 
-      <div class="prestige-section">
-        <div class="collapsible-header collapsed" data-target="prestigeBody">
-          <span>Prestige</span>
-          <span class="collapse-arrow">▾</span>
+      <div class="char-tabs-wrap">
+        <div class="char-tab-bar" id="charTabBar">
+          <button class="char-tab-btn" data-tab="prestigeBody"><span class="char-tab-icon">✦</span>Prestige</button>
+          <button class="char-tab-btn" data-tab="awakeningBody"><span class="char-tab-icon">✨</span>ปลุกพลัง</button>
+          <button class="char-tab-btn" data-tab="enhanceBody"><span class="char-tab-icon">⚒️</span>ตีบวก</button>
+          <button class="char-tab-btn" data-tab="skillBody"><span class="char-tab-icon">🔥</span>สกิล</button>
+          <button class="char-tab-btn" data-tab="titleBody"><span class="char-tab-icon">🏅</span>ฉายา</button>
+          <button class="char-tab-btn" data-tab="relicBody"><span class="char-tab-icon">🏺</span>วัตถุโบราณ</button>
+          <button class="char-tab-btn" data-tab="bestiaryBody"><span class="char-tab-icon">📖</span>สมุดภาพ</button>
+          <button class="char-tab-btn" data-tab="alchemyBody"><span class="char-tab-icon">⚗️</span>ผสมยา</button>
         </div>
-        <div class="collapsible-body collapsed" id="prestigeBody">
+
+        <div class="char-tab-panel" id="prestigeBody">
           <div class="row"><span>Prestige Points</span><span id="prestigePoints">0</span></div>
           <div class="row"><span>โบนัสถาวร (ATK/DEF/HP)</span><span id="prestigeBonus">+0%</span></div>
           <button class="btn btn--success" id="btnPrestige">Prestige</button>
         </div>
-      </div>
 
-      <div class="skill-section">
-        <div class="collapsible-header collapsed" data-target="skillBody">
-          <span>สกิล Passive</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="skillBody">
-          <div class="skill-grid" id="skillGrid"></div>
-        </div>
-      </div>
-
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="relicBody">
-          <span>วัตถุโบราณ (<span id="relicCount">0</span>/<span id="relicTotal">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="relicBody">
-          <div class="relic-grid" id="relicGrid"></div>
-        </div>
-      </div>
-
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="bestiaryBody">
-          <span>สมุดภาพมอนสเตอร์ (<span id="bestiaryCount">0</span>/<span id="bestiaryTotal">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="bestiaryBody">
-          <p class="raid-desc" style="margin:6px 0;">สังหารมอนสเตอร์แต่ละชนิดครบ <span id="bestiaryTargetLabel">0</span> ตัว ปลดล็อกบัฟ ATK ถาวร +0.3%/ชนิด</p>
-          <div class="relic-grid" id="bestiaryGrid"></div>
-        </div>
-      </div>
-
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="enhanceBody">
-          <span>ตีบวกอุปกรณ์ (🔨 <span id="enhanceStonesCount">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="enhanceBody">
-          <p class="raid-desc" style="margin:6px 0;">ย่อยไอเทมในคลังเป็นหินหลอม แล้วใช้ตีบวกอุปกรณ์ Epic/Legendary ที่สวมอยู่ (สูงสุด +10)</p>
-          <div class="enhance-list" id="enhanceList"></div>
-        </div>
-      </div>
-
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="titleBody">
-          <span>ฉายา (<span id="titleUnlockedCount">0</span>/<span id="titleTotal">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="titleBody">
-          <div class="enhance-list" id="titleList"></div>
-        </div>
-      </div>
-
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="awakeningBody">
-          <span>✨ ปลุกพลังแฝง (<span id="awakeningLevelLabel">0</span>/<span id="awakeningTotalLabel">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="awakeningBody">
+        <div class="char-tab-panel" id="awakeningBody">
+          <div class="raid-desc" style="margin:0 0 6px;">✨ ปลุกพลังแฝง (<span id="awakeningLevelLabel">0</span>/<span id="awakeningTotalLabel">0</span>)</div>
           <div class="awakening-box">
             ตัวคูณ CP ปัจจุบัน: <span class="awakening-mult" id="awakeningMultLabel">x1.0</span><br>
             อัปเกรดสเตตัสสะสมตลอดชีพ: <span id="lifetimeUpgradesLabel">0</span> ครั้ง
@@ -1120,15 +1089,34 @@
           <div class="quest-progress-bar-bg" style="margin-top:6px;"><div class="quest-progress-bar-fill" id="awakeningProgressFill" style="width:0%;"></div></div>
           <div class="awakening-tiers" id="awakeningNextInfo"></div>
         </div>
-      </div>
 
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="alchemyBody">
-          <span>⚗️ ผสมยา (Alchemy)</span>
-          <span class="collapse-arrow">▾</span>
+        <div class="char-tab-panel" id="enhanceBody">
+          <div class="raid-desc" style="margin:0 0 6px;">ตีบวกอุปกรณ์ (🔨 <span id="enhanceStonesCount">0</span>)</div>
+          <p class="raid-desc" style="margin:6px 0;">ย่อยไอเทมในคลังเป็นหินหลอม แล้วใช้ตีบวกอุปกรณ์ Epic/Legendary ที่สวมอยู่ (สูงสุด +10)</p>
+          <div class="enhance-list" id="enhanceList"></div>
         </div>
-        <div class="collapsible-body collapsed" id="alchemyBody">
-          <p class="raid-desc" style="margin:6px 0;">นำโพชั่นแดง+ฟ้าอย่างละ 3 มาผสมเป็น Elixir: ฟื้น HP เต็ม + บัฟ ATK/DEF +40% 5 ไฟต์</p>
+
+        <div class="char-tab-panel" id="skillBody">
+          <div class="skill-grid" id="skillGrid"></div>
+        </div>
+
+        <div class="char-tab-panel" id="titleBody">
+          <div class="raid-desc" style="margin:0 0 6px;">ฉายา (<span id="titleUnlockedCount">0</span>/<span id="titleTotal">0</span>)</div>
+          <div class="enhance-list" id="titleList"></div>
+        </div>
+
+        <div class="char-tab-panel" id="relicBody">
+          <div class="raid-desc" style="margin:0 0 6px;">วัตถุโบราณ (<span id="relicCount">0</span>/<span id="relicTotal">0</span>)</div>
+          <div class="relic-grid" id="relicGrid"></div>
+        </div>
+
+        <div class="char-tab-panel" id="bestiaryBody">
+          <p class="raid-desc" style="margin:0 0 6px;">สมุดภาพมอนสเตอร์ (<span id="bestiaryCount">0</span>/<span id="bestiaryTotal">0</span>) — สังหารมอนสเตอร์แต่ละชนิดครบ <span id="bestiaryTargetLabel">0</span> ตัว ปลดล็อกบัฟ ATK ถาวร +0.3%/ชนิด</p>
+          <div class="relic-grid" id="bestiaryGrid"></div>
+        </div>
+
+        <div class="char-tab-panel" id="alchemyBody">
+          <p class="raid-desc" style="margin:0 0 6px;">⚗️ ผสมยา — นำโพชั่นแดง+ฟ้าอย่างละ 3 มาผสมเป็น Elixir: ฟื้น HP เต็ม + บัฟ ATK/DEF +40% 5 ไฟต์</p>
           <div class="alchemy-row">
             <span class="alchemy-desc">Elixir ที่มี: <span id="elixirCount">0</span></span>
             <button class="btn btn--info" id="btnCraftElixir">ผสม (🧪แดง x3 + 🧪ฟ้า x3)</button>
@@ -4093,6 +4081,24 @@ document.querySelectorAll('.collapsible-header').forEach(header => {
     header.classList.toggle('collapsed', collapsed);
   });
 });
+
+// แถบเมนูด้านข้างของพาเนลตัวละคร (Prestige/ปลุกพลัง/ตีบวก/สกิล/ฉายา/วัตถุโบราณ/สมุดภาพ/ผสมยา)
+// แสดงทีละแท็บแทนการกาง accordion ซ้อนกันหลายอันเหมือนเดิม เรียงลำดับตามความสำคัญ/ความถี่ในการใช้งาน
+const CHAR_TAB_IDS = ['prestigeBody', 'awakeningBody', 'enhanceBody', 'skillBody', 'titleBody', 'relicBody', 'bestiaryBody', 'alchemyBody'];
+function selectCharTab(tabId) {
+  CHAR_TAB_IDS.forEach(id => {
+    document.getElementById(id).classList.toggle('char-tab-panel--active', id === tabId);
+  });
+  document.querySelectorAll('#charTabBar .char-tab-btn').forEach(btn => {
+    btn.classList.toggle('char-tab-btn--active', btn.dataset.tab === tabId);
+  });
+}
+document.getElementById('charTabBar').addEventListener('click', (e) => {
+  const btn = e.target.closest('.char-tab-btn');
+  if (!btn) return;
+  selectCharTab(btn.dataset.tab);
+});
+selectCharTab('prestigeBody');
 document.getElementById('btnToggleSound').addEventListener('click', () => {
   player.settings.soundEnabled = !player.settings.soundEnabled;
   renderSettingsModal();
