@@ -102,6 +102,19 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    image-rendering: pixelated;
+    background-image: url('assets/blacksmith/tile_wood_wall.png'), url('assets/blacksmith/tile_stone_floor.png');
+    background-repeat: repeat-x, repeat-x;
+    background-position: top left, bottom left;
+    background-size: auto 68%, auto 42%;
+  }
+  .stand-tint-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    mix-blend-mode: soft-light;
+    opacity: 0.85;
+    pointer-events: none;
     transition: background 0.6s ease;
   }
   .stand-booth {
@@ -314,6 +327,7 @@
     <div class="stand-title" id="stageName">แผงขายของริมทาง</div>
     <div class="stand-product" id="stageProduct">ขาย ของกินของใช้ทั่วไป</div>
     <div class="stand-stage-view" id="standStageView">
+      <div class="stand-tint-overlay" id="standTintOverlay"></div>
       <div class="customer-lane" id="customerLane"></div>
       <img class="stand-booth" id="standBooth" src="assets/blacksmith/station_stall.png" alt="">
     </div>
@@ -375,10 +389,20 @@
    ข้อมูลเกม (Stages / Upgrades)
    ===================================================================== */
 const STAGES = [
-  { key: 'stall',   name: 'แผงขายของริมทาง',    product: 'ของกินของใช้ทั่วไป', stationImg: 'assets/blacksmith/station_stall.png',   customerImg: 'assets/blacksmith/rogue.png',   color: '#f3e3c9', baseRevenue: 5   },
-  { key: 'forge',   name: 'โรงตีดาบ',           product: 'ดาบ',               stationImg: 'assets/blacksmith/station_forge.png',   customerImg: 'assets/blacksmith/knight.png',  color: '#dcdbe0', baseRevenue: 25  },
-  { key: 'alchemy', name: 'ห้องเล่นแร่แปรธาตุ',  product: 'โพชั่นวิเศษ',        stationImg: 'assets/blacksmith/station_alchemy.png', customerImg: 'assets/blacksmith/wizard.png',  color: '#e3d9f3', baseRevenue: 125 },
+  { key: 'stall',   name: 'แผงขายของริมทาง',    product: 'ของกินของใช้ทั่วไป', stationImg: 'assets/blacksmith/station_stall.png',
+    customerImgs: ['assets/blacksmith/rogue.png', 'assets/blacksmith/villager_woman.png', 'assets/blacksmith/farmer_man.png'],
+    color: '#f3e3c9', baseRevenue: 5   },
+  { key: 'forge',   name: 'โรงตีดาบ',           product: 'ดาบ',               stationImg: 'assets/blacksmith/station_forge.png',
+    customerImgs: ['assets/blacksmith/knight.png'],
+    color: '#dcdbe0', baseRevenue: 25  },
+  { key: 'alchemy', name: 'ห้องเล่นแร่แปรธาตุ',  product: 'โพชั่นวิเศษ',        stationImg: 'assets/blacksmith/station_alchemy.png',
+    customerImgs: ['assets/blacksmith/wizard.png'],
+    color: '#e3d9f3', baseRevenue: 125 },
 ];
+function getRandomCustomerImg() {
+  const imgs = getStage().customerImgs;
+  return imgs[Math.floor(Math.random() * imgs.length)];
+}
 
 // ไอคอนสินค้าที่ขาย เปลี่ยนดีไซน์ (tier) ตามระดับอัปเกรด "คุณภาพสินค้า" ที่ซื้อไปแล้ว — ให้เห็นภาพว่าซื้ออัปเกรด
 // แล้วของที่ขายเปลี่ยนจริง ไม่ใช่แค่ตัวเลขขยับ (จับต้องได้ตามที่ตั้งใจออกแบบไว้)
@@ -518,7 +542,7 @@ function spawnCustomer() {
   el.className = 'customer';
   const img = document.createElement('img');
   img.className = 'customer-img';
-  img.src = getStage().customerImg;
+  img.src = getRandomCustomerImg();
   img.alt = '';
   el.appendChild(img);
   el.style.left = (laneWidth - 20) + 'px';
@@ -678,7 +702,7 @@ function renderStageView() {
   const stage = getStage();
   document.getElementById('stageName').textContent = stage.name;
   document.getElementById('stageProduct').textContent = `ขาย ${stage.product}`;
-  document.getElementById('standStageView').style.background = stage.color;
+  document.getElementById('standTintOverlay').style.background = stage.color;
   document.getElementById('standBooth').src = stage.stationImg;
 }
 
