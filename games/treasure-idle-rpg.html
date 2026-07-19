@@ -850,6 +850,10 @@
   <div class="settings-modal-box">
     <h2>ตั้งค่า</h2>
     <div class="settings-row">
+      <span>เปิด/ปิดเสียง</span>
+      <button class="btn btn--info" id="btnToggleSound">เปิดอยู่</button>
+    </div>
+    <div class="settings-row">
       <span>เปิด/ปิดแอนิเมชันการต่อสู้</span>
       <button class="btn btn--info" id="btnToggleAnimations">เปิดอยู่</button>
     </div>
@@ -1161,6 +1165,45 @@
 </div>
 
 <script>
+/* =====================================================================
+   ระบบเสียง 8-bit (Web Audio API) — สังเคราะห์เสียงสดจาก oscillator ทั้งหมด
+   ไม่มีไฟล์เสียงภายนอกเลย เพื่อให้เกมยังเป็น HTML ไฟล์เดียว ปิด/เปิดได้จาก Settings
+   ===================================================================== */
+let audioCtx = null;
+function getAudioCtx() {
+  // สร้าง/resume AudioContext แบบ lazy ตอนมีการโต้ตอบจากผู้ใช้จริง (คลิกปุ่ม) เท่านั้น
+  // เพราะเบราว์เซอร์ส่วนใหญ่บล็อกการเล่นเสียงอัตโนมัติก่อนมี user gesture
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    audioCtx = new Ctx();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// เล่นโน้ตสั้นๆ 1 เสียงแบบ 8-bit (square/triangle wave) พร้อม envelope ลดเสียงแบบ exponential กันเสียงเพี้ยน/คลิก
+function playTone(freq, duration, type, volume, startDelay) {
+  if (!player.settings.soundEnabled) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const t0 = ctx.currentTime + (startDelay || 0);
+  osc.type = type || 'square';
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(volume || 0.12, t0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + duration);
+}
+
+function playSfxAttack() { playTone(150, 0.09, 'square', 0.10); }
+function playSfxCrit() { playTone(700, 0.05, 'square', 0.14); playTone(1000, 0.09, 'square', 0.11, 0.04); }
+function playSfxChestOpen() { [523, 659, 784, 1047].forEach((freq, i) => playTone(freq, 0.14, 'triangle', 0.10, i * 0.07)); }
+function playSfxClick() { playTone(880, 0.035, 'square', 0.06); }
+
 /* =====================================================================
    IMAGE ASSET PATHS
    ตัวแปรอ้างอิงรูปภาพทั้งหมด — แก้ path ตรงนี้เมื่อมีไฟล์ภาพจริงแล้ว
@@ -1609,7 +1652,7 @@ let player = {
   gems: 0, // เพชร (Premium Currency) ได้จากการชนะ Big-Boss
   buffFightsLeft: 0, // จำนวนไฟต์ที่เหลือของบัฟจากโพชั่นฟ้า
   buffMultiplier: 1, // ตัวคูณ ATK/DEF ชั่วคราวจากโพชั่นฟ้า
-  settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false },
+  settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false, soundEnabled: true },
   pets: {}, // key ของสัตว์เลี้ยงที่มี -> { level, stars } (ดู PET_DEFS)
   equippedPet: null, // key ของสัตว์เลี้ยงที่ติดตั้งอยู่ (ให้บัฟได้ทีละ 1 ตัว)
   petFood: 0, // ได้จาก Boss Raid ใช้ป้อนสัตว์เลี้ยงแทน Gold ได้ (1 อาหาร = 1 เลเวล ฟรี)
@@ -1997,14 +2040,20 @@ function rollPetGacha() {
   return pet;
 }
 
+// Math Audit: เดิม cost = 50*level (เติบโตแบบ "เชิงเส้น" ไม่ใช่ exponential เหมือนระบบอื่นๆ ในเกม)
+// และไม่มีเพดานเลเวล ทำให้เลเวลสัตว์เลี้ยง (และบัฟ ATK/HP ที่ผูกกับมัน) ไต่ขึ้นได้ไม่จำกัดตราบเท่าที่มี
+// Gold/อาหารสัตว์เลี้ยงมากพอ ในเกมแบบ Idle ที่ Gold โตแบบทวีคูณตามเวลา นี่คือช่องโหว่ให้ค่า ATK พุ่งจน
+// เกมหมดความท้าทายได้ในระยะยาว — แก้โดยเปลี่ยน cost เป็น exponential (เหมือน getUpgradeCost/getEnhanceCost)
+// และเพิ่มเพดานเลเวลสูงสุด (PET_MAX_LEVEL) ให้บัฟจากสัตว์เลี้ยงยังคง "แข็งแกร่งมากตอนเลี้ยงเต็มที่" แต่มีขอบเขต
+const PET_MAX_LEVEL = 30;
 function getPetLevelUpCost(petKey) {
   const owned = player.pets[petKey];
-  return owned ? 50 * owned.level : 0;
+  return owned ? Math.floor(50 * Math.pow(1.15, owned.level)) : 0;
 }
 
 function levelUpPet(petKey) {
   const owned = player.pets[petKey];
-  if (!owned) return;
+  if (!owned || owned.level >= PET_MAX_LEVEL) return;
   const cost = getPetLevelUpCost(petKey);
   if (player.gold < cost) return;
   player.gold -= cost;
@@ -2017,7 +2066,7 @@ function levelUpPet(petKey) {
 // ป้อนอาหารสัตว์เลี้ยง (ได้จาก Boss Raid): ฟรี ไม่ใช้ Gold แลกกับเลเวลได้ 1 อาหาร = 1 เลเวล
 function feedPet(petKey) {
   const owned = player.pets[petKey];
-  if (!owned || player.petFood <= 0) return;
+  if (!owned || player.petFood <= 0 || owned.level >= PET_MAX_LEVEL) return;
   player.petFood -= 1;
   owned.level += 1;
   const def = PET_DEFS.find(p => p.key === petKey);
@@ -2179,6 +2228,7 @@ function raidAttack() {
   if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
   raidSession.hp = Math.max(0, raidSession.hp - dmg);
   raidSession.damageDealt += dmg;
+  if (isCrit) playSfxCrit(); else playSfxAttack();
   spawnDamagePopup(document.getElementById('raidBossSprite').parentElement, { kind: isCrit ? 'crit' : 'hit', dmg });
   triggerHitEffect(document.getElementById('raidBossSprite'));
   renderRaidActive();
@@ -2241,11 +2291,16 @@ function renderRaidModal() {
 // ===============================================
 const TOWER_MONSTER_POOL = ['dark_knight', 'necromancer', 'stone_golem', 'red_demon', 'armored_golem_warrior', 'purple_dragon', 'demon_king'];
 const TOWER_GROWTH_PER_FLOOR = 1.18;
+// Math Audit: 1.18^floor ในทางทฤษฎีจะล้นเป็น Infinity เมื่อ floor สูงมากๆ (ราวชั้น 4000+) ซึ่งถ้าเกิดขึ้น
+// ระหว่างเล่นจริงจะทำให้ maxHp/atk/def ของศัตรูกลายเป็น Infinity (ยังไม่ถึงขั้น NaN เพราะไม่มีการหาร 0/0
+// เกิดขึ้นที่ไหน แต่ก็ไม่ใช่ค่าที่ควรเกิดขึ้น) — ครอบเลขชี้กำลังไว้ไม่ให้เกิน 2000 (1.18^2000 ยังเป็นเลขจำกัด
+// ราว 10^147 ห่างไกลจาก Infinity มาก) เป็นแนวป้องกันเชิงรุก แม้ในทางปฏิบัติจะไม่มีทางไต่ถึงชั้นขนาดนั้นด้วยมือ
+const TOWER_GROWTH_EXPONENT_CAP = 2000;
 let towerSession = null; // { floor, playerHp } — ชั่วคราว ไม่ persist ข้าม session เหมือน raidSession
 
 function getTowerMonster(floor) {
   const atk = getAtk(player), def = getDef(player), maxHp = getMaxHp(player);
-  const growth = Math.pow(TOWER_GROWTH_PER_FLOOR, floor - 1);
+  const growth = Math.pow(TOWER_GROWTH_PER_FLOOR, Math.min(floor - 1, TOWER_GROWTH_EXPONENT_CAP));
   const base = MONSTERS.find(m => m.key === TOWER_MONSTER_POOL[(floor - 1) % TOWER_MONSTER_POOL.length]);
   return {
     key: base.key, name: `${base.name} (ชั้น ${floor})`, icon: base.icon, element: base.element, tier: 'tower',
@@ -2563,7 +2618,7 @@ function loadGame() {
       gems: data.gems || 0,
       buffFightsLeft: data.buffFightsLeft || 0,
       buffMultiplier: data.buffMultiplier || 1,
-      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false }, data.settings || {}),
+      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false, soundEnabled: true }, data.settings || {}),
       stats: Object.assign(
         { monstersKilled: 0, bigBossKills: 0, chestsOpened: 0, upgradesPurchased: 0, prestigeCount: 0, itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 } },
         data.stats || {},
@@ -2799,6 +2854,8 @@ function playEvents(events, monsterMaxHp, done) {
     const ev = events[i++];
     appendLog([ev.text]);
     renderLiveHpBars(ev.playerHp, ev.monsterHp, monsterMaxHp);
+    if (ev.kind === 'crit') playSfxCrit();
+    else if (ev.kind === 'hit') playSfxAttack();
     if (animationsOn) {
       if (ev.target === 'monster') {
         spawnDamagePopup(document.getElementById('bgScene'), ev);
@@ -3277,20 +3334,21 @@ function renderPetGrid() {
     btnEquip.dataset.action = 'equip';
     btnEquip.dataset.pet = key;
 
+    const atMaxLevel = owned.level >= PET_MAX_LEVEL;
     const upgradeCost = getPetLevelUpCost(key);
     const btnUpgrade = document.createElement('button');
     btnUpgrade.className = 'btn btn--success';
-    btnUpgrade.textContent = `อัปเลเวล (${upgradeCost} Gold)`;
+    btnUpgrade.textContent = atMaxLevel ? 'เลเวลสูงสุดแล้ว' : `อัปเลเวล (${upgradeCost} Gold)`;
     btnUpgrade.dataset.action = 'upgrade';
     btnUpgrade.dataset.pet = key;
-    btnUpgrade.disabled = player.gold < upgradeCost;
+    btnUpgrade.disabled = atMaxLevel || player.gold < upgradeCost;
 
     const btnFeed = document.createElement('button');
     btnFeed.className = 'btn btn--info';
-    btnFeed.textContent = 'ป้อนอาหาร (ฟรี)';
+    btnFeed.textContent = atMaxLevel ? 'เลเวลสูงสุดแล้ว' : 'ป้อนอาหาร (ฟรี)';
     btnFeed.dataset.action = 'feed';
     btnFeed.dataset.pet = key;
-    btnFeed.disabled = player.petFood <= 0;
+    btnFeed.disabled = atMaxLevel || player.petFood <= 0;
 
     card.append(icon, name, lvStars, desc, btnEquip, btnUpgrade, btnFeed);
 
@@ -3421,6 +3479,7 @@ document.getElementById('btnOpenChest').addEventListener('click', () => {
     player.stats.itemsByRarity[item.rarity] += 1;
     player.pendingGacha = item;
     appendLog([`เปิดกล่อง: ได้รับ ${item.name}`]);
+    playSfxChestOpen();
     autoResolveItemIfEnabled(item);
     renderAll();
     const spriteAfter = document.getElementById('chestSprite');
@@ -3605,6 +3664,12 @@ document.querySelectorAll('.collapsible-header').forEach(header => {
     header.classList.toggle('collapsed', collapsed);
   });
 });
+document.getElementById('btnToggleSound').addEventListener('click', () => {
+  player.settings.soundEnabled = !player.settings.soundEnabled;
+  renderSettingsModal();
+  saveGame();
+  if (player.settings.soundEnabled) playSfxClick();
+});
 document.getElementById('btnToggleAnimations').addEventListener('click', () => {
   player.settings.animationsEnabled = !player.settings.animationsEnabled;
   renderSettingsModal();
@@ -3628,6 +3693,7 @@ document.getElementById('btnResetSave').addEventListener('click', () => {
 });
 
 function renderSettingsModal() {
+  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
   document.getElementById('btnToggleAnimations').textContent = player.settings.animationsEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
   document.getElementById('btnCycleAutoSpeed').textContent = AUTO_BATTLE_SPEED_LABELS[player.settings.autoBattleSpeed];
   document.getElementById('btnToggleAutoEquip').textContent = player.settings.autoEquipEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
@@ -3679,6 +3745,12 @@ document.getElementById('btnFight').addEventListener('click', () => {
 
 document.getElementById('btnAutoBattle').addEventListener('click', () => {
   toggleAutoBattle();
+});
+
+// เสียงบิ๊ปสั้นๆ เวลากดปุ่ม UI ทั่วไป — ใช้ delegate เดียวจับทุกปุ่ม .btn ในหน้า กันไม่ต้องผูกทีละปุ่ม
+// (ปุ่มที่ disabled จะไม่ยิง click event เองอยู่แล้วตามพฤติกรรมมาตรฐานของเบราว์เซอร์ จึงไม่ต้องกันซ้ำ)
+document.body.addEventListener('click', (e) => {
+  if (e.target.closest('.btn')) playSfxClick();
 });
 
 /* =====================================================================
