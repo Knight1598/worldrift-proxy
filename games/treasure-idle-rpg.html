@@ -1124,6 +1124,7 @@
       <div class="chest-open-area">
         <div class="chest-sprite" id="chestSprite"></div>
         <button class="btn btn--primary" id="btnOpenChest">เปิดกล่อง</button>
+        <button class="btn btn--info" id="btnOpenMysteryChest" style="margin-top:6px;">🎁 เปิดหีบปริศนา (มี <span id="mysteryChestCount">0</span>)</button>
 
         <div class="gacha-result" id="gachaResult" style="display:none;">
           <img id="gachaItemIcon" src="" alt="item" onerror="this.style.display='none'">
@@ -1154,8 +1155,20 @@
         </div>
         <div class="collapsible-body" id="petBody">
           <button class="btn btn--primary" id="btnRollPet">สุ่มสัตว์เลี้ยง (5 💎)</button>
+          <button class="btn btn--info" id="btnRollPetTicket" style="margin-top:6px;">🎫 สุ่มด้วยตั๋ว (มี <span id="petTicketCount">0</span>)</button>
           <div class="pet-food-count">🍖 อาหารสัตว์เลี้ยง: <span id="petFoodCount">0</span></div>
           <div class="pet-grid" id="petGrid"></div>
+        </div>
+      </div>
+
+      <div class="relic-section">
+        <div class="collapsible-header collapsed" data-target="bossSoulBody">
+          <span>💀 วิญญาณบอส (<span id="bossSoulCount">0</span>)</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="bossSoulBody">
+          <p class="raid-desc" style="margin:6px 0;">ได้จากปราบมิด/บิ๊กบอส นำมาหลอมเป็นอุปกรณ์ Legendary การันตี หรือแลกหินหลอม</p>
+          <div class="enhance-list" id="bossSoulForgeList"></div>
         </div>
       </div>
     </section>
@@ -1614,6 +1627,49 @@ function enhanceItem(slotKey) {
 }
 
 // ===============================================
+// วิญญาณบอส (Boss Souls) — ได้จากปราบมิด/บิ๊กบอส คราฟต์เป็นอุปกรณ์ Legendary การันตี หรือแลกหินหลอม
+// ===============================================
+const BOSS_SOUL_FORGE = [
+  { key: 'legendary_gear', name: 'คราฟต์อุปกรณ์ Legendary การันตี', cost: 15 },
+  { key: 'enhance_stones', name: 'แลกหินหลอม x5', cost: 5 },
+];
+function craftFromBossSouls(key) {
+  const recipe = BOSS_SOUL_FORGE.find(r => r.key === key);
+  if (!recipe || player.bossSouls < recipe.cost) return;
+  player.bossSouls -= recipe.cost;
+  if (key === 'legendary_gear') {
+    player.pendingGacha = rollGachaItemMinRarity(player.stage, 'legendary');
+    player.stats.itemsByRarity[player.pendingGacha.rarity] += 1;
+    appendLog([`💀 หลอมวิญญาณบอส: ได้รับ ${player.pendingGacha.name}!`]);
+  } else if (key === 'enhance_stones') {
+    player.enhanceStones += 5;
+    appendLog(['💀 หลอมวิญญาณบอส: ได้หินหลอม +5']);
+  }
+  renderAll();
+}
+
+// ===============================================
+// หีบสมบัติปริศนา (Mystery Chests) — แยกจากกล่องสมบัติปกติ (ไม่ได้อุปกรณ์ แต่ได้ Gold ก้อนใหญ่หรือโพชั่นสุ่ม)
+// ===============================================
+function openMysteryChest() {
+  if (player.mysteryChests <= 0) return;
+  player.mysteryChests -= 1;
+  if (Math.random() < 0.5) {
+    const goldReward = Math.floor((50 + player.stage * 10) * (1 + Math.random() * 2));
+    player.gold += goldReward;
+    appendLog([`🎁 หีบปริศนา: ได้รับ Gold ก้อนใหญ่ +${goldReward}!`]);
+    showToast(`🎁 หีบปริศนา: +${goldReward} Gold!`);
+  } else {
+    const color = Math.random() < 0.5 ? 'red' : 'blue';
+    const amount = 1 + Math.floor(Math.random() * 3);
+    player.potions[color] += amount;
+    appendLog([`🎁 หีบปริศนา: ได้รับโพชั่น${color === 'red' ? 'แดง' : 'ฟ้า'} x${amount}!`]);
+    showToast(`🎁 หีบปริศนา: โพชั่น${color === 'red' ? 'แดง' : 'ฟ้า'} x${amount}!`);
+  }
+  renderAll();
+}
+
+// ===============================================
 // โบนัสเซ็ตอุปกรณ์ (Set Bonus) — ใส่ของ rarity เดียวกัน หรือธาตุเดียวกัน ครบ 3/6 ชิ้น (จาก 6 ช่อง)
 // ให้โบนัสสเตตัสพิเศษ เพื่อให้เลือกใส่ของตามชุดแทนที่จะดูแค่ค่าสเตตัสสูงสุดของแต่ละชิ้น
 // ===============================================
@@ -1713,6 +1769,9 @@ let player = {
   // รีเซ็ตทุก Prestige) ใช้ปลดล็อกระดับปลุกพลังแฝง (ดู AWAKENING_TIERS) — ถาวร ไม่รีเซ็ตตอน Prestige
   lifetimeUpgrades: 0,
   awakeningLevel: 0, // ระดับปลุกพลังแฝงปัจจุบัน (0 = ยังไม่ปลุก) — ถาวร ไม่รีเซ็ตตอน Prestige
+  bossSouls: 0, // ได้จากปราบมิด/บิ๊กบอส ใช้คราฟต์อุปกรณ์ Legendary การันตี หรือแลกหินตีบวก
+  petTickets: 0, // ได้จากมอนสเตอร์ปกติ (โอกาสน้อย) ใช้สุ่มสัตว์เลี้ยงแทนเพชรได้ 1 ตั๋ว/ครั้ง
+  mysteryChests: 0, // หีบปริศนา ดรอปจากการต่อสู้เป็นบางครั้ง เปิดแล้วได้ Gold ก้อนใหญ่หรือโพชั่นสุ่ม
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -2102,9 +2161,8 @@ function rollPetRarity() {
   return PET_RARITY_WEIGHTS[0].key;
 }
 
-function rollPetGacha() {
-  if (player.gems < PET_GACHA_COST) return null;
-  player.gems -= PET_GACHA_COST;
+// แยกตรรกะการสุ่มตัวสัตว์เลี้ยงออกจากการหักค่าใช้จ่าย เพื่อให้ใช้ร่วมกันได้ทั้งจ่ายด้วยเพชรและตั๋วสุ่ม
+function resolvePetGachaRoll() {
   const rarity = rollPetRarity();
   const candidates = PET_DEFS.filter(p => p.rarity === rarity);
   const pet = candidates[Math.floor(Math.random() * candidates.length)];
@@ -2118,6 +2176,17 @@ function rollPetGacha() {
     appendLog([`ได้สัตว์เลี้ยงใหม่: ${pet.name}!`]);
   }
   return pet;
+}
+function rollPetGacha() {
+  if (player.gems < PET_GACHA_COST) return null;
+  player.gems -= PET_GACHA_COST;
+  return resolvePetGachaRoll();
+}
+// สุ่มด้วยตั๋วสุ่มสัตว์เลี้ยง (ได้จากมอนสเตอร์ปกติแบบสุ่ม) แทนการจ่ายเพชร ให้สายฟรี/สายฟาร์มเข้าถึงระบบนี้ได้
+function rollPetGachaWithTicket() {
+  if (player.petTickets < 1) return null;
+  player.petTickets -= 1;
+  return resolvePetGachaRoll();
 }
 
 // Math Audit: เดิม cost = 50*level (เติบโตแบบ "เชิงเส้น" ไม่ใช่ exponential เหมือนระบบอื่นๆ ในเกม)
@@ -2677,6 +2746,9 @@ function saveGame() {
     towerClaimedFloors: player.towerClaimedFloors,
     lifetimeUpgrades: player.lifetimeUpgrades,
     awakeningLevel: player.awakeningLevel,
+    bossSouls: player.bossSouls,
+    petTickets: player.petTickets,
+    mysteryChests: player.mysteryChests,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -2722,6 +2794,9 @@ function loadGame() {
       towerClaimedFloors: data.towerClaimedFloors || [],
       lifetimeUpgrades: data.lifetimeUpgrades || 0,
       awakeningLevel: data.awakeningLevel || 0,
+      bossSouls: data.bossSouls || 0,
+      petTickets: data.petTickets || 0,
+      mysteryChests: data.mysteryChests || 0,
     });
     if (data.lastSeenAt) {
       pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
@@ -2847,12 +2922,14 @@ function finalizeBattle(result) {
 
     if (result.monster.tier === 'midboss') {
       grantChest(1);
-      appendLog(['ได้รับกล่องสมบัติ 1 ใบ']);
+      player.bossSouls += 1;
+      appendLog(['ได้รับกล่องสมบัติ 1 ใบ', 'ได้รับวิญญาณบอส +1']);
     } else if (result.monster.tier === 'bigboss') {
       player.stats.bigBossKills += 1;
       grantChest(3);
       player.gems += 1;
-      appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด']);
+      player.bossSouls += 3;
+      appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด', 'ได้รับวิญญาณบอส +3']);
       // วัตถุโบราณ: ดรอปจาก Demon King โดยเฉพาะ ที่ด่านคูณ 100 (100, 200, 300, ...) เท่านั้น โอกาส 20%
       if (result.monster.key === 'demon_king' && player.stage % 100 === 0) {
         const undiscovered = RELIC_DEFS.filter(r => !hasRelic(r.key));
@@ -2863,11 +2940,24 @@ function finalizeBattle(result) {
           showToast(`✨ พบวัตถุโบราณ: ${relic.name}!`);
         }
       }
-    } else if (Math.random() < 0.08 + getPetBonusValue('chestDropBonus')) {
-      // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม (+ โบนัสจากสัตว์เลี้ยงประเภท chestDropBonus ถ้ามี)
-      // แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลยจนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไป
-      grantChest(1);
-      appendLog(['มอนสเตอร์ดรอปกล่องสมบัติ +1 ใบ!']);
+    } else {
+      if (Math.random() < 0.08 + getPetBonusValue('chestDropBonus')) {
+        // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม (+ โบนัสจากสัตว์เลี้ยงประเภท chestDropBonus ถ้ามี)
+        // แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลยจนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไป
+        grantChest(1);
+        appendLog(['มอนสเตอร์ดรอปกล่องสมบัติ +1 ใบ!']);
+      }
+      // ตั๋วสุ่มสัตว์เลี้ยง: โอกาสน้อย (1%) จากมอนสเตอร์ปกติ ให้สายฟรีเข้าถึงสัตว์เลี้ยงได้โดยไม่ต้องพึ่งเพชรอย่างเดียว
+      if (Math.random() < 0.01) {
+        player.petTickets += 1;
+        appendLog(['🎫 ได้รับตั๋วสุ่มสัตว์เลี้ยง +1!']);
+        showToast('🎫 ได้รับตั๋วสุ่มสัตว์เลี้ยง!');
+      }
+    }
+    // หีบสมบัติปริศนา: โอกาสเล็กน้อยจากทุกชัยชนะ (ไม่ว่ามอนสเตอร์ปกติหรือบอส) ดรอปแยกจากกล่องสมบัติปกติ
+    if (Math.random() < 0.03) {
+      player.mysteryChests += 1;
+      appendLog(['🎁 พบหีบสมบัติปริศนา!']);
     }
 
     player.stage += 1;
@@ -3353,9 +3443,33 @@ function renderChestPanel() {
     resultBox.className = 'gacha-result';
   }
 
+  document.getElementById('mysteryChestCount').textContent = player.mysteryChests;
+  document.getElementById('btnOpenMysteryChest').disabled = player.mysteryChests <= 0;
+
   renderInventory();
   renderGemShop();
   renderPetGrid();
+  renderBossSoulForge();
+}
+
+function renderBossSoulForge() {
+  document.getElementById('bossSoulCount').textContent = player.bossSouls;
+  const list = document.getElementById('bossSoulForgeList');
+  list.innerHTML = '';
+  BOSS_SOUL_FORGE.forEach(recipe => {
+    const row = document.createElement('div');
+    row.className = 'enhance-row';
+    const name = document.createElement('span');
+    name.className = 'enhance-name';
+    name.textContent = `${recipe.name} (💀 ${recipe.cost})`;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn--success';
+    btn.textContent = 'หลอม';
+    btn.dataset.key = recipe.key;
+    btn.disabled = player.bossSouls < recipe.cost;
+    row.append(name, btn);
+    list.appendChild(row);
+  });
 }
 
 function renderInventory() {
@@ -3425,6 +3539,8 @@ const PET_BUFF_LABELS = { atk: 'ATK', hp: 'HP สูงสุด', chestDropBonu
 
 function renderPetGrid() {
   document.getElementById('btnRollPet').disabled = player.gems < PET_GACHA_COST;
+  document.getElementById('petTicketCount').textContent = player.petTickets;
+  document.getElementById('btnRollPetTicket').disabled = player.petTickets < 1;
   document.getElementById('petFoodCount').textContent = player.petFood;
   const grid = document.getElementById('petGrid');
   grid.innerHTML = '';
@@ -3842,6 +3958,21 @@ document.getElementById('gemShopList').addEventListener('click', (e) => {
 document.getElementById('btnRollPet').addEventListener('click', () => {
   rollPetGacha();
   renderAll();
+});
+
+document.getElementById('btnRollPetTicket').addEventListener('click', () => {
+  rollPetGachaWithTicket();
+  renderAll();
+});
+
+document.getElementById('btnOpenMysteryChest').addEventListener('click', () => {
+  openMysteryChest();
+});
+
+document.getElementById('bossSoulForgeList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !btn.dataset.key) return;
+  craftFromBossSouls(btn.dataset.key);
 });
 
 document.getElementById('petGrid').addEventListener('click', (e) => {
