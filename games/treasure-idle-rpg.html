@@ -1895,6 +1895,18 @@ function getBaseGoldPerKill() {
   return Math.floor(10 * (1 + (player.stage - 1) * 0.3));
 }
 
+// ===============================================
+// บูสต์ช่วงต้นเกม (Early-Game Boost) — ผู้เล่นใหม่ควรรู้สึกว่า "ได้ของเร็ว" ใน 5 นาทีแรกเพื่อดึงดูดให้เล่นต่อ
+// คูณเข้ากับรางวัล (Gold/โอกาสดรอปกล่อง) เฉพาะด่าน 1-14 เท่านั้น ไล่ลดจาก 2.5x ที่ด่าน 1 ลงมาเหลือ 1x
+// (ปกติ) พอด่าน 15 ขึ้นไป — มีเพดานชัดเจน จำกัดแค่ช่วงต้นเกม ไม่ทบต้นกับตัวคูณอื่นใดถาวร จึงไม่เสี่ยงเสีย
+// สมดุลระยะยาวที่ตรวจสอบไว้แล้วใน Math Audit (ต่างจากตัวคูณสเตตัสถาวรที่ต้องมีเพดานเข้มงวดกว่านี้มาก)
+// ===============================================
+const EARLY_GAME_BOOST_END_STAGE = 15;
+function getEarlyGameBoostMult(stage) {
+  if (stage >= EARLY_GAME_BOOST_END_STAGE) return 1;
+  return 2.5 - (1.5 * (stage - 1) / (EARLY_GAME_BOOST_END_STAGE - 1));
+}
+
 // สุ่มแบบถ่วงน้ำหนัก (weighted random) ใช้ร่วมกันได้ทั้งวงล้อก็อบลินและระบบอื่นในอนาคต
 function pickWeighted(list) {
   const total = list.reduce((s, x) => s + x.weight, 0);
@@ -2269,6 +2281,7 @@ let player = {
   echoSnapshot: null, // { atk, def, hp, cp, stage, claimed } สแนปช็อตสเตตัสที่บันทึกไว้ ใช้ท้าดวล Echo Battle
   spinTickets: 0, // ตั๋วสปินวงล้อก็อบลิน ได้จากบอส หรือซื้อด้วย Gold
   treasureMaps: 0, // แผนที่ลายแทง ดรอปจากมอนสเตอร์ปกติแบบสุ่ม ใช้เปิดมินิเกมปล้นสมบัติ
+  unlockedFeatures: [], // key ของระบบที่ปลดล็อกให้เห็นแล้ว (ดู FEATURE_UNLOCKS) — ถาวร ไม่รีเซ็ตตอน Prestige
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -2366,6 +2379,65 @@ function checkAchievements() {
       showToast(`🏆 ปลดล็อกความสำเร็จ: ${ach.name}!`);
       appendLog([`🏆 ปลดล็อกความสำเร็จ: ${ach.name}!`]);
     }
+  });
+}
+
+// ===============================================
+// ระบบปลดล็อกฟีเจอร์แบบไล่ระดับ (Progressive Feature Unlock) — ผู้เล่นใหม่จะไม่เห็นแท็บ/ปุ่มของ
+// ระบบขั้นสูงทั้งหมดพร้อมกันตั้งแต่ต้น (เดิมมี ~15 แท็บโชว์รวดเดียวจนงง) แต่จะค่อยๆ ปลดล็อกทีละอันตาม
+// ด่านสูงสุดที่เคยไปถึง (highestStageEver ถาวร ไม่โดน Prestige รีเซ็ต) พร้อม toast ฉลองทุกครั้งที่ปลดล็อก
+// ใหม่ — ใช้ระบบที่มีอยู่แล้วทั้งหมด ไม่ต้องสร้างกลไกใหม่ แค่ควบคุมจังหวะการเปิดเผยให้เล่นไปเรื่อยๆ แล้ว
+// รู้สึกว่า "มีของใหม่ให้เล่นอยู่ตลอด" ในครึ่งชั่วโมงแรก
+// kind 'tab' = ซ่อน/โชว์ปุ่มในแท็บบาร์ (data-tab=key) | kind 'button' = ซ่อน/โชว์ปุ่มที่มี id=key ตรงๆ
+// ===============================================
+const FEATURE_UNLOCKS = [
+  { key: 'skillBody',         kind: 'tab',    name: 'สกิล Passive',                stage: 1   },
+  { key: 'bestiaryBody',      kind: 'tab',    name: 'สมุดภาพมอนสเตอร์',             stage: 4   },
+  { key: 'achievementBody',   kind: 'tab',    name: 'ป้ายความสำเร็จ',               stage: 5   },
+  { key: 'prestigeBody',      kind: 'tab',    name: 'ระบบ Prestige',                stage: 6   },
+  { key: 'btnOpenRaid',       kind: 'button', name: 'ดันเจี้ยนท้าทาย (Boss Raid)',   stage: 7   },
+  { key: 'alchemyBody',       kind: 'tab',    name: 'ผสมยา (Alchemy)',              stage: 8   },
+  { key: 'enhanceBody',       kind: 'tab',    name: 'ตีบวกอุปกรณ์',                 stage: 9   },
+  { key: 'slotBody',          kind: 'tab',    name: 'วงล้อก็อบลินเสี่ยงโชค',        stage: 10  },
+  { key: 'btnOpenTower',      kind: 'button', name: 'หอคอยไร้ขีดจำกัด',             stage: 12  },
+  { key: 'workshopBody',      kind: 'tab',    name: 'โรงงานผลิต Gold',              stage: 14  },
+  { key: 'titleBody',         kind: 'tab',    name: 'ฉายา',                         stage: 16  },
+  { key: 'echoBody',          kind: 'tab',    name: 'เงาอดีต (Echo Battle)',         stage: 18  },
+  { key: 'personalBestBody',  kind: 'tab',    name: 'สถิติส่วนตัว',                  stage: 20  },
+  { key: 'btnOpenWeeklyBoss', kind: 'button', name: 'บอสประจำสัปดาห์',              stage: 25  },
+  { key: 'relicBody',         kind: 'tab',    name: 'วัตถุโบราณ',                   stage: 100 },
+];
+
+function isFeatureUnlocked(key) {
+  const def = FEATURE_UNLOCKS.find(f => f.key === key);
+  return !def || player.unlockedFeatures.includes(key); // ไม่อยู่ในลิสต์ = ระบบหลัก เปิดตั้งแต่ต้นเสมอ
+}
+
+// เติมรายการที่ปลดล็อกไปแล้วแบบเงียบๆ (ไม่ toast) ใช้ตอนโหลดเกมครั้งแรก กันไม่ให้ผู้เล่นเก่าที่ไปไกลแล้ว
+// เจอ toast ปลดล็อกกระหน่ำรัวๆ ทีเดียว 15 อันตอนเปิดเซฟเก่า
+function silentlyBackfillFeatureUnlocks() {
+  const reached = player.personalBests.highestStageEver;
+  FEATURE_UNLOCKS.forEach(f => {
+    if (reached >= f.stage && !player.unlockedFeatures.includes(f.key)) player.unlockedFeatures.push(f.key);
+  });
+}
+
+function checkFeatureUnlocks() {
+  const reached = player.personalBests.highestStageEver;
+  FEATURE_UNLOCKS.forEach(f => {
+    if (!player.unlockedFeatures.includes(f.key) && reached >= f.stage) {
+      player.unlockedFeatures.push(f.key);
+      showToast(`🔓 ปลดล็อกระบบใหม่: ${f.name}!`);
+      appendLog([`🔓 ปลดล็อกระบบใหม่: ${f.name}!`]);
+    }
+  });
+}
+
+function renderFeatureGating() {
+  FEATURE_UNLOCKS.forEach(f => {
+    const unlocked = isFeatureUnlocked(f.key);
+    const el = f.kind === 'tab' ? document.querySelector(`.char-tab-btn[data-tab="${f.key}"]`) : document.getElementById(f.key);
+    if (el) el.style.display = unlocked ? '' : 'none';
   });
 }
 
@@ -3647,6 +3719,7 @@ function saveGame() {
     echoSnapshot: player.echoSnapshot,
     spinTickets: player.spinTickets,
     treasureMaps: player.treasureMaps,
+    unlockedFeatures: player.unlockedFeatures,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -3707,6 +3780,7 @@ function loadGame() {
       echoSnapshot: data.echoSnapshot || null,
       spinTickets: data.spinTickets || 0,
       treasureMaps: data.treasureMaps || 0,
+      unlockedFeatures: data.unlockedFeatures || [],
     });
     // ย้ายไอเทมรูปแบบเก่า (ยุคก่อน Multi-Stat Equipment ที่เก็บ .value ค่าเดียว) ให้เป็น .baseStats
     // แบบใหม่ กันเซฟเก่าพังตอนโหลด — ทำทั้งของที่สวมอยู่และในคลังไอเทม
@@ -3830,7 +3904,7 @@ function finalizeBattle(result) {
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
     // อัตราสเกล 0.2 -> 0.3 ต่อด่าน: จากการจำลองพบว่ารายได้ทองเดิมโตช้ากว่าค่าอัปเกรดที่โตแบบ
     // exponential (20*1.15^n ต่อสเตตัส) มากพอที่จะทำให้ผู้เล่นไล่ตามไม่ทันตั้งแต่ราวด่าน 30-40
-    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult * (1 + getTitleBonus(player, 'goldMult') + getWeatherBonus('goldMult')));
+    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult * getEarlyGameBoostMult(player.stage) * (1 + getTitleBonus(player, 'goldMult') + getWeatherBonus('goldMult')));
     player.gold += goldDrop;
     appendLog([`ได้รับ ${goldDrop} Gold`]);
     addDailyChallengeProgress('kill_monsters', 1);
@@ -3863,9 +3937,10 @@ function finalizeBattle(result) {
         }
       }
     } else {
-      if (Math.random() < 0.08 + getPetBonusValue('chestDropBonus')) {
+      if (Math.random() < 0.08 * getEarlyGameBoostMult(player.stage) + getPetBonusValue('chestDropBonus')) {
         // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม (+ โบนัสจากสัตว์เลี้ยงประเภท chestDropBonus ถ้ามี)
         // แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลยจนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไป
+        // + คูณด้วย Early-Game Boost (ด่าน 1-14) ให้ยิ่งได้กล่องถี่ขึ้นไปอีกช่วงต้นเกม
         grantChest(1);
         appendLog(['มอนสเตอร์ดรอปกล่องสมบัติ +1 ใบ!']);
       }
@@ -4159,6 +4234,8 @@ function renderCharacterPanel() {
   renderWorkshopBox();
   renderEchoBox();
   renderSlotBox();
+  checkFeatureUnlocks();
+  renderFeatureGating();
 
   const dailyBtn = document.getElementById('btnOpenDailyLogin');
   dailyBtn.classList.toggle('daily-login-btn--ready', !isDailyLoginClaimedToday(player));
@@ -5099,7 +5176,7 @@ document.getElementById('charTabBar').addEventListener('click', (e) => {
   if (!btn) return;
   selectCharTab(btn.dataset.tab);
 });
-selectCharTab('prestigeBody');
+selectCharTab('skillBody');
 document.getElementById('btnToggleSound').addEventListener('click', () => {
   player.settings.soundEnabled = !player.settings.soundEnabled;
   renderSettingsModal();
@@ -5214,6 +5291,7 @@ document.body.addEventListener('click', (e) => {
    INIT
    ===================================================================== */
 loadGame();
+silentlyBackfillFeatureUnlocks(); // กันเซฟเก่า/ผู้เล่นที่ไปไกลแล้วโดน toast ปลดล็อกกระหน่ำตอนเปิดเกม
 ensureEncounter();
 renderAll();
 renderSettingsModal();
