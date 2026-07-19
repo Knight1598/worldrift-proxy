@@ -132,6 +132,61 @@
   .stand-booth.tap-bump { animation: tapBump 0.18s ease; }
   @keyframes tapBump { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
 
+  /* ป้ายสินค้าแตะเพื่อเลเวลอัพแยก (ตามแพทเทิร์นเกมต้นแบบที่แยก "อัปเกรดสินค้า" ออกจากลิสต์อัปเกรดทั่วไป) */
+  .product-badge {
+    position: absolute;
+    z-index: 4;
+    right: 12px;
+    top: 12px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 3px solid #fff;
+    background: rgba(255,255,255,0.92);
+    box-shadow: 0 3px 0 rgba(0,0,0,0.2);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0;
+  }
+  .product-badge img { width: 26px; height: 26px; object-fit: contain; image-rendering: pixelated; }
+  .product-badge-level {
+    position: absolute; bottom: -6px; right: -6px;
+    background: var(--primary-dark); color: #fff;
+    font-size: 0.65rem; font-weight: bold;
+    border-radius: 999px; padding: 1px 5px;
+    border: 2px solid #fff;
+    min-width: 10px; text-align: center;
+  }
+  .product-badge.affordable { animation: affordablePulse 1.4s ease-in-out infinite; }
+
+  /* ป๊อปอัพเลเวลอัพสินค้า */
+  .product-level-box { position: relative; padding-top: 30px; }
+  .modal-close-x {
+    position: absolute; top: 10px; right: 10px;
+    width: 28px; height: 28px; border-radius: 50%;
+    border: none; background: var(--danger); color: #fff;
+    font-weight: bold; cursor: pointer; line-height: 1;
+  }
+  .product-level-icon { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; margin: 4px auto 10px; display: block; }
+  .product-level-stars { font-size: 1.3rem; letter-spacing: 3px; margin-bottom: 10px; color: #e0d8c5; }
+  .product-level-stars .star-filled { color: var(--accent-gold); }
+  .product-level-progress-bg { background: #e5dcc5; border-radius: 999px; height: 14px; overflow: hidden; margin-bottom: 16px; }
+  .product-level-progress-fill { background: linear-gradient(90deg, #6bbf6b, #4fa9e8); height: 100%; transition: width 0.3s ease; }
+  .btn-cta-mega--maxed { background: var(--success); animation: none; }
+
+  /* คอนเฟตตี้ตอนจบด่าน */
+  .confetti-piece {
+    position: fixed;
+    top: -20px;
+    width: 8px; height: 14px;
+    z-index: 200;
+    pointer-events: none;
+    animation: confettiFall linear forwards;
+  }
+  @keyframes confettiFall {
+    0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+    100% { transform: translateY(110vh) rotate(540deg); opacity: 0.9; }
+  }
+
   .customer-lane {
     position: absolute;
     inset: 0;
@@ -330,6 +385,10 @@
       <div class="stand-tint-overlay" id="standTintOverlay"></div>
       <div class="customer-lane" id="customerLane"></div>
       <img class="stand-booth" id="standBooth" src="assets/blacksmith/station_stall.png" alt="">
+      <button class="product-badge" id="productBadge" title="อัปเกรดสินค้า">
+        <img id="productBadgeIcon" src="" alt="">
+        <span class="product-badge-level" id="productBadgeLevel">0</span>
+      </button>
     </div>
     <div class="stage-progress">
       อัปเกรดเต็มขั้นแล้ว <span id="stageProgressCount">0</span>/<span id="stageProgressTotal">4</span>
@@ -340,6 +399,17 @@
   <div class="upgrade-list" id="upgradeList"></div>
 
   <div class="stats-footer" id="statsFooter"></div>
+</div>
+
+<div class="modal-overlay" id="productLevelModal">
+  <div class="modal-box product-level-box">
+    <button class="modal-close-x" id="btnCloseProductLevel">✕</button>
+    <h2 id="productLevelTitle">ระดับ 0 — สินค้า</h2>
+    <img class="product-level-icon" id="productLevelIcon" src="" alt="">
+    <div class="product-level-stars" id="productLevelStars"></div>
+    <div class="product-level-progress-bg"><div class="product-level-progress-fill" id="productLevelProgressFill"></div></div>
+    <button class="btn-cta-mega" id="btnBuyProductLevel">อัปเกรด</button>
+  </div>
 </div>
 
 <div class="modal-overlay" id="stageCompleteModal">
@@ -421,7 +491,9 @@ function getProductIcon() {
 
 const UPGRADE_TYPES = [
   { key: 'speed',   name: 'ความเร็วในการขาย', icon: '⚡', desc: 'ลูกค้ามาถี่ขึ้น',        maxLevel: 5, baseCostMult: 8  },
-  { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 5, baseCostMult: 10 },
+  // "คุณภาพสินค้า" ไม่โชว์ในลิสต์ทั่วไป — ย้ายไปเป็นป๊อปอัพแยกที่แตะตัวสินค้าโดยตรงแทน (ตามแพทเทิร์นเกมต้นแบบ
+  // ที่ผู้ใช้ส่งวิดีโอมา ซึ่งแยก "อัปเกรดร้านทั่วไป" กับ "เลเวลอัปสินค้า" ออกจากกันเป็นคนละกลไก)
+  { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 5, baseCostMult: 10, hiddenFromList: true },
   { key: 'signage', name: 'ป้ายร้าน',         icon: '📣', desc: 'มีโอกาสลูกค้ามาเป็นคู่',  maxLevel: 5, baseCostMult: 12 },
   { key: 'decor',   name: 'ตกแต่งร้าน',        icon: '✨', desc: 'ลูกค้ามีโอกาสให้ทิป',     maxLevel: 5, baseCostMult: 14 },
 ];
@@ -637,6 +709,8 @@ function buyUpgrade(key) {
   renderGold();
   renderUpgradeList();
   renderStageProgress();
+  renderProductBadge();
+  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
   saveGame();
   if (isStageMaxed()) showStageCompleteModal();
 }
@@ -655,6 +729,22 @@ function showStageCompleteModal() {
   }
   playSfxStageComplete();
   document.getElementById('stageCompleteModal').classList.add('show');
+  spawnConfetti();
+}
+
+const CONFETTI_COLORS = ['#ff9f45', '#6bbf6b', '#5aa9e6', '#e35d5d', '#ffd76a', '#c77dff'];
+function spawnConfetti(count) {
+  const n = count || 40;
+  for (let i = 0; i < n; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    piece.style.animationDuration = (1.6 + Math.random() * 1.2) + 's';
+    piece.style.animationDelay = (Math.random() * 0.4) + 's';
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), 3200);
+  }
 }
 
 function advanceStage() {
@@ -723,7 +813,7 @@ function renderStageProgress() {
 function renderUpgradeList() {
   const listEl = document.getElementById('upgradeList');
   listEl.innerHTML = '';
-  UPGRADE_TYPES.forEach(type => {
+  UPGRADE_TYPES.filter(type => !type.hiddenFromList).forEach(type => {
     const level = player.upgradeLevels[type.key];
     const maxed = level >= type.maxLevel;
     const cost = maxed ? null : getUpgradeCost(type.key);
@@ -765,11 +855,57 @@ function renderStatsFooter() {
     `เสิร์ฟลูกค้าไปแล้ว ${player.stats.totalCustomersServed.toLocaleString()} คน | รายได้สะสมทั้งหมด ${Math.floor(player.stats.totalGoldEarned).toLocaleString()} Gold`;
 }
 
+function renderProductBadge() {
+  const type = getUpgradeType('portion');
+  const level = player.upgradeLevels.portion;
+  const maxed = level >= type.maxLevel;
+  const cost = maxed ? null : getUpgradeCost('portion');
+  const affordable = !maxed && player.gold >= cost;
+  document.getElementById('productBadgeIcon').src = getProductIcon();
+  document.getElementById('productBadgeLevel').textContent = level;
+  document.getElementById('productBadge').classList.toggle('affordable', affordable);
+}
+
+function renderProductLevelModal() {
+  const type = getUpgradeType('portion');
+  const level = player.upgradeLevels.portion;
+  const maxed = level >= type.maxLevel;
+  const cost = maxed ? null : getUpgradeCost('portion');
+  const affordable = !maxed && player.gold >= cost;
+
+  document.getElementById('productLevelTitle').textContent = `ระดับ ${level} — ${getStage().product}`;
+  document.getElementById('productLevelIcon').src = getProductIcon();
+
+  const starsEl = document.getElementById('productLevelStars');
+  starsEl.innerHTML = '';
+  for (let i = 0; i < type.maxLevel; i++) {
+    const star = document.createElement('span');
+    star.textContent = '★';
+    star.className = i < level ? 'star-filled' : '';
+    starsEl.appendChild(star);
+  }
+  document.getElementById('productLevelProgressFill').style.width = `${(level / type.maxLevel) * 100}%`;
+
+  const btn = document.getElementById('btnBuyProductLevel');
+  btn.textContent = maxed ? 'เต็มขั้นแล้ว ✓' : `อัปเกรด (${cost.toLocaleString()})`;
+  btn.disabled = maxed || !affordable;
+  btn.className = 'btn-cta-mega' + (maxed ? ' btn-cta-mega--maxed' : '');
+}
+
+function openProductLevelModal() {
+  renderProductLevelModal();
+  document.getElementById('productLevelModal').classList.add('show');
+}
+function closeProductLevelModal() {
+  document.getElementById('productLevelModal').classList.remove('show');
+}
+
 function renderAll() {
   renderGold();
   renderStageView();
   renderStageProgress();
   renderUpgradeList();
+  renderProductBadge();
   renderStatsFooter();
 }
 
@@ -816,6 +952,10 @@ document.getElementById('standBooth').addEventListener('click', (e) => {
   e.currentTarget.classList.add('tap-bump');
   playSfxTap();
 });
+
+document.getElementById('productBadge').addEventListener('click', () => openProductLevelModal());
+document.getElementById('btnCloseProductLevel').addEventListener('click', () => closeProductLevelModal());
+document.getElementById('btnBuyProductLevel').addEventListener('click', () => buyUpgrade('portion'));
 
 document.getElementById('btnAdvanceStage').addEventListener('click', () => advanceStage());
 document.getElementById('btnCloseWelcomeBack').addEventListener('click', () => {
