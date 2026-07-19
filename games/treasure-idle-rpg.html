@@ -610,6 +610,7 @@
   .enhance-row img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
   .enhance-row .enhance-name { flex: 1; }
   .enhance-row .enhance-level { color: var(--accent-gold); font-weight: bold; margin-right: 4px; }
+  .enhance-stats-sub { font-size: 0.6rem; color: #8a84a0; margin-top: 2px; }
   .enhance-row .btn { width: auto; margin-top: 0; padding: 4px 8px; font-size: 0.65rem; }
   .enhance-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 8px 0; }
 
@@ -902,6 +903,10 @@
       <button class="btn btn--neutral" id="btnToggleAutoEquip">ปิดอยู่</button>
     </div>
     <div class="settings-row">
+      <span>ของเก่าที่ถูกแทนที่/ไม่ต้องการ (auto)</span>
+      <button class="btn btn--neutral" id="btnCycleAutoDispose">ขาย</button>
+    </div>
+    <div class="settings-row">
       <button class="btn btn--danger" id="btnResetSave">รีเซ็ตเซฟทั้งหมด</button>
     </div>
     <button class="btn btn--neutral" id="btnCloseSettings">ปิด</button>
@@ -1154,6 +1159,7 @@
             <button class="btn btn--info" id="btnEquipItem">สวมใส่</button>
             <button class="btn btn--neutral" id="btnKeepItem">เก็บไว้</button>
             <button class="btn btn--success" id="btnSellItem">ขายรับ Gold</button>
+            <button class="btn btn--neutral" id="btnDismantleItem">ย่อยเป็นหินหลอม</button>
           </div>
         </div>
       </div>
@@ -1489,6 +1495,79 @@ const RARITY_TABLE = [
   { key: 'legendary', weight: 1,  mult: 5.5, label: 'Legendary' },
 ];
 
+// ===============================================
+// สเตตัสหลายบรรทัดต่อไอเทม 1 ชิ้น (Multi-Stat Equipment) — จำนวน stat line ต่อชิ้นเพิ่มตาม rarity
+// ทุก slot มี "stat หลัก" ของตัวเองตายตัว (SLOT_PRIMARY_STAT) รับประกันว่าได้เสมอ ส่วน rarity ที่สูงกว่า
+// common/good จะสุ่มได้ "stat รอง" เพิ่มจากสระ stat ที่เหลือ (ไม่ซ้ำกัน) ทำให้ของหายากมีประโยชน์หลายทาง
+// ไม่ใช่แค่ "เลขเดิมแต่มากขึ้น" เหมือนก่อนหน้านี้
+// ===============================================
+const STAT_KEYS = ['atk', 'def', 'hp', 'crit', 'dodge'];
+const STAT_LABELS_TH = { atk: 'ATK', def: 'DEF', hp: 'HP สูงสุด', crit: 'คริติคอล', dodge: 'หลบหลีก' };
+const SLOT_PRIMARY_STAT = { weapon: 'atk', armor: 'def', ring: 'hp', helmet: 'def', gloves: 'crit', boots: 'dodge' };
+const RARITY_STAT_LINE_COUNT = { common: 1, good: 1, rare: 2, epic: 3, legendary: 4 };
+// ฐานค่าต่อ "1 stat line" ก่อนคูณ rarity/stage — เดิมแยกตาม slot (SLOT_BASE_VALUE) เพราะแต่ละ slot ผูก
+// กับ stat เดียวตายตัว ตอนนี้ทุก stat มีฐานของตัวเองแทน ไม่ผูกกับ slot ที่มันไปโผล่อีกต่อไป
+const STAT_LINE_BASE = { atk: 3, def: 2, hp: 8, crit: 1, dodge: 1 }; // crit/dodge เป็น % ไม่สเกลตาม stage (กันพุ่งไม่มีเพดาน)
+const SECONDARY_STAT_MULT = 0.5; // stat line รอง (ที่ไม่ใช่ stat หลักของ slot) มีค่าน้อยกว่าเพื่อไม่ให้ไอเทมชิ้นเดียวโอเวอร์พาวเวอร์เกิน
+
+function rollStatValue(statKey, rarity, stage, isPrimary) {
+  const flatStat = statKey === 'atk' || statKey === 'def' || statKey === 'hp';
+  const stageScale = flatStat ? 1 + (stage - 1) * 0.12 : 1;
+  const base = STAT_LINE_BASE[statKey] * rarity.mult * stageScale * (isPrimary ? 1 : SECONDARY_STAT_MULT);
+  return Math.max(1, Math.round(base));
+}
+
+// สุ่ม stat ทั้งหมดของไอเทม 1 ชิ้น: ได้ stat หลักของ slot เสมอ + stat รองเพิ่มตามจำนวนที่ rarity กำหนด (สุ่มไม่ซ้ำ)
+function rollItemStats(slotType, stage, rarity) {
+  const primaryKey = SLOT_PRIMARY_STAT[slotType];
+  const stats = { [primaryKey]: rollStatValue(primaryKey, rarity, stage, true) };
+  const lineCount = RARITY_STAT_LINE_COUNT[rarity.key] || 1;
+  const secondaryCount = lineCount - 1;
+  if (secondaryCount > 0) {
+    const pool = STAT_KEYS.filter(k => k !== primaryKey);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    pool.slice(0, secondaryCount).forEach(key => { stats[key] = rollStatValue(key, rarity, stage, false); });
+  }
+  return stats;
+}
+
+// คำนวณสเตตัส "ปัจจุบัน" ของไอเทม (รวมผลตีบวก) จาก baseStats ที่สุ่มได้ครั้งแรก (ไม่แก้ไขซ้ำๆ ตรงๆ
+// เพื่อกันปัญหาปัดเศษสะสมจนค่าติดอยู่ที่เดิมไม่ขยับ โดยเฉพาะ stat รองที่มีค่าน้อย)
+function getItemCurrentStats(item) {
+  const level = item.enhanceLevel || 0;
+  const mult = Math.pow(1 + ENHANCE_VALUE_BOOST_PER_LEVEL, level);
+  const result = {};
+  const base = item.baseStats || {};
+  Object.keys(base).forEach(k => { result[k] = Math.max(1, Math.round(base[k] * mult)); });
+  return result;
+}
+function formatStatLine(key, value) {
+  return (key === 'crit' || key === 'dodge') ? `+${value}% ${STAT_LABELS_TH[key]}` : `+${value} ${STAT_LABELS_TH[key]}`;
+}
+function formatItemStatsText(item) {
+  const stats = getItemCurrentStats(item);
+  return STAT_KEYS.filter(k => stats[k] !== undefined).map(k => formatStatLine(k, stats[k])).join(', ');
+}
+// รวม "พลัง" ของไอเทมเป็นตัวเลขเดียวสำหรับเทียบของเก่า-ใหม่ (auto-equip) และคิดราคาขาย — ทำให้ stat
+// คนละชนิด (flat กับ %) เทียบกันได้โดยหารด้วยฐานของ stat นั้นๆ ก่อนรวม
+function getItemPowerScore(item) {
+  const stats = getItemCurrentStats(item);
+  return Object.keys(stats).reduce((sum, k) => sum + stats[k] / STAT_LINE_BASE[k], 0);
+}
+
+// ย้ายไอเทมเซฟเก่า (ก่อนมีระบบ Multi-Stat Equipment ที่เก็บแค่ .value ค่าเดียว) ให้เข้ารูปแบบ .baseStats ใหม่
+function migrateItemToMultiStat(item) {
+  if (!item || item.baseStats) return item;
+  const primaryKey = SLOT_PRIMARY_STAT[item.slot];
+  item.baseStats = { [primaryKey]: item.value != null ? item.value : 1 };
+  item.enhanceLevel = item.enhanceLevel || 0;
+  delete item.value;
+  return item;
+}
+
 function rollRarity() {
   const total = RARITY_TABLE.reduce((s, r) => s + r.weight, 0); // 100
   let roll = Math.random() * total;
@@ -1498,9 +1577,6 @@ function rollRarity() {
   }
   return RARITY_TABLE[0];
 }
-
-const SLOT_BASE_VALUE = { weapon: 3, armor: 2, ring: 8, helmet: 2 }; // flat-stat slots (สเกลตาม stage)
-const PERCENT_SLOT_BASE = { gloves: 1, boots: 1 }; // slot ที่ให้โบนัสเป็น % (ไม่สเกลตาม stage กันค่าพุ่งไม่มีเพดาน)
 
 function rollItem(slotType, stage) {
   return rollItemWithRarity(slotType, stage, rollRarity());
@@ -1514,16 +1590,16 @@ function rollElementForRarity(rarity) {
 }
 
 function rollItemWithRarity(slotType, stage, rarity) {
+  const baseStats = rollItemStats(slotType, stage, rarity);
+  const element = rollElementForRarity(rarity);
   if (slotType === 'weapon') {
     const family = WEAPON_FAMILIES[Math.floor(Math.random() * WEAPON_FAMILIES.length)];
-    const stageScale = 1 + (stage - 1) * 0.12;
-    const value = Math.max(1, Math.round(SLOT_BASE_VALUE.weapon * rarity.mult * stageScale));
-    const element = rollElementForRarity(rarity);
     return {
       slot: slotType,
       rarity: rarity.key,
       rarityLabel: rarity.label,
-      value,
+      baseStats,
+      enhanceLevel: 0,
       icon: getWeaponIcon(family.key, rarity.key),
       name: `${rarity.label} ${family.name}${element ? ` (${element})` : ''}`,
       family: family.key,
@@ -1533,30 +1609,12 @@ function rollItemWithRarity(slotType, stage, rarity) {
     };
   }
 
-  if (slotType === 'gloves' || slotType === 'boots') {
-    // ค่าที่ได้คือ "จำนวน % ที่เพิ่ม" ไม่ใช่ flat stat จึงไม่คูณ stageScale เพื่อกันค่าพุ่งไม่มีที่สิ้นสุด
-    const value = Math.max(1, Math.round(PERCENT_SLOT_BASE[slotType] * rarity.mult));
-    const element = rollElementForRarity(rarity);
-    return {
-      slot: slotType,
-      rarity: rarity.key,
-      rarityLabel: rarity.label,
-      value,
-      icon: EQUIPMENT_ICONS[slotType][rarity.key],
-      name: `${rarity.label} ${SLOT_NAMES[slotType]}${element ? ` (${element})` : ''}`,
-      element,
-    };
-  }
-
-  const base = SLOT_BASE_VALUE[slotType];
-  const stageScale = 1 + (stage - 1) * 0.12;
-  const value = Math.max(1, Math.round(base * rarity.mult * stageScale));
-  const element = rollElementForRarity(rarity);
   return {
     slot: slotType,
     rarity: rarity.key,
     rarityLabel: rarity.label,
-    value,
+    baseStats,
+    enhanceLevel: 0,
     icon: EQUIPMENT_ICONS[slotType][rarity.key],
     name: `${rarity.label} ${SLOT_NAMES[slotType]}${element ? ` (${element})` : ''}`,
     element,
@@ -1583,38 +1641,13 @@ function rollGachaItemMinRarity(stage, minRarityKey) {
   return rollItemWithRarity(slotType, stage, forcedRarity);
 }
 
+// 12 = ค่าคาลิเบรตให้ไอเทม 1 stat line (common/good) ได้ราคาขายเท่ากับสูตรเดิม (value*4) พอดี เพราะ
+// power score ของไอเทมแบบนั้น = value/STAT_LINE_BASE[stat] และ STAT_LINE_BASE ของ atk/def/hp ส่วนใหญ่คือ
+// 2-8 → 12/3 = 4 ตรงกับตัวคูณเดิมสำหรับอาวุธ ส่วนไอเทม multi-stat (rare ขึ้นไป) จะได้ราคาสูงขึ้นตาม
+// จำนวน/คุณภาพ stat ที่ติดมาโดยธรรมชาติ ไม่ต้องมีตารางแยก
+const SELL_VALUE_PER_POWER = 12;
 function getSellValue(item) {
-  return Math.floor(item.value * 4);
-}
-
-// เปิดใช้ผ่าน Settings > จัดการอุปกรณ์อัตโนมัติ: ถ้าไอเทมที่สุ่มได้จากกล่องสมบัติมีค่าสถานะสูงกว่า
-// ของที่สวมอยู่ในช่องเดียวกัน ให้สวมใส่ทันที (ขายของเก่าเป็น Gold) ไม่งั้นขายไอเทมใหม่ทิ้งทันที
-// กันคลังไอเทมรก — คืนค่า true ถ้าจัดการให้แล้ว (ไม่ต้องโชว์ปุ่ม สวมใส่/เก็บไว้/ขาย ให้กดเอง)
-function autoResolveItemIfEnabled(item) {
-  if (!player.settings.autoEquipEnabled) return false;
-  const old = player.equipment[item.slot];
-  if (!old || item.value > old.value) {
-    player.equipment[item.slot] = item;
-    player.pendingGacha = null;
-    player.currentHp = Math.min(player.currentHp, getMaxHp(player));
-    if (old) {
-      const refund = getSellValue(old);
-      player.gold += refund;
-      appendLog([`สวมใส่อัตโนมัติ: ${item.name} (ขาย ${old.name} เก่าได้ ${refund} Gold)`]);
-    } else {
-      appendLog([`สวมใส่อัตโนมัติ: ${item.name}`]);
-    }
-  } else {
-    const refund = getSellValue(item);
-    player.gold += refund;
-    player.pendingGacha = null;
-    appendLog([`ขายอัตโนมัติ: ${item.name} ได้ ${refund} Gold (สเตตัสต่ำกว่าที่สวมอยู่)`]);
-  }
-  return true;
-}
-
-function formatItemValue(item) {
-  return (item.slot === 'gloves' || item.slot === 'boots') ? `+${item.value}%` : `+${item.value}`;
+  return Math.floor(getItemPowerScore(item) * SELL_VALUE_PER_POWER);
 }
 
 // ===============================================
@@ -1623,7 +1656,7 @@ function formatItemValue(item) {
 // ===============================================
 const ENHANCE_STONE_VALUE = { common: 1, good: 2, rare: 3, epic: 5, legendary: 8 };
 const ENHANCE_MAX_LEVEL = 10;
-const ENHANCE_VALUE_BOOST_PER_LEVEL = 0.1; // +10% ต่อเลเวล (ทบต้น)
+const ENHANCE_VALUE_BOOST_PER_LEVEL = 0.1; // +10% ต่อเลเวล (ทบต้น) — คำนวณจาก baseStats สดทุกครั้ง ไม่ทบเศษ
 
 function getEnhanceCost(level) {
   return Math.floor(10 * Math.pow(1.4, level));
@@ -1631,6 +1664,43 @@ function getEnhanceCost(level) {
 
 function dismantleItem(item) {
   return ENHANCE_STONE_VALUE[item.rarity] || 1;
+}
+
+// จัดการไอเทมที่ไม่ต้องการทิ้ง (auto-equip แทนที่ของเก่า/ไอเทมใหม่ที่แย่กว่า) ตามโหมดที่ตั้งไว้ใน Settings
+// (ask ผู้ใช้: "เปลี่ยนระบบจากขายทิ้งอัตโนมัติ ให้เลือกได้ว่าจะย่อยหรือขาย") — ค่าเริ่มต้นยังเป็น "ขาย"
+// เพื่อไม่ให้พฤติกรรมเดิมเปลี่ยนไปโดยไม่ได้ตั้งใจ ผู้เล่นสลับเป็น "ย่อย" ได้เองถ้าอยากได้หินหลอมแทน
+function disposeItem(item, reasonSuffix) {
+  if (player.settings.autoDisposeMode === 'dismantle') {
+    const stones = dismantleItem(item);
+    player.enhanceStones += stones;
+    appendLog([`ย่อยอัตโนมัติ: ${item.name} ได้หินหลอม +${stones} (${reasonSuffix})`]);
+  } else {
+    const refund = getSellValue(item);
+    player.gold += refund;
+    appendLog([`ขายอัตโนมัติ: ${item.name} ได้ ${refund} Gold (${reasonSuffix})`]);
+  }
+}
+
+// เปิดใช้ผ่าน Settings > จัดการอุปกรณ์อัตโนมัติ: ถ้าไอเทมที่สุ่มได้จากกล่องสมบัติมีค่าสถานะสูงกว่า
+// ของที่สวมอยู่ในช่องเดียวกัน ให้สวมใส่ทันที (จัดการของเก่าตามโหมด sell/dismantle) ไม่งั้นจัดการไอเทมใหม่ทิ้งทันที
+// กันคลังไอเทมรก — คืนค่า true ถ้าจัดการให้แล้ว (ไม่ต้องโชว์ปุ่ม สวมใส่/เก็บไว้/ขาย/ย่อย ให้กดเอง)
+function autoResolveItemIfEnabled(item) {
+  if (!player.settings.autoEquipEnabled) return false;
+  const old = player.equipment[item.slot];
+  if (!old || getItemPowerScore(item) > getItemPowerScore(old)) {
+    player.equipment[item.slot] = item;
+    player.pendingGacha = null;
+    player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+    if (old) {
+      disposeItem(old, `แทนที่ด้วย ${item.name}`);
+    } else {
+      appendLog([`สวมใส่อัตโนมัติ: ${item.name}`]);
+    }
+  } else {
+    disposeItem(item, 'สเตตัสต่ำกว่าที่สวมอยู่');
+    player.pendingGacha = null;
+  }
+  return true;
 }
 
 function enhanceItem(slotKey) {
@@ -1641,8 +1711,7 @@ function enhanceItem(slotKey) {
   const cost = getEnhanceCost(level);
   if (player.enhanceStones < cost) return;
   player.enhanceStones -= cost;
-  item.enhanceLevel = level + 1;
-  item.value = Math.round(item.value * (1 + ENHANCE_VALUE_BOOST_PER_LEVEL));
+  item.enhanceLevel = level + 1; // สเตตัสปัจจุบันคำนวณจาก baseStats สดทุกครั้งผ่าน getItemCurrentStats() ไม่ต้องแก้ค่าตรงนี้
   appendLog([`⚒️ ตีบวก ${item.name} เป็น +${item.enhanceLevel}!`]);
   player.currentHp = Math.min(player.currentHp, getMaxHp(player));
   renderAll();
@@ -1704,6 +1773,10 @@ const SET_BONUS_ELEMENT_TIERS = {
   3: { atk: 0.10 },
   6: { atk: 0.20, crit: 0.10 },
 };
+// โบนัสเซ็ท rarity คูณเพิ่มตาม "ความหายากของ rarity ที่จับคู่ได้" — เซ็ต Legendary ครบ 6 ชิ้นควรแรงกว่า
+// เซ็ต Common ครบ 6 ชิ้นชัดเจน ไม่ใช่ได้โบนัสเท่ากันเป๊ะเหมือนเดิม (ใช้ตัวคูณคงที่ ไม่ผูกกับ RARITY_TABLE.mult
+// โดยตรงเพราะตัวนั้นแรงเกินไปสำหรับจุดประสงค์นี้ — 2 เท่าที่ legendary ถือว่าคุ้มค่าแต่ยังมีขอบเขตชัดเจน)
+const SET_BONUS_RARITY_SCALE = { common: 1.0, good: 1.15, rare: 1.35, epic: 1.6, legendary: 2.0 };
 
 function getEquippedItemsList(p) {
   return EQUIP_SLOTS.map(slot => p.equipment[slot]).filter(Boolean);
@@ -1733,7 +1806,10 @@ function getSetBonusTotals(p) {
   const totals = { atk: 0, def: 0, hp: 0, crit: 0 };
   const rarityBonus = SET_BONUS_RARITY_TIERS[info.rarity.tier];
   const elementBonus = SET_BONUS_ELEMENT_TIERS[info.element.tier];
-  if (rarityBonus) Object.keys(rarityBonus).forEach(k => { totals[k] += rarityBonus[k]; });
+  if (rarityBonus) {
+    const scale = SET_BONUS_RARITY_SCALE[info.rarity.key] || 1;
+    Object.keys(rarityBonus).forEach(k => { totals[k] += rarityBonus[k] * scale; });
+  }
   if (elementBonus) Object.keys(elementBonus).forEach(k => { totals[k] += elementBonus[k]; });
   return totals;
 }
@@ -1761,7 +1837,7 @@ let player = {
   gems: 0, // เพชร (Premium Currency) ได้จากการชนะ Big-Boss
   buffFightsLeft: 0, // จำนวนไฟต์ที่เหลือของบัฟจากโพชั่นฟ้า
   buffMultiplier: 1, // ตัวคูณ ATK/DEF ชั่วคราวจากโพชั่นฟ้า
-  settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false, soundEnabled: true },
+  settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false, soundEnabled: true, autoDisposeMode: 'sell' },
   pets: {}, // key ของสัตว์เลี้ยงที่มี -> { level, stars } (ดู PET_DEFS)
   equippedPet: null, // key ของสัตว์เลี้ยงที่ติดตั้งอยู่ (ให้บัฟได้ทีละ 1 ตัว)
   petFood: 0, // ได้จาก Boss Raid ใช้ป้อนสัตว์เลี้ยงแทน Gold ได้ (1 อาหาร = 1 เลเวล ฟรี)
@@ -2015,8 +2091,19 @@ const PRESTIGE_STAGE_REQUIREMENT = 10; // ต้องเคยไปถึง�
 function getPrestigeMultiplier(p) { return 1 + p.prestigePoints * 0.08; }
 function getPrestigeGain(p) { return Math.floor((p.highestStage || 1) / PRESTIGE_STAGE_REQUIREMENT); }
 
+// รวมค่า stat หนึ่งชนิดจากอุปกรณ์ที่สวมอยู่ "ทุกช่อง" (ไม่ใช่แค่ช่องที่ผูก stat นั้นเป็นค่าเริ่มต้นอีกต่อไป)
+// เพราะตอนนี้ไอเทม rare ขึ้นไปมี stat รองที่อาจไปโผล่ slot ไหนก็ได้ (ดู Multi-Stat Equipment)
+function getEquipmentStatTotal(p, statKey) {
+  return EQUIP_SLOTS.reduce((sum, slot) => {
+    const item = p.equipment[slot];
+    if (!item) return sum;
+    const stats = getItemCurrentStats(item);
+    return sum + (stats[statKey] || 0);
+  }, 0);
+}
+
 function getMaxHp(p) {
-  const base = p.baseStats.hp + p.upgradeLevels.hp * 10 + (p.equipment.ring ? p.equipment.ring.value : 0);
+  const base = p.baseStats.hp + p.upgradeLevels.hp * 10 + getEquipmentStatTotal(p, 'hp');
   const skillMult = p.equippedSkill === 'nature' ? 1.15 : 1;
   const petMult = 1 + getPetBonusValue('hp');
   const setMult = 1 + getSetBonusTotals(p).hp;
@@ -2024,7 +2111,7 @@ function getMaxHp(p) {
   return Math.round(base * skillMult * petMult * setMult * titleMult * getPrestigeMultiplier(p) * getAwakeningMultiplier(p));
 }
 function getAtk(p) {
-  const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0);
+  const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + getEquipmentStatTotal(p, 'atk');
   const skillMult = p.equippedSkill === 'fire' ? 1.08 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
   const petMult = 1 + getPetBonusValue('atk');
@@ -2034,7 +2121,7 @@ function getAtk(p) {
   return Math.round(base * skillMult * buffMult * petMult * setMult * bestiaryMult * titleMult * getPrestigeMultiplier(p) * getAwakeningMultiplier(p));
 }
 function getDef(p) {
-  const base = p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0) + (p.equipment.helmet ? p.equipment.helmet.value : 0);
+  const base = p.baseStats.def + p.upgradeLevels.def * 1 + getEquipmentStatTotal(p, 'def');
   const skillMult = p.equippedSkill === 'shield' ? 1.10 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
   const setMult = 1 + getSetBonusTotals(p).def;
@@ -2053,18 +2140,18 @@ function getUpgradeCost(statKey) {
 function getCritChance(p) {
   const weapon = p.equipment.weapon;
   const weaponBonus = weapon && weapon.perk === 'crit' ? weapon.perkValue : 0;
-  const glovesBonus = p.equipment.gloves ? p.equipment.gloves.value / 100 : 0;
+  const equipBonus = getEquipmentStatTotal(p, 'crit') / 100;
   const setBonus = getSetBonusTotals(p).crit;
   const titleBonus = getTitleBonus(p, 'crit');
   const weatherBonus = getWeatherBonus('crit');
-  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + glovesBonus + weaponBonus + setBonus + titleBonus + weatherBonus);
+  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + equipBonus + weaponBonus + setBonus + titleBonus + weatherBonus);
 }
 function getDodgeChance(p) {
   const weapon = p.equipment.weapon;
   const weaponBonus = weapon && weapon.perk === 'dodge' ? weapon.perkValue : 0;
-  const bootsBonus = p.equipment.boots ? p.equipment.boots.value / 100 : 0;
+  const equipBonus = getEquipmentStatTotal(p, 'dodge') / 100;
   const weatherBonus = getWeatherBonus('dodge');
-  return Math.min(0.5, 0.05 + p.upgradeLevels.def * 0.005 + bootsBonus + weaponBonus + weatherBonus);
+  return Math.min(0.5, 0.05 + p.upgradeLevels.def * 0.005 + equipBonus + weaponBonus + weatherBonus);
 }
 
 function doPrestige() {
@@ -2829,7 +2916,7 @@ function loadGame() {
       gems: data.gems || 0,
       buffFightsLeft: data.buffFightsLeft || 0,
       buffMultiplier: data.buffMultiplier || 1,
-      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false, soundEnabled: true }, data.settings || {}),
+      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false, soundEnabled: true, autoDisposeMode: 'sell' }, data.settings || {}),
       stats: Object.assign(
         { monstersKilled: 0, bigBossKills: 0, chestsOpened: 0, upgradesPurchased: 0, prestigeCount: 0, itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 } },
         data.stats || {},
@@ -2857,6 +2944,10 @@ function loadGame() {
       weatherKey: data.weatherKey || null,
       weatherChangesAt: data.weatherChangesAt || 0,
     });
+    // ย้ายไอเทมรูปแบบเก่า (ยุคก่อน Multi-Stat Equipment ที่เก็บ .value ค่าเดียว) ให้เป็น .baseStats
+    // แบบใหม่ กันเซฟเก่าพังตอนโหลด — ทำทั้งของที่สวมอยู่และในคลังไอเทม
+    EQUIP_SLOTS.forEach(slot => { if (player.equipment[slot]) migrateItemToMultiStat(player.equipment[slot]); });
+    player.inventory.forEach(migrateItemToMultiStat);
     if (data.lastSeenAt) {
       pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
     }
@@ -3174,10 +3265,20 @@ function renderEquipSlot(slotKey, item) {
     img.alt = item.name;
     img.onerror = () => { img.style.display = 'none'; };
     el.insertBefore(img, el.firstChild);
+    // hover เพื่อดูสเตตัสครบทุกบรรทัดของไอเทม (ask: "แสดงรายละเอียดว่าบวกสเตตัสอะไรบ้าง")
+    el.title = `${item.name}\n${formatItemStatsText(item)}`;
+  } else {
+    el.title = '';
   }
-  const isPercentSlot = slotKey === 'gloves' || slotKey === 'boots';
+  const stats = item ? getItemCurrentStats(item) : {};
+  const primaryKey = item ? SLOT_PRIMARY_STAT[slotKey] : null;
+  const isPercentStat = primaryKey === 'crit' || primaryKey === 'dodge';
   const enhanceTag = item && item.enhanceLevel ? ` (+${item.enhanceLevel})` : '';
-  el.querySelector('.slot-label').textContent = item ? `+${item.value}${isPercentSlot ? '%' : ''}${enhanceTag}` : SLOT_NAMES[slotKey];
+  const extraCount = item ? Object.keys(stats).length - 1 : 0;
+  const extraTag = extraCount > 0 ? ` +${extraCount}` : '';
+  el.querySelector('.slot-label').textContent = item
+    ? `+${stats[primaryKey]}${isPercentStat ? '%' : ''}${enhanceTag}${extraTag}`
+    : SLOT_NAMES[slotKey];
 }
 
 function renderSetBonusBox() {
@@ -3186,8 +3287,11 @@ function renderSetBonusBox() {
   const lines = [];
   if (info.rarity.tier > 0) {
     const rarityLabel = RARITY_TABLE.find(r => r.key === info.rarity.key).label;
-    const bonus = SET_BONUS_RARITY_TIERS[info.rarity.tier];
-    lines.push(`🎯 เซ็ต ${rarityLabel} x${info.rarity.tier}: ${formatSetBonusText(bonus)}`);
+    const scale = SET_BONUS_RARITY_SCALE[info.rarity.key] || 1;
+    const baseBonus = SET_BONUS_RARITY_TIERS[info.rarity.tier];
+    const scaledBonus = {};
+    Object.keys(baseBonus).forEach(k => { scaledBonus[k] = baseBonus[k] * scale; });
+    lines.push(`🎯 เซ็ต ${rarityLabel} x${info.rarity.tier}: ${formatSetBonusText(scaledBonus)}`);
   }
   if (info.element.tier > 0) {
     const elementLabel = ELEMENT_NAMES_TH[info.element.key];
@@ -3440,7 +3544,7 @@ function renderEnhanceList() {
     img.onerror = () => { img.style.display = 'none'; };
     const name = document.createElement('span');
     name.className = 'enhance-name';
-    name.innerHTML = `<span class="enhance-level">+${level}</span>${item.name}`;
+    name.innerHTML = `<span class="enhance-level">+${level}</span>${item.name}<div class="enhance-stats-sub">${formatItemStatsText(item)}</div>`;
     const btn = document.createElement('button');
     btn.className = 'btn btn--success';
     const maxed = level >= ENHANCE_MAX_LEVEL;
@@ -3494,7 +3598,7 @@ function renderChestPanel() {
     const nameEl = document.getElementById('gachaItemName');
     nameEl.textContent = item.name;
     nameEl.className = `rarity-${item.rarity}`;
-    document.getElementById('gachaItemValue').textContent = `${formatItemValue(item)} (ขายได้ ${getSellValue(item)} Gold)`;
+    document.getElementById('gachaItemValue').textContent = `${formatItemStatsText(item)} (ขายได้ ${getSellValue(item)} Gold, ย่อยได้ 🔨${dismantleItem(item)})`;
     sprite.style.backgroundImage = `url('${CHEST_ICONS[item.rarity].open}')`;
     resultBox.className = 'gacha-result' + (item.rarity === 'legendary' ? ' inventory-item--legendary' : '');
   } else {
@@ -3548,7 +3652,7 @@ function renderInventory() {
     img.onerror = () => { img.style.display = 'none'; };
     const name = document.createElement('span');
     name.className = `inv-name rarity-${item.rarity}`;
-    name.textContent = `${item.name} ${formatItemValue(item)}`;
+    name.textContent = `${item.name} (${formatItemStatsText(item)})`;
     const btnEquip = document.createElement('button');
     btnEquip.className = 'btn btn--info';
     btnEquip.textContent = 'สวม';
@@ -3830,6 +3934,16 @@ document.getElementById('btnSellItem').addEventListener('click', () => {
   renderAll();
 });
 
+document.getElementById('btnDismantleItem').addEventListener('click', () => {
+  if (!player.pendingGacha) return;
+  const item = player.pendingGacha;
+  const stones = dismantleItem(item);
+  player.enhanceStones += stones;
+  player.pendingGacha = null;
+  appendLog([`ย่อย ${item.name} ได้หินหลอม +${stones}`]);
+  renderAll();
+});
+
 document.getElementById('inventoryList').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
@@ -4001,6 +4115,11 @@ document.getElementById('btnToggleAutoEquip').addEventListener('click', () => {
   renderSettingsModal();
   saveGame();
 });
+document.getElementById('btnCycleAutoDispose').addEventListener('click', () => {
+  player.settings.autoDisposeMode = player.settings.autoDisposeMode === 'sell' ? 'dismantle' : 'sell';
+  renderSettingsModal();
+  saveGame();
+});
 document.getElementById('btnResetSave').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเซฟทั้งหมด? การกระทำนี้ย้อนกลับไม่ได้')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน */ }
@@ -4012,6 +4131,7 @@ function renderSettingsModal() {
   document.getElementById('btnToggleAnimations').textContent = player.settings.animationsEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
   document.getElementById('btnCycleAutoSpeed').textContent = AUTO_BATTLE_SPEED_LABELS[player.settings.autoBattleSpeed];
   document.getElementById('btnToggleAutoEquip').textContent = player.settings.autoEquipEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+  document.getElementById('btnCycleAutoDispose').textContent = player.settings.autoDisposeMode === 'dismantle' ? 'ย่อยเป็นหินหลอม' : 'ขายเป็น Gold';
 }
 
 document.getElementById('gemShopList').addEventListener('click', (e) => {
