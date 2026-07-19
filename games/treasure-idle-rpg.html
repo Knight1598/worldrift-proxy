@@ -551,11 +551,30 @@
   .inventory-item .btn { width: auto; padding: 3px 8px; margin-top: 0; font-size: 0.62rem; }
   .inventory-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 10px 0; }
 
-  /* Prestige */
-  .prestige-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
+  /* แถบเมนูด้านข้าง (side tab bar) — รวมระบบย่อยทั้งหมดของตัวละคร (Prestige/สกิล/วัตถุโบราณ/ฯลฯ)
+     เรียงตามความสำคัญ แทนที่ระบบ accordion แบบเดิมที่ต้องกางทีละอันจนพาเนลยาวเกินไป */
+  .char-tabs-wrap { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
+  .char-tab-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 10px; }
+  .char-tab-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    background: #1c1730;
+    border: 2px solid var(--divider);
+    border-radius: 4px;
+    padding: 5px 2px;
+    cursor: pointer;
+    color: #8a84a0;
+    font-size: 0.55rem;
+    line-height: 1.2;
+  }
+  .char-tab-btn .char-tab-icon { font-size: 1.05rem; }
+  .char-tab-btn.char-tab-btn--active { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); color: var(--accent-gold); }
+  .char-tab-panel { display: none; }
+  .char-tab-panel.char-tab-panel--active { display: block; }
 
   /* สกิล Passive */
-  .skill-section { margin-top: 16px; border-top: 2px dashed var(--divider); padding-top: 10px; }
   .skill-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
   .skill-btn {
     display: flex;
@@ -610,6 +629,7 @@
   .enhance-row img { width: 26px; height: 26px; object-fit: contain; flex-shrink: 0; }
   .enhance-row .enhance-name { flex: 1; }
   .enhance-row .enhance-level { color: var(--accent-gold); font-weight: bold; margin-right: 4px; }
+  .enhance-stats-sub { font-size: 0.6rem; color: #8a84a0; margin-top: 2px; }
   .enhance-row .btn { width: auto; margin-top: 0; padding: 4px 8px; font-size: 0.65rem; }
   .enhance-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 8px 0; }
 
@@ -670,6 +690,22 @@
   /* หอคอยไร้ขีดจำกัด (Infinite Tower) */
   .tower-floor-label { font-size: 0.8rem; color: var(--accent-gold); margin-bottom: 6px; }
 
+  /* ปลุกพลังแฝง (Awakening) */
+  .awakening-box { font-size: 0.72rem; color: #cfc7ae; margin-top: 6px; }
+  .awakening-mult { color: var(--accent-gold); font-weight: bold; font-size: 0.85rem; }
+  .awakening-tiers { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  @keyframes awakeningPulse {
+    0%   { box-shadow: 0 0 6px 2px rgba(180, 120, 255, 0.5); }
+    50%  { box-shadow: 0 0 26px 10px rgba(180, 120, 255, 0.95); }
+    100% { box-shadow: 0 0 6px 2px rgba(180, 120, 255, 0.5); }
+  }
+  .panel--character.awakening-flash { animation: awakeningPulse 1.2s ease-out; }
+  @keyframes awakeningAura {
+    0%, 100% { box-shadow: 0 0 5px 1px rgba(180, 120, 255, 0.35); }
+    50%      { box-shadow: 0 0 12px 4px rgba(180, 120, 255, 0.65); }
+  }
+  .panel--character.awakened { animation: awakeningAura 3s ease-in-out infinite; }
+
   /* ฉากต่อสู้ */
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังฉากต่อสู้ เปลี่ยนตามช่วงด่าน)
@@ -717,6 +753,26 @@
   .tier-normal   { background: rgba(80,80,80,0.7); }
   .tier-midboss  { background: rgba(180,120,20,0.8); }
   .tier-bigboss  { background: rgba(180,20,20,0.85); }
+
+  /* อีเวนต์สภาพอากาศ (Weather Events) */
+  .weather-badge {
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    font-size: 0.85rem;
+    background: rgba(0,0,0,0.55);
+    padding: 2px 6px;
+    border-radius: 3px;
+    cursor: help;
+    z-index: 2;
+  }
+  .weather-tint {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transition: background-color 1.2s ease;
+    z-index: 1;
+  }
 
   .monster-name { text-align: center; font-size: 0.85rem; margin-bottom: 4px; }
 
@@ -850,6 +906,10 @@
   <div class="settings-modal-box">
     <h2>ตั้งค่า</h2>
     <div class="settings-row">
+      <span>เปิด/ปิดเสียง</span>
+      <button class="btn btn--info" id="btnToggleSound">เปิดอยู่</button>
+    </div>
+    <div class="settings-row">
       <span>เปิด/ปิดแอนิเมชันการต่อสู้</span>
       <button class="btn btn--info" id="btnToggleAnimations">เปิดอยู่</button>
     </div>
@@ -860,6 +920,10 @@
     <div class="settings-row">
       <span>จัดการอุปกรณ์อัตโนมัติ</span>
       <button class="btn btn--neutral" id="btnToggleAutoEquip">ปิดอยู่</button>
+    </div>
+    <div class="settings-row">
+      <span>ของเก่าที่ถูกแทนที่/ไม่ต้องการ (auto)</span>
+      <button class="btn btn--neutral" id="btnCycleAutoDispose">ขาย</button>
     </div>
     <div class="settings-row">
       <button class="btn btn--danger" id="btnResetSave">รีเซ็ตเซฟทั้งหมด</button>
@@ -918,6 +982,8 @@
       <p class="raid-desc">ไต่หอคอยไปเรื่อยๆ ศัตรูจะเก่งขึ้นแบบก้าวกระโดดทุกชั้น ชั้นที่ไปถึงครั้งแรกจะได้รางวัลพิเศษ (วัตถุโบราณ หรือเพชรก้อนโต) แพ้เมื่อไหร่จบรอบ แต่สถิติชั้นสูงสุดจะถูกเก็บไว้เสมอ</p>
       <div class="tower-floor-label">ชั้นสูงสุดที่เคยไปถึง: <span id="towerHighestFloorLabel">0</span></div>
       <button class="btn btn--danger" id="btnStartTower">เข้าหอคอย (เริ่มชั้น 1)</button>
+      <div class="tower-floor-label" style="margin-top:12px;">🎐 ของสะสมพิเศษ (<span id="towerCurioCount">0</span>/<span id="towerCurioTotal">0</span>) — ได้ทุกชั้น 20/40/60/80/100</div>
+      <div class="relic-grid" id="towerCurioGrid"></div>
     </div>
     <div id="towerActive" style="display:none;">
       <div class="tower-floor-label">ชั้น <span id="towerCurrentFloor">1</span></div>
@@ -938,6 +1004,31 @@
       <button class="btn btn--neutral" id="btnCloseTowerResult">ปิด</button>
     </div>
     <button class="btn btn--neutral" id="btnCloseTower">ปิด</button>
+  </div>
+</div>
+
+<div class="raid-modal" id="weeklyBossModal" style="display:none;">
+  <div class="raid-modal-box">
+    <h2>👑 บอสประจำสัปดาห์</h2>
+    <div id="weeklyBossIntro">
+      <p class="raid-desc">ท้าดวลกับ Demon King ตัวจริง แข็งแกร่งกว่า Boss Raid ปกติมาก ทำดาเมจให้ได้ตามเกณฑ์ภายใน 45 วินาที เข้าได้แค่สัปดาห์ละ 1 ครั้ง แต่รางวัลคุ้มค่ามาก (โอกาสได้วัตถุโบราณ 40% หรือเพชรก้อนใหญ่ + วิญญาณบอส + หีบปริศนา)</p>
+      <button class="btn btn--danger" id="btnStartWeeklyBoss">เริ่มดวล</button>
+      <div class="raid-cooldown-note" id="weeklyBossCooldownNote"></div>
+    </div>
+    <div id="weeklyBossActive" style="display:none;">
+      <img class="raid-boss-sprite" id="weeklyBossSprite" src="" alt="weekly boss">
+      <div class="raid-timer" id="weeklyBossTimer">45.0s</div>
+      <div class="hp-bar-bg" id="weeklyBossHpBarBg">
+        <div class="hp-bar-fill" id="weeklyBossHpFill" style="width:100%;"></div>
+        <div class="hp-bar-label" id="weeklyBossHpLabel">- / -</div>
+      </div>
+      <button class="btn btn--danger" id="btnWeeklyBossAttack">⚔️ โจมตี!</button>
+    </div>
+    <div id="weeklyBossResult" style="display:none;">
+      <div class="raid-result-text" id="weeklyBossResultText"></div>
+      <button class="btn btn--neutral" id="btnCloseWeeklyBossResult">ปิด</button>
+    </div>
+    <button class="btn btn--neutral" id="btnCloseWeeklyBoss">ปิด</button>
   </div>
 </div>
 
@@ -998,77 +1089,63 @@
         </div>
       </div>
 
-      <div class="prestige-section">
-        <div class="collapsible-header collapsed" data-target="prestigeBody">
-          <span>Prestige</span>
-          <span class="collapse-arrow">▾</span>
+      <div class="char-tabs-wrap">
+        <div class="char-tab-bar" id="charTabBar">
+          <button class="char-tab-btn" data-tab="prestigeBody"><span class="char-tab-icon">✦</span>Prestige</button>
+          <button class="char-tab-btn" data-tab="awakeningBody"><span class="char-tab-icon">✨</span>ปลุกพลัง</button>
+          <button class="char-tab-btn" data-tab="enhanceBody"><span class="char-tab-icon">⚒️</span>ตีบวก</button>
+          <button class="char-tab-btn" data-tab="skillBody"><span class="char-tab-icon">🔥</span>สกิล</button>
+          <button class="char-tab-btn" data-tab="titleBody"><span class="char-tab-icon">🏅</span>ฉายา</button>
+          <button class="char-tab-btn" data-tab="relicBody"><span class="char-tab-icon">🏺</span>วัตถุโบราณ</button>
+          <button class="char-tab-btn" data-tab="bestiaryBody"><span class="char-tab-icon">📖</span>สมุดภาพ</button>
+          <button class="char-tab-btn" data-tab="alchemyBody"><span class="char-tab-icon">⚗️</span>ผสมยา</button>
+          <button class="char-tab-btn" data-tab="achievementBody"><span class="char-tab-icon">🏆</span>ความสำเร็จ</button>
+          <button class="char-tab-btn" data-tab="personalBestBody"><span class="char-tab-icon">📊</span>สถิติ</button>
         </div>
-        <div class="collapsible-body collapsed" id="prestigeBody">
+
+        <div class="char-tab-panel" id="prestigeBody">
           <div class="row"><span>Prestige Points</span><span id="prestigePoints">0</span></div>
           <div class="row"><span>โบนัสถาวร (ATK/DEF/HP)</span><span id="prestigeBonus">+0%</span></div>
           <button class="btn btn--success" id="btnPrestige">Prestige</button>
         </div>
-      </div>
 
-      <div class="skill-section">
-        <div class="collapsible-header collapsed" data-target="skillBody">
-          <span>สกิล Passive</span>
-          <span class="collapse-arrow">▾</span>
+        <div class="char-tab-panel" id="awakeningBody">
+          <div class="raid-desc" style="margin:0 0 6px;">✨ ปลุกพลังแฝง (<span id="awakeningLevelLabel">0</span>/<span id="awakeningTotalLabel">0</span>)</div>
+          <div class="awakening-box">
+            ตัวคูณ CP ปัจจุบัน: <span class="awakening-mult" id="awakeningMultLabel">x1.0</span><br>
+            อัปเกรดสเตตัสสะสมตลอดชีพ: <span id="lifetimeUpgradesLabel">0</span> ครั้ง
+          </div>
+          <div class="quest-progress-bar-bg" style="margin-top:6px;"><div class="quest-progress-bar-fill" id="awakeningProgressFill" style="width:0%;"></div></div>
+          <div class="awakening-tiers" id="awakeningNextInfo"></div>
         </div>
-        <div class="collapsible-body collapsed" id="skillBody">
-          <div class="skill-grid" id="skillGrid"></div>
-        </div>
-      </div>
 
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="relicBody">
-          <span>วัตถุโบราณ (<span id="relicCount">0</span>/<span id="relicTotal">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="relicBody">
-          <div class="relic-grid" id="relicGrid"></div>
-        </div>
-      </div>
-
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="bestiaryBody">
-          <span>สมุดภาพมอนสเตอร์ (<span id="bestiaryCount">0</span>/<span id="bestiaryTotal">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="bestiaryBody">
-          <p class="raid-desc" style="margin:6px 0;">สังหารมอนสเตอร์แต่ละชนิดครบ <span id="bestiaryTargetLabel">0</span> ตัว ปลดล็อกบัฟ ATK ถาวร +0.3%/ชนิด</p>
-          <div class="relic-grid" id="bestiaryGrid"></div>
-        </div>
-      </div>
-
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="enhanceBody">
-          <span>ตีบวกอุปกรณ์ (🔨 <span id="enhanceStonesCount">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
-        </div>
-        <div class="collapsible-body collapsed" id="enhanceBody">
+        <div class="char-tab-panel" id="enhanceBody">
+          <div class="raid-desc" style="margin:0 0 6px;">ตีบวกอุปกรณ์ (🔨 <span id="enhanceStonesCount">0</span>)</div>
           <p class="raid-desc" style="margin:6px 0;">ย่อยไอเทมในคลังเป็นหินหลอม แล้วใช้ตีบวกอุปกรณ์ Epic/Legendary ที่สวมอยู่ (สูงสุด +10)</p>
           <div class="enhance-list" id="enhanceList"></div>
         </div>
-      </div>
 
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="titleBody">
-          <span>ฉายา (<span id="titleUnlockedCount">0</span>/<span id="titleTotal">0</span>)</span>
-          <span class="collapse-arrow">▾</span>
+        <div class="char-tab-panel" id="skillBody">
+          <div class="skill-grid" id="skillGrid"></div>
         </div>
-        <div class="collapsible-body collapsed" id="titleBody">
+
+        <div class="char-tab-panel" id="titleBody">
+          <div class="raid-desc" style="margin:0 0 6px;">ฉายา (<span id="titleUnlockedCount">0</span>/<span id="titleTotal">0</span>)</div>
           <div class="enhance-list" id="titleList"></div>
         </div>
-      </div>
 
-      <div class="relic-section">
-        <div class="collapsible-header collapsed" data-target="alchemyBody">
-          <span>⚗️ ผสมยา (Alchemy)</span>
-          <span class="collapse-arrow">▾</span>
+        <div class="char-tab-panel" id="relicBody">
+          <div class="raid-desc" style="margin:0 0 6px;">วัตถุโบราณ (<span id="relicCount">0</span>/<span id="relicTotal">0</span>)</div>
+          <div class="relic-grid" id="relicGrid"></div>
         </div>
-        <div class="collapsible-body collapsed" id="alchemyBody">
-          <p class="raid-desc" style="margin:6px 0;">นำโพชั่นแดง+ฟ้าอย่างละ 3 มาผสมเป็น Elixir: ฟื้น HP เต็ม + บัฟ ATK/DEF +40% 5 ไฟต์</p>
+
+        <div class="char-tab-panel" id="bestiaryBody">
+          <p class="raid-desc" style="margin:0 0 6px;">สมุดภาพมอนสเตอร์ (<span id="bestiaryCount">0</span>/<span id="bestiaryTotal">0</span>) — สังหารมอนสเตอร์แต่ละชนิดครบ <span id="bestiaryTargetLabel">0</span> ตัว ปลดล็อกบัฟ ATK ถาวร +0.3%/ชนิด</p>
+          <div class="relic-grid" id="bestiaryGrid"></div>
+        </div>
+
+        <div class="char-tab-panel" id="alchemyBody">
+          <p class="raid-desc" style="margin:0 0 6px;">⚗️ ผสมยา — นำโพชั่นแดง+ฟ้าอย่างละ 3 มาผสมเป็น Elixir: ฟื้น HP เต็ม + บัฟ ATK/DEF +40% 5 ไฟต์</p>
           <div class="alchemy-row">
             <span class="alchemy-desc">Elixir ที่มี: <span id="elixirCount">0</span></span>
             <button class="btn btn--info" id="btnCraftElixir">ผสม (🧪แดง x3 + 🧪ฟ้า x3)</button>
@@ -1077,6 +1154,28 @@
             <span class="alchemy-desc">ใช้ Elixir ทันที</span>
             <button class="btn btn--success" id="btnUseElixir">ใช้ Elixir</button>
           </div>
+          <p class="raid-desc" style="margin:10px 0 6px;">Mega Elixir — นำ Elixir 2 ขวด + วิญญาณบอส 10 มาต้มเข้มข้น: ฟื้น HP เต็ม + บัฟ ATK/DEF +70% 8 ไฟต์</p>
+          <div class="alchemy-row">
+            <span class="alchemy-desc">Mega Elixir ที่มี: <span id="megaElixirCount">0</span></span>
+            <button class="btn btn--info" id="btnCraftMegaElixir">ต้ม (Elixir x2 + 💀10)</button>
+          </div>
+          <div class="alchemy-row">
+            <span class="alchemy-desc">ใช้ Mega Elixir ทันที</span>
+            <button class="btn btn--success" id="btnUseMegaElixir">ใช้ Mega Elixir</button>
+          </div>
+        </div>
+
+        <div class="char-tab-panel" id="achievementBody">
+          <div class="raid-desc" style="margin:0 0 6px;">🏆 ป้ายความสำเร็จ (<span id="achievementCount">0</span>/<span id="achievementTotal">0</span>) — สะสมถาวรตลอดชีพ ไม่มีบัฟสเตตัส แค่เก็บไว้โชว์</div>
+          <div class="relic-grid" id="achievementGrid"></div>
+        </div>
+
+        <div class="char-tab-panel" id="personalBestBody">
+          <div class="raid-desc" style="margin:0 0 10px;">📊 สถิติส่วนตัว — สถิติที่ดีที่สุดตลอดชีพ ไม่รีเซ็ตตอน Prestige</div>
+          <div class="row"><span>ชั้นสูงสุดที่เคยไปถึง</span><span id="pbHighestStage">1</span></div>
+          <div class="row"><span>CP สูงสุดที่เคยมี</span><span id="pbHighestCP">0</span></div>
+          <div class="row"><span>Gold สูงสุดที่เคยถือ</span><span id="pbMostGold">0</span></div>
+          <div class="row"><span>ดาเมจครั้งเดียวสูงสุด</span><span id="pbBiggestHit">0</span></div>
         </div>
       </div>
     </section>
@@ -1089,6 +1188,7 @@
       <div class="chest-open-area">
         <div class="chest-sprite" id="chestSprite"></div>
         <button class="btn btn--primary" id="btnOpenChest">เปิดกล่อง</button>
+        <button class="btn btn--info" id="btnOpenMysteryChest" style="margin-top:6px;">🎁 เปิดหีบปริศนา (มี <span id="mysteryChestCount">0</span>)</button>
 
         <div class="gacha-result" id="gachaResult" style="display:none;">
           <img id="gachaItemIcon" src="" alt="item" onerror="this.style.display='none'">
@@ -1098,6 +1198,7 @@
             <button class="btn btn--info" id="btnEquipItem">สวมใส่</button>
             <button class="btn btn--neutral" id="btnKeepItem">เก็บไว้</button>
             <button class="btn btn--success" id="btnSellItem">ขายรับ Gold</button>
+            <button class="btn btn--neutral" id="btnDismantleItem">ย่อยเป็นหินหลอม</button>
           </div>
         </div>
       </div>
@@ -1119,8 +1220,20 @@
         </div>
         <div class="collapsible-body" id="petBody">
           <button class="btn btn--primary" id="btnRollPet">สุ่มสัตว์เลี้ยง (5 💎)</button>
+          <button class="btn btn--info" id="btnRollPetTicket" style="margin-top:6px;">🎫 สุ่มด้วยตั๋ว (มี <span id="petTicketCount">0</span>)</button>
           <div class="pet-food-count">🍖 อาหารสัตว์เลี้ยง: <span id="petFoodCount">0</span></div>
           <div class="pet-grid" id="petGrid"></div>
+        </div>
+      </div>
+
+      <div class="relic-section">
+        <div class="collapsible-header collapsed" data-target="bossSoulBody">
+          <span>💀 วิญญาณบอส (<span id="bossSoulCount">0</span>)</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="bossSoulBody">
+          <p class="raid-desc" style="margin:6px 0;">ได้จากปราบมิด/บิ๊กบอส นำมาหลอมเป็นอุปกรณ์ Legendary การันตี หรือแลกหินหลอม</p>
+          <div class="enhance-list" id="bossSoulForgeList"></div>
         </div>
       </div>
     </section>
@@ -1131,6 +1244,8 @@
       <div class="bg-scene" id="bgScene">
         <span class="stage-badge">ด่าน <span id="stageNum">1</span></span>
         <span class="tier-badge tier-normal" id="tierBadge">ปกติ</span>
+        <span class="weather-badge" id="weatherBadge" title="">☀️</span>
+        <div class="weather-tint" id="weatherTint"></div>
         <img class="monster-sprite" id="monsterSprite" src="" alt="monster" onerror="this.style.opacity='0'">
         <div class="battle-banner" id="battleBanner"></div>
       </div>
@@ -1146,11 +1261,21 @@
       </div>
       <button class="btn btn--danger" id="btnOpenRaid" style="margin-top:10px;">⚔️ ดันเจี้ยนท้าทาย (Boss Raid)</button>
       <button class="btn btn--danger" id="btnOpenTower" style="margin-top:8px;">🗼 หอคอยไร้ขีดจำกัด</button>
+      <button class="btn btn--danger" id="btnOpenWeeklyBoss" style="margin-top:8px;">👑 บอสประจำสัปดาห์</button>
     </section>
 
     <!-- ============ Panel 4: Quests / Achievements ============ -->
     <section class="panel panel--quests">
       <h2>ภารกิจ <span class="quest-badge" id="questBadge"></span></h2>
+      <div class="quest-row" id="dailyChallengeRow" style="margin-bottom:10px;">
+        <div class="quest-info">
+          <div class="quest-name">🎯 <span id="dailyChallengeName">-</span></div>
+          <div class="quest-desc" id="dailyChallengeDesc">-</div>
+          <div class="quest-progress-bar-bg"><div class="quest-progress-bar-fill" id="dailyChallengeProgressFill" style="width:0%;"></div></div>
+          <div class="quest-desc" id="dailyChallengeProgressLabel">0/0</div>
+        </div>
+        <button class="btn btn--success quest-claim-btn" id="btnClaimDailyChallenge">รับรางวัล</button>
+      </div>
       <div class="quest-list" id="questList"></div>
     </section>
 
@@ -1161,6 +1286,45 @@
 </div>
 
 <script>
+/* =====================================================================
+   ระบบเสียง 8-bit (Web Audio API) — สังเคราะห์เสียงสดจาก oscillator ทั้งหมด
+   ไม่มีไฟล์เสียงภายนอกเลย เพื่อให้เกมยังเป็น HTML ไฟล์เดียว ปิด/เปิดได้จาก Settings
+   ===================================================================== */
+let audioCtx = null;
+function getAudioCtx() {
+  // สร้าง/resume AudioContext แบบ lazy ตอนมีการโต้ตอบจากผู้ใช้จริง (คลิกปุ่ม) เท่านั้น
+  // เพราะเบราว์เซอร์ส่วนใหญ่บล็อกการเล่นเสียงอัตโนมัติก่อนมี user gesture
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    audioCtx = new Ctx();
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// เล่นโน้ตสั้นๆ 1 เสียงแบบ 8-bit (square/triangle wave) พร้อม envelope ลดเสียงแบบ exponential กันเสียงเพี้ยน/คลิก
+function playTone(freq, duration, type, volume, startDelay) {
+  if (!player.settings.soundEnabled) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  const t0 = ctx.currentTime + (startDelay || 0);
+  osc.type = type || 'square';
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(volume || 0.12, t0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + duration);
+}
+
+function playSfxAttack() { playTone(150, 0.09, 'square', 0.10); }
+function playSfxCrit() { playTone(700, 0.05, 'square', 0.14); playTone(1000, 0.09, 'square', 0.11, 0.04); }
+function playSfxChestOpen() { [523, 659, 784, 1047].forEach((freq, i) => playTone(freq, 0.14, 'triangle', 0.10, i * 0.07)); }
+function playSfxClick() { playTone(880, 0.035, 'square', 0.06); }
+
 /* =====================================================================
    IMAGE ASSET PATHS
    ตัวแปรอ้างอิงรูปภาพทั้งหมด — แก้ path ตรงนี้เมื่อมีไฟล์ภาพจริงแล้ว
@@ -1380,6 +1544,79 @@ const RARITY_TABLE = [
   { key: 'legendary', weight: 1,  mult: 5.5, label: 'Legendary' },
 ];
 
+// ===============================================
+// สเตตัสหลายบรรทัดต่อไอเทม 1 ชิ้น (Multi-Stat Equipment) — จำนวน stat line ต่อชิ้นเพิ่มตาม rarity
+// ทุก slot มี "stat หลัก" ของตัวเองตายตัว (SLOT_PRIMARY_STAT) รับประกันว่าได้เสมอ ส่วน rarity ที่สูงกว่า
+// common/good จะสุ่มได้ "stat รอง" เพิ่มจากสระ stat ที่เหลือ (ไม่ซ้ำกัน) ทำให้ของหายากมีประโยชน์หลายทาง
+// ไม่ใช่แค่ "เลขเดิมแต่มากขึ้น" เหมือนก่อนหน้านี้
+// ===============================================
+const STAT_KEYS = ['atk', 'def', 'hp', 'crit', 'dodge'];
+const STAT_LABELS_TH = { atk: 'ATK', def: 'DEF', hp: 'HP สูงสุด', crit: 'คริติคอล', dodge: 'หลบหลีก' };
+const SLOT_PRIMARY_STAT = { weapon: 'atk', armor: 'def', ring: 'hp', helmet: 'def', gloves: 'crit', boots: 'dodge' };
+const RARITY_STAT_LINE_COUNT = { common: 1, good: 1, rare: 2, epic: 3, legendary: 4 };
+// ฐานค่าต่อ "1 stat line" ก่อนคูณ rarity/stage — เดิมแยกตาม slot (SLOT_BASE_VALUE) เพราะแต่ละ slot ผูก
+// กับ stat เดียวตายตัว ตอนนี้ทุก stat มีฐานของตัวเองแทน ไม่ผูกกับ slot ที่มันไปโผล่อีกต่อไป
+const STAT_LINE_BASE = { atk: 3, def: 2, hp: 8, crit: 1, dodge: 1 }; // crit/dodge เป็น % ไม่สเกลตาม stage (กันพุ่งไม่มีเพดาน)
+const SECONDARY_STAT_MULT = 0.5; // stat line รอง (ที่ไม่ใช่ stat หลักของ slot) มีค่าน้อยกว่าเพื่อไม่ให้ไอเทมชิ้นเดียวโอเวอร์พาวเวอร์เกิน
+
+function rollStatValue(statKey, rarity, stage, isPrimary) {
+  const flatStat = statKey === 'atk' || statKey === 'def' || statKey === 'hp';
+  const stageScale = flatStat ? 1 + (stage - 1) * 0.12 : 1;
+  const base = STAT_LINE_BASE[statKey] * rarity.mult * stageScale * (isPrimary ? 1 : SECONDARY_STAT_MULT);
+  return Math.max(1, Math.round(base));
+}
+
+// สุ่ม stat ทั้งหมดของไอเทม 1 ชิ้น: ได้ stat หลักของ slot เสมอ + stat รองเพิ่มตามจำนวนที่ rarity กำหนด (สุ่มไม่ซ้ำ)
+function rollItemStats(slotType, stage, rarity) {
+  const primaryKey = SLOT_PRIMARY_STAT[slotType];
+  const stats = { [primaryKey]: rollStatValue(primaryKey, rarity, stage, true) };
+  const lineCount = RARITY_STAT_LINE_COUNT[rarity.key] || 1;
+  const secondaryCount = lineCount - 1;
+  if (secondaryCount > 0) {
+    const pool = STAT_KEYS.filter(k => k !== primaryKey);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    pool.slice(0, secondaryCount).forEach(key => { stats[key] = rollStatValue(key, rarity, stage, false); });
+  }
+  return stats;
+}
+
+// คำนวณสเตตัส "ปัจจุบัน" ของไอเทม (รวมผลตีบวก) จาก baseStats ที่สุ่มได้ครั้งแรก (ไม่แก้ไขซ้ำๆ ตรงๆ
+// เพื่อกันปัญหาปัดเศษสะสมจนค่าติดอยู่ที่เดิมไม่ขยับ โดยเฉพาะ stat รองที่มีค่าน้อย)
+function getItemCurrentStats(item) {
+  const level = item.enhanceLevel || 0;
+  const mult = Math.pow(1 + ENHANCE_VALUE_BOOST_PER_LEVEL, level);
+  const result = {};
+  const base = item.baseStats || {};
+  Object.keys(base).forEach(k => { result[k] = Math.max(1, Math.round(base[k] * mult)); });
+  return result;
+}
+function formatStatLine(key, value) {
+  return (key === 'crit' || key === 'dodge') ? `+${value}% ${STAT_LABELS_TH[key]}` : `+${value} ${STAT_LABELS_TH[key]}`;
+}
+function formatItemStatsText(item) {
+  const stats = getItemCurrentStats(item);
+  return STAT_KEYS.filter(k => stats[k] !== undefined).map(k => formatStatLine(k, stats[k])).join(', ');
+}
+// รวม "พลัง" ของไอเทมเป็นตัวเลขเดียวสำหรับเทียบของเก่า-ใหม่ (auto-equip) และคิดราคาขาย — ทำให้ stat
+// คนละชนิด (flat กับ %) เทียบกันได้โดยหารด้วยฐานของ stat นั้นๆ ก่อนรวม
+function getItemPowerScore(item) {
+  const stats = getItemCurrentStats(item);
+  return Object.keys(stats).reduce((sum, k) => sum + stats[k] / STAT_LINE_BASE[k], 0);
+}
+
+// ย้ายไอเทมเซฟเก่า (ก่อนมีระบบ Multi-Stat Equipment ที่เก็บแค่ .value ค่าเดียว) ให้เข้ารูปแบบ .baseStats ใหม่
+function migrateItemToMultiStat(item) {
+  if (!item || item.baseStats) return item;
+  const primaryKey = SLOT_PRIMARY_STAT[item.slot];
+  item.baseStats = { [primaryKey]: item.value != null ? item.value : 1 };
+  item.enhanceLevel = item.enhanceLevel || 0;
+  delete item.value;
+  return item;
+}
+
 function rollRarity() {
   const total = RARITY_TABLE.reduce((s, r) => s + r.weight, 0); // 100
   let roll = Math.random() * total;
@@ -1389,9 +1626,6 @@ function rollRarity() {
   }
   return RARITY_TABLE[0];
 }
-
-const SLOT_BASE_VALUE = { weapon: 3, armor: 2, ring: 8, helmet: 2 }; // flat-stat slots (สเกลตาม stage)
-const PERCENT_SLOT_BASE = { gloves: 1, boots: 1 }; // slot ที่ให้โบนัสเป็น % (ไม่สเกลตาม stage กันค่าพุ่งไม่มีเพดาน)
 
 function rollItem(slotType, stage) {
   return rollItemWithRarity(slotType, stage, rollRarity());
@@ -1405,16 +1639,16 @@ function rollElementForRarity(rarity) {
 }
 
 function rollItemWithRarity(slotType, stage, rarity) {
+  const baseStats = rollItemStats(slotType, stage, rarity);
+  const element = rollElementForRarity(rarity);
   if (slotType === 'weapon') {
     const family = WEAPON_FAMILIES[Math.floor(Math.random() * WEAPON_FAMILIES.length)];
-    const stageScale = 1 + (stage - 1) * 0.12;
-    const value = Math.max(1, Math.round(SLOT_BASE_VALUE.weapon * rarity.mult * stageScale));
-    const element = rollElementForRarity(rarity);
     return {
       slot: slotType,
       rarity: rarity.key,
       rarityLabel: rarity.label,
-      value,
+      baseStats,
+      enhanceLevel: 0,
       icon: getWeaponIcon(family.key, rarity.key),
       name: `${rarity.label} ${family.name}${element ? ` (${element})` : ''}`,
       family: family.key,
@@ -1424,30 +1658,12 @@ function rollItemWithRarity(slotType, stage, rarity) {
     };
   }
 
-  if (slotType === 'gloves' || slotType === 'boots') {
-    // ค่าที่ได้คือ "จำนวน % ที่เพิ่ม" ไม่ใช่ flat stat จึงไม่คูณ stageScale เพื่อกันค่าพุ่งไม่มีที่สิ้นสุด
-    const value = Math.max(1, Math.round(PERCENT_SLOT_BASE[slotType] * rarity.mult));
-    const element = rollElementForRarity(rarity);
-    return {
-      slot: slotType,
-      rarity: rarity.key,
-      rarityLabel: rarity.label,
-      value,
-      icon: EQUIPMENT_ICONS[slotType][rarity.key],
-      name: `${rarity.label} ${SLOT_NAMES[slotType]}${element ? ` (${element})` : ''}`,
-      element,
-    };
-  }
-
-  const base = SLOT_BASE_VALUE[slotType];
-  const stageScale = 1 + (stage - 1) * 0.12;
-  const value = Math.max(1, Math.round(base * rarity.mult * stageScale));
-  const element = rollElementForRarity(rarity);
   return {
     slot: slotType,
     rarity: rarity.key,
     rarityLabel: rarity.label,
-    value,
+    baseStats,
+    enhanceLevel: 0,
     icon: EQUIPMENT_ICONS[slotType][rarity.key],
     name: `${rarity.label} ${SLOT_NAMES[slotType]}${element ? ` (${element})` : ''}`,
     element,
@@ -1474,38 +1690,13 @@ function rollGachaItemMinRarity(stage, minRarityKey) {
   return rollItemWithRarity(slotType, stage, forcedRarity);
 }
 
+// 12 = ค่าคาลิเบรตให้ไอเทม 1 stat line (common/good) ได้ราคาขายเท่ากับสูตรเดิม (value*4) พอดี เพราะ
+// power score ของไอเทมแบบนั้น = value/STAT_LINE_BASE[stat] และ STAT_LINE_BASE ของ atk/def/hp ส่วนใหญ่คือ
+// 2-8 → 12/3 = 4 ตรงกับตัวคูณเดิมสำหรับอาวุธ ส่วนไอเทม multi-stat (rare ขึ้นไป) จะได้ราคาสูงขึ้นตาม
+// จำนวน/คุณภาพ stat ที่ติดมาโดยธรรมชาติ ไม่ต้องมีตารางแยก
+const SELL_VALUE_PER_POWER = 12;
 function getSellValue(item) {
-  return Math.floor(item.value * 4);
-}
-
-// เปิดใช้ผ่าน Settings > จัดการอุปกรณ์อัตโนมัติ: ถ้าไอเทมที่สุ่มได้จากกล่องสมบัติมีค่าสถานะสูงกว่า
-// ของที่สวมอยู่ในช่องเดียวกัน ให้สวมใส่ทันที (ขายของเก่าเป็น Gold) ไม่งั้นขายไอเทมใหม่ทิ้งทันที
-// กันคลังไอเทมรก — คืนค่า true ถ้าจัดการให้แล้ว (ไม่ต้องโชว์ปุ่ม สวมใส่/เก็บไว้/ขาย ให้กดเอง)
-function autoResolveItemIfEnabled(item) {
-  if (!player.settings.autoEquipEnabled) return false;
-  const old = player.equipment[item.slot];
-  if (!old || item.value > old.value) {
-    player.equipment[item.slot] = item;
-    player.pendingGacha = null;
-    player.currentHp = Math.min(player.currentHp, getMaxHp(player));
-    if (old) {
-      const refund = getSellValue(old);
-      player.gold += refund;
-      appendLog([`สวมใส่อัตโนมัติ: ${item.name} (ขาย ${old.name} เก่าได้ ${refund} Gold)`]);
-    } else {
-      appendLog([`สวมใส่อัตโนมัติ: ${item.name}`]);
-    }
-  } else {
-    const refund = getSellValue(item);
-    player.gold += refund;
-    player.pendingGacha = null;
-    appendLog([`ขายอัตโนมัติ: ${item.name} ได้ ${refund} Gold (สเตตัสต่ำกว่าที่สวมอยู่)`]);
-  }
-  return true;
-}
-
-function formatItemValue(item) {
-  return (item.slot === 'gloves' || item.slot === 'boots') ? `+${item.value}%` : `+${item.value}`;
+  return Math.floor(getItemPowerScore(item) * SELL_VALUE_PER_POWER);
 }
 
 // ===============================================
@@ -1514,7 +1705,7 @@ function formatItemValue(item) {
 // ===============================================
 const ENHANCE_STONE_VALUE = { common: 1, good: 2, rare: 3, epic: 5, legendary: 8 };
 const ENHANCE_MAX_LEVEL = 10;
-const ENHANCE_VALUE_BOOST_PER_LEVEL = 0.1; // +10% ต่อเลเวล (ทบต้น)
+const ENHANCE_VALUE_BOOST_PER_LEVEL = 0.1; // +10% ต่อเลเวล (ทบต้น) — คำนวณจาก baseStats สดทุกครั้ง ไม่ทบเศษ
 
 function getEnhanceCost(level) {
   return Math.floor(10 * Math.pow(1.4, level));
@@ -1522,6 +1713,43 @@ function getEnhanceCost(level) {
 
 function dismantleItem(item) {
   return ENHANCE_STONE_VALUE[item.rarity] || 1;
+}
+
+// จัดการไอเทมที่ไม่ต้องการทิ้ง (auto-equip แทนที่ของเก่า/ไอเทมใหม่ที่แย่กว่า) ตามโหมดที่ตั้งไว้ใน Settings
+// (ask ผู้ใช้: "เปลี่ยนระบบจากขายทิ้งอัตโนมัติ ให้เลือกได้ว่าจะย่อยหรือขาย") — ค่าเริ่มต้นยังเป็น "ขาย"
+// เพื่อไม่ให้พฤติกรรมเดิมเปลี่ยนไปโดยไม่ได้ตั้งใจ ผู้เล่นสลับเป็น "ย่อย" ได้เองถ้าอยากได้หินหลอมแทน
+function disposeItem(item, reasonSuffix) {
+  if (player.settings.autoDisposeMode === 'dismantle') {
+    const stones = dismantleItem(item);
+    player.enhanceStones += stones;
+    appendLog([`ย่อยอัตโนมัติ: ${item.name} ได้หินหลอม +${stones} (${reasonSuffix})`]);
+  } else {
+    const refund = getSellValue(item);
+    player.gold += refund;
+    appendLog([`ขายอัตโนมัติ: ${item.name} ได้ ${refund} Gold (${reasonSuffix})`]);
+  }
+}
+
+// เปิดใช้ผ่าน Settings > จัดการอุปกรณ์อัตโนมัติ: ถ้าไอเทมที่สุ่มได้จากกล่องสมบัติมีค่าสถานะสูงกว่า
+// ของที่สวมอยู่ในช่องเดียวกัน ให้สวมใส่ทันที (จัดการของเก่าตามโหมด sell/dismantle) ไม่งั้นจัดการไอเทมใหม่ทิ้งทันที
+// กันคลังไอเทมรก — คืนค่า true ถ้าจัดการให้แล้ว (ไม่ต้องโชว์ปุ่ม สวมใส่/เก็บไว้/ขาย/ย่อย ให้กดเอง)
+function autoResolveItemIfEnabled(item) {
+  if (!player.settings.autoEquipEnabled) return false;
+  const old = player.equipment[item.slot];
+  if (!old || getItemPowerScore(item) > getItemPowerScore(old)) {
+    player.equipment[item.slot] = item;
+    player.pendingGacha = null;
+    player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+    if (old) {
+      disposeItem(old, `แทนที่ด้วย ${item.name}`);
+    } else {
+      appendLog([`สวมใส่อัตโนมัติ: ${item.name}`]);
+    }
+  } else {
+    disposeItem(item, 'สเตตัสต่ำกว่าที่สวมอยู่');
+    player.pendingGacha = null;
+  }
+  return true;
 }
 
 function enhanceItem(slotKey) {
@@ -1532,10 +1760,52 @@ function enhanceItem(slotKey) {
   const cost = getEnhanceCost(level);
   if (player.enhanceStones < cost) return;
   player.enhanceStones -= cost;
-  item.enhanceLevel = level + 1;
-  item.value = Math.round(item.value * (1 + ENHANCE_VALUE_BOOST_PER_LEVEL));
+  item.enhanceLevel = level + 1; // สเตตัสปัจจุบันคำนวณจาก baseStats สดทุกครั้งผ่าน getItemCurrentStats() ไม่ต้องแก้ค่าตรงนี้
   appendLog([`⚒️ ตีบวก ${item.name} เป็น +${item.enhanceLevel}!`]);
   player.currentHp = Math.min(player.currentHp, getMaxHp(player));
+  renderAll();
+}
+
+// ===============================================
+// วิญญาณบอส (Boss Souls) — ได้จากปราบมิด/บิ๊กบอส คราฟต์เป็นอุปกรณ์ Legendary การันตี หรือแลกหินหลอม
+// ===============================================
+const BOSS_SOUL_FORGE = [
+  { key: 'legendary_gear', name: 'คราฟต์อุปกรณ์ Legendary การันตี', cost: 15 },
+  { key: 'enhance_stones', name: 'แลกหินหลอม x5', cost: 5 },
+];
+function craftFromBossSouls(key) {
+  const recipe = BOSS_SOUL_FORGE.find(r => r.key === key);
+  if (!recipe || player.bossSouls < recipe.cost) return;
+  player.bossSouls -= recipe.cost;
+  if (key === 'legendary_gear') {
+    player.pendingGacha = rollGachaItemMinRarity(player.stage, 'legendary');
+    player.stats.itemsByRarity[player.pendingGacha.rarity] += 1;
+    appendLog([`💀 หลอมวิญญาณบอส: ได้รับ ${player.pendingGacha.name}!`]);
+  } else if (key === 'enhance_stones') {
+    player.enhanceStones += 5;
+    appendLog(['💀 หลอมวิญญาณบอส: ได้หินหลอม +5']);
+  }
+  renderAll();
+}
+
+// ===============================================
+// หีบสมบัติปริศนา (Mystery Chests) — แยกจากกล่องสมบัติปกติ (ไม่ได้อุปกรณ์ แต่ได้ Gold ก้อนใหญ่หรือโพชั่นสุ่ม)
+// ===============================================
+function openMysteryChest() {
+  if (player.mysteryChests <= 0) return;
+  player.mysteryChests -= 1;
+  if (Math.random() < 0.5) {
+    const goldReward = Math.floor((50 + player.stage * 10) * (1 + Math.random() * 2));
+    player.gold += goldReward;
+    appendLog([`🎁 หีบปริศนา: ได้รับ Gold ก้อนใหญ่ +${goldReward}!`]);
+    showToast(`🎁 หีบปริศนา: +${goldReward} Gold!`);
+  } else {
+    const color = Math.random() < 0.5 ? 'red' : 'blue';
+    const amount = 1 + Math.floor(Math.random() * 3);
+    player.potions[color] += amount;
+    appendLog([`🎁 หีบปริศนา: ได้รับโพชั่น${color === 'red' ? 'แดง' : 'ฟ้า'} x${amount}!`]);
+    showToast(`🎁 หีบปริศนา: โพชั่น${color === 'red' ? 'แดง' : 'ฟ้า'} x${amount}!`);
+  }
   renderAll();
 }
 
@@ -1552,6 +1822,10 @@ const SET_BONUS_ELEMENT_TIERS = {
   3: { atk: 0.10 },
   6: { atk: 0.20, crit: 0.10 },
 };
+// โบนัสเซ็ท rarity คูณเพิ่มตาม "ความหายากของ rarity ที่จับคู่ได้" — เซ็ต Legendary ครบ 6 ชิ้นควรแรงกว่า
+// เซ็ต Common ครบ 6 ชิ้นชัดเจน ไม่ใช่ได้โบนัสเท่ากันเป๊ะเหมือนเดิม (ใช้ตัวคูณคงที่ ไม่ผูกกับ RARITY_TABLE.mult
+// โดยตรงเพราะตัวนั้นแรงเกินไปสำหรับจุดประสงค์นี้ — 2 เท่าที่ legendary ถือว่าคุ้มค่าแต่ยังมีขอบเขตชัดเจน)
+const SET_BONUS_RARITY_SCALE = { common: 1.0, good: 1.15, rare: 1.35, epic: 1.6, legendary: 2.0 };
 
 function getEquippedItemsList(p) {
   return EQUIP_SLOTS.map(slot => p.equipment[slot]).filter(Boolean);
@@ -1581,7 +1855,10 @@ function getSetBonusTotals(p) {
   const totals = { atk: 0, def: 0, hp: 0, crit: 0 };
   const rarityBonus = SET_BONUS_RARITY_TIERS[info.rarity.tier];
   const elementBonus = SET_BONUS_ELEMENT_TIERS[info.element.tier];
-  if (rarityBonus) Object.keys(rarityBonus).forEach(k => { totals[k] += rarityBonus[k]; });
+  if (rarityBonus) {
+    const scale = SET_BONUS_RARITY_SCALE[info.rarity.key] || 1;
+    Object.keys(rarityBonus).forEach(k => { totals[k] += rarityBonus[k] * scale; });
+  }
   if (elementBonus) Object.keys(elementBonus).forEach(k => { totals[k] += elementBonus[k]; });
   return totals;
 }
@@ -1609,7 +1886,7 @@ let player = {
   gems: 0, // เพชร (Premium Currency) ได้จากการชนะ Big-Boss
   buffFightsLeft: 0, // จำนวนไฟต์ที่เหลือของบัฟจากโพชั่นฟ้า
   buffMultiplier: 1, // ตัวคูณ ATK/DEF ชั่วคราวจากโพชั่นฟ้า
-  settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false },
+  settings: { animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false, soundEnabled: true, autoDisposeMode: 'sell' },
   pets: {}, // key ของสัตว์เลี้ยงที่มี -> { level, stars } (ดู PET_DEFS)
   equippedPet: null, // key ของสัตว์เลี้ยงที่ติดตั้งอยู่ (ให้บัฟได้ทีละ 1 ตัว)
   petFood: 0, // ได้จาก Boss Raid ใช้ป้อนสัตว์เลี้ยงแทน Gold ได้ (1 อาหาร = 1 เลเวล ฟรี)
@@ -1635,6 +1912,23 @@ let player = {
   elixirs: 0, // ได้จากผสมโพชั่นแดง+ฟ้าอย่างละ 3 (ดู ALCHEMY_RECIPE)
   towerHighestFloor: 0, // ชั้นสูงสุดของหอคอยไร้ขีดจำกัดที่เคยไปถึง — ถาวร ไม่รีเซ็ตตอน Prestige
   towerClaimedFloors: [], // เลขชั้นที่เคยรับรางวัลแรกเข้าไปแล้ว (กันรับซ้ำถ้าไต่ผ่านชั้นเดิมอีกรอบ)
+  // จำนวนครั้งที่อัปเกรดสเตตัส "สะสมตลอดชีพ" (ต่างจาก stats.upgradesPurchased ซึ่งเป็นตัวนับภารกิจที่
+  // รีเซ็ตทุก Prestige) ใช้ปลดล็อกระดับปลุกพลังแฝง (ดู AWAKENING_TIERS) — ถาวร ไม่รีเซ็ตตอน Prestige
+  lifetimeUpgrades: 0,
+  awakeningLevel: 0, // ระดับปลุกพลังแฝงปัจจุบัน (0 = ยังไม่ปลุก) — ถาวร ไม่รีเซ็ตตอน Prestige
+  bossSouls: 0, // ได้จากปราบมิด/บิ๊กบอส ใช้คราฟต์อุปกรณ์ Legendary การันตี หรือแลกหินตีบวก
+  petTickets: 0, // ได้จากมอนสเตอร์ปกติ (โอกาสน้อย) ใช้สุ่มสัตว์เลี้ยงแทนเพชรได้ 1 ตั๋ว/ครั้ง
+  mysteryChests: 0, // หีบปริศนา ดรอปจากการต่อสู้เป็นบางครั้ง เปิดแล้วได้ Gold ก้อนใหญ่หรือโพชั่นสุ่ม
+  weatherKey: null, // สภาพอากาศปัจจุบัน (ดู WEATHER_TYPES) — หมุนเวียนอัตโนมัติ ไม่ถาวร ไม่สะสม
+  weatherChangesAt: 0, // timestamp (Date.now()) ที่จะสุ่มสภาพอากาศใหม่
+  // สถิติส่วนตัว (Personal Best) — สถิติที่ดีที่สุดตลอดชีพ ไม่รีเซ็ตตอน Prestige (ต่างจาก highestStage
+  // ที่เป็นสถิติ "รอบปัจจุบัน" ใช้คำนวณ Prestige Point เท่านั้น)
+  personalBests: { highestStageEver: 1, highestCP: 0, mostGoldHeld: 0, biggestHit: 0 },
+  unlockedAchievements: [], // key ของป้ายความสำเร็จที่ปลดล็อกแล้ว (ดู ACHIEVEMENT_DEFS) — ถาวร ไม่มีบัฟสเตตัส แค่สะสม
+  megaElixirs: 0, // ได้จากผสม Elixir 2 ขวด + วิญญาณบอส 10 (ดู MEGA_ALCHEMY_RECIPE)
+  dailyChallenge: { key: null, assignedDate: null, progress: 0, claimed: false }, // ภารกิจสุ่มรายวัน
+  weeklyBossCooldownUntil: 0, // timestamp (Date.now()) ที่จะเข้าบอสประจำสัปดาห์รอบถัดไปได้
+  towerCurios: [], // key ของสะสมพิเศษจากหอคอยที่เก็บได้แล้ว — ถาวร ไม่รีเซ็ตตอน Prestige ไม่มีบัฟสเตตัส
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1701,6 +1995,38 @@ function getTitleBonusTotals(p) {
 }
 function getTitleBonus(p, key) {
   return getTitleBonusTotals(p)[key] || 0;
+}
+
+// ===============================================
+// ป้ายความสำเร็จ (Achievement Trophies) — สะสมถาวรล้วนๆ ไม่มีบัฟสเตตัสติดตัวเหมือนฉายา (Titles)
+// ต่างจากภารกิจ (Quests) ที่เป็นเป้าหมายระยะสั้นต่อรอบ Prestige — อันนี้คือ "หมุดหมายตลอดชีพ" เก็บไว้โชว์
+// ใช้เงื่อนไขจากสถิติที่ถาวรอยู่แล้ว (ไม่รีเซ็ตตอน Prestige) เท่านั้น เพื่อไม่ต้องเพิ่มตัวนับใหม่โดยไม่จำเป็น
+// ===============================================
+const ACHIEVEMENT_DEFS = [
+  { key: 'stage_10',        name: 'ก้าวแรก',            desc: 'ไปถึงด่าน 10', condition: p => p.personalBests.highestStageEver >= 10 },
+  { key: 'stage_50',        name: 'นักผจญภัย',          desc: 'ไปถึงด่าน 50', condition: p => p.personalBests.highestStageEver >= 50 },
+  { key: 'stage_100',       name: 'ผู้กล้าไร้เทียมทาน',  desc: 'ไปถึงด่าน 100', condition: p => p.personalBests.highestStageEver >= 100 },
+  { key: 'first_prestige',  name: 'วัฏจักรแรก',         desc: 'ทำ Prestige ครั้งแรก', condition: p => p.stats.prestigeCount >= 1 },
+  { key: 'prestige_10',     name: 'เซียน Prestige',      desc: 'ทำ Prestige ครบ 10 ครั้ง', condition: p => p.stats.prestigeCount >= 10 },
+  { key: 'rich_10k',        name: 'เศรษฐี',             desc: 'มี Gold ครบ 10,000 พร้อมกัน', condition: p => p.personalBests.mostGoldHeld >= 10000 },
+  { key: 'all_relics',      name: 'นักล่าวัตถุโบราณ',    desc: 'เก็บวัตถุโบราณครบทุกชิ้น', condition: p => p.relics.length >= RELIC_DEFS.length },
+  { key: 'all_titles',      name: 'ผู้ทรงเกียรติ',       desc: 'ปลดล็อกฉายาครบทุกอัน', condition: p => p.unlockedTitles.length >= TITLE_DEFS.length },
+  { key: 'awakened_once',   name: 'ตื่นแล้ว',           desc: 'ปลุกพลังแฝงระดับแรก', condition: p => p.awakeningLevel >= 1 },
+  { key: 'awakened_max',    name: 'พลังแฝงเต็มขั้น',     desc: 'ปลุกพลังแฝงครบทุกระดับ', condition: p => p.awakeningLevel >= AWAKENING_TIERS.length },
+  { key: 'tower_10',        name: 'นักไต่หอคอย',        desc: 'ไต่หอคอยไร้ขีดจำกัดถึงชั้น 10', condition: p => p.towerHighestFloor >= 10 },
+  { key: 'tower_30',        name: 'จ้าวหอคอย',          desc: 'ไต่หอคอยไร้ขีดจำกัดถึงชั้น 30', condition: p => p.towerHighestFloor >= 30 },
+  { key: 'bestiary_full',   name: 'นักสัตววิทยา',        desc: 'สมุดภาพมอนสเตอร์ครบทุกชนิด', condition: p => getBestiaryCompletedCount(p) >= MONSTERS.length },
+  { key: 'big_hit_1000',    name: 'ดาเมจมหาศาล',        desc: 'ทำดาเมจครั้งเดียวถึง 1,000', condition: p => p.personalBests.biggestHit >= 1000 },
+];
+
+function checkAchievements() {
+  ACHIEVEMENT_DEFS.forEach(ach => {
+    if (!player.unlockedAchievements.includes(ach.key) && ach.condition(player)) {
+      player.unlockedAchievements.push(ach.key);
+      showToast(`🏆 ปลดล็อกความสำเร็จ: ${ach.name}!`);
+      appendLog([`🏆 ปลดล็อกความสำเร็จ: ${ach.name}!`]);
+    }
+  });
 }
 
 // ===============================================
@@ -1775,6 +2101,47 @@ function renderDailyLoginModal() {
 }
 
 // ===============================================
+// ภารกิจสุ่มรายวัน (Daily Challenge) — สุ่ม 1 เป้าหมายต่อวัน (อิงวันที่ปฏิทินจริงเหมือน Daily Login)
+// ต่างจาก Quests (ผูกกับรอบ Prestige) ตรงที่ผูกกับ "วัน" แทน — increment progress เฉพาะตอนภารกิจวันนี้
+// ตรงกับ key นั้นๆ เท่านั้น ไม่ต้องเพิ่มตัวนับ lifetime แยกทุกประเภท
+// ===============================================
+const DAILY_CHALLENGE_DEFS = [
+  { key: 'kill_monsters', name: 'นักล่าประจำวัน',   desc: 'ฆ่ามอนสเตอร์ให้ได้ 30 ตัว',      target: 30 },
+  { key: 'open_chests',   name: 'นักเปิดกล่องประจำวัน', desc: 'เปิดกล่องสมบัติ 8 ใบ',        target: 8 },
+  { key: 'earn_gold',     name: 'นักหาเงินประจำวัน',  desc: 'หา Gold สะสมให้ได้ 2,000',      target: 2000 },
+  { key: 'deal_damage',   name: 'นักดาเมจประจำวัน',   desc: 'ทำดาเมจสะสมให้ได้ 5,000',       target: 5000 },
+];
+function ensureDailyChallenge() {
+  if (!player.dailyChallenge.assignedDate || player.dailyChallenge.assignedDate !== todayDateString()) {
+    const def = DAILY_CHALLENGE_DEFS[Math.floor(Math.random() * DAILY_CHALLENGE_DEFS.length)];
+    player.dailyChallenge = { key: def.key, assignedDate: todayDateString(), progress: 0, claimed: false };
+  }
+}
+function getDailyChallengeDef() {
+  ensureDailyChallenge();
+  return DAILY_CHALLENGE_DEFS.find(d => d.key === player.dailyChallenge.key);
+}
+function addDailyChallengeProgress(key, amount) {
+  ensureDailyChallenge();
+  if (player.dailyChallenge.key !== key || player.dailyChallenge.claimed) return;
+  player.dailyChallenge.progress += amount;
+}
+function claimDailyChallenge() {
+  const def = getDailyChallengeDef();
+  if (player.dailyChallenge.claimed || player.dailyChallenge.progress < def.target) return;
+  player.dailyChallenge.claimed = true;
+  const gemReward = 5, chestReward = 2;
+  const goldReward = Math.floor(50 * (1 + (player.stage - 1) * 0.3));
+  player.gems += gemReward;
+  grantChest(chestReward);
+  player.gold += goldReward;
+  appendLog([`🎯 ภารกิจประจำวันสำเร็จ! ได้รับเพชร +${gemReward}, กล่องสมบัติ +${chestReward}, Gold +${goldReward}`]);
+  showToast('🎯 ภารกิจประจำวันสำเร็จ!');
+  saveGame();
+  renderAll();
+}
+
+// ===============================================
 // ระบบผสมยา (Alchemy) — นำโพชั่นแดง+ฟ้ามาผสมเป็น Elixir บัฟใหญ่ครั้งเดียว
 // ===============================================
 const ALCHEMY_RECIPE = { red: 3, blue: 3 };
@@ -1800,6 +2167,75 @@ function useElixir() {
   renderAll();
 }
 
+// สูตรผสมยาขั้นสูง (ต่อยอดจาก Alchemy เดิม): ใช้ Elixir ที่มีอยู่แล้ว + วิญญาณบอส (ทรัพยากรจากระบบ Boss
+// Souls) มาต้มเข้มข้นเป็น Mega Elixir บัฟแรงและนานกว่า — เชื่อมสองระบบที่มีอยู่แล้วเข้าด้วยกันแทนสร้างของใหม่ทั้งหมด
+const MEGA_ALCHEMY_RECIPE = { elixirs: 2, bossSouls: 10 };
+const MEGA_ELIXIR_BUFF_MULT = 1.7; // ATK/DEF +70%
+const MEGA_ELIXIR_BUFF_FIGHTS = 8;
+function craftMegaElixir() {
+  if (player.elixirs < MEGA_ALCHEMY_RECIPE.elixirs || player.bossSouls < MEGA_ALCHEMY_RECIPE.bossSouls) return;
+  player.elixirs -= MEGA_ALCHEMY_RECIPE.elixirs;
+  player.bossSouls -= MEGA_ALCHEMY_RECIPE.bossSouls;
+  player.megaElixirs += 1;
+  appendLog([`⚗️ ต้ม Mega Elixir สำเร็จ (ใช้ Elixir x${MEGA_ALCHEMY_RECIPE.elixirs} + วิญญาณบอส x${MEGA_ALCHEMY_RECIPE.bossSouls})`]);
+  renderAll();
+}
+function useMegaElixir() {
+  if (player.animating || player.autoBattle) return;
+  if (player.megaElixirs <= 0) return;
+  player.megaElixirs -= 1;
+  player.currentHp = getMaxHp(player);
+  player.buffFightsLeft = MEGA_ELIXIR_BUFF_FIGHTS;
+  player.buffMultiplier = MEGA_ELIXIR_BUFF_MULT;
+  appendLog([`⚗️ ใช้ Mega Elixir: ฟื้น HP เต็ม + ATK/DEF +70% เป็นเวลา ${MEGA_ELIXIR_BUFF_FIGHTS} ไฟต์`]);
+  renderAll();
+}
+
+// ===============================================
+// ปลุกพลังแฝง (Awakening) — milestone ถาวรจากยอดอัปเกรดสเตตัสสะสมตลอดชีพ (lifetimeUpgrades)
+// จ่าย Gold+เพชรเพื่อปลดล็อกทีละระดับ ได้ตัวคูณ CP รวมถาวร (ไม่ทบต้นกับตัวเอง — ตัวคูณของแต่ละ tier
+// คือค่าตัวคูณ "รวม" ของระดับนั้นเลย ไม่ใช่คูณซ้อนจากระดับก่อนหน้า) จำกัดจำนวน tier ไว้ชัดเจนตามการ
+// ทำ Math Audit ก่อนหน้านี้ที่พบว่าตัวคูณสเตตัสที่ไม่มีเพดาน (ตอนนั้นคือเลเวลสัตว์เลี้ยง) เสี่ยงทำให้ตัวเลข
+// พุ่งจนเกมหมดความท้าทาย — Awakening จึงออกแบบให้ "แข็งแกร่งมากตอนปลุกครบ" แต่มีขอบเขตชัดเจนเสมอ
+const AWAKENING_TIERS = [
+  { requiredUpgrades: 100, cost: { gold: 5000,    gems: 20  }, mult: 1.5 },
+  { requiredUpgrades: 200, cost: { gold: 25000,   gems: 50  }, mult: 2.0 },
+  { requiredUpgrades: 300, cost: { gold: 100000,  gems: 100 }, mult: 2.5 },
+  { requiredUpgrades: 400, cost: { gold: 400000,  gems: 200 }, mult: 3.0 },
+  { requiredUpgrades: 500, cost: { gold: 1500000, gems: 400 }, mult: 3.5 },
+];
+function getAwakeningMultiplier(p) {
+  return p.awakeningLevel > 0 ? AWAKENING_TIERS[p.awakeningLevel - 1].mult : 1;
+}
+function getNextAwakeningTier(p) {
+  return AWAKENING_TIERS[p.awakeningLevel] || null;
+}
+function canAwaken(p) {
+  const tier = getNextAwakeningTier(p);
+  if (!tier) return false;
+  return p.lifetimeUpgrades >= tier.requiredUpgrades && p.gold >= tier.cost.gold && p.gems >= tier.cost.gems;
+}
+function doAwaken() {
+  if (!canAwaken(player)) return;
+  const tier = getNextAwakeningTier(player);
+  player.gold -= tier.cost.gold;
+  player.gems -= tier.cost.gems;
+  player.awakeningLevel += 1;
+  appendLog([`✨ ปลุกพลังแฝงสำเร็จ! ระดับ ${player.awakeningLevel} (CP x${tier.mult})`]);
+  showToast(`✨ ปลุกพลังแฝงระดับ ${player.awakeningLevel}!`);
+  triggerAwakeningAura();
+  saveGame();
+  renderAll();
+}
+function triggerAwakeningAura() {
+  const panel = document.querySelector('.panel--character');
+  if (!panel) return;
+  panel.classList.remove('awakening-flash');
+  void panel.offsetWidth; // บังคับ reflow ให้แอนิเมชันเริ่มใหม่ได้เสมอ
+  panel.classList.add('awakening-flash');
+  setTimeout(() => panel.classList.remove('awakening-flash'), 1200);
+}
+
 // ===============================================
 // PRESTIGE — รีเซ็ตด่านเพื่อแลกโบนัสถาวร
 // ===============================================
@@ -1809,31 +2245,42 @@ const PRESTIGE_STAGE_REQUIREMENT = 10; // ต้องเคยไปถึง�
 function getPrestigeMultiplier(p) { return 1 + p.prestigePoints * 0.08; }
 function getPrestigeGain(p) { return Math.floor((p.highestStage || 1) / PRESTIGE_STAGE_REQUIREMENT); }
 
+// รวมค่า stat หนึ่งชนิดจากอุปกรณ์ที่สวมอยู่ "ทุกช่อง" (ไม่ใช่แค่ช่องที่ผูก stat นั้นเป็นค่าเริ่มต้นอีกต่อไป)
+// เพราะตอนนี้ไอเทม rare ขึ้นไปมี stat รองที่อาจไปโผล่ slot ไหนก็ได้ (ดู Multi-Stat Equipment)
+function getEquipmentStatTotal(p, statKey) {
+  return EQUIP_SLOTS.reduce((sum, slot) => {
+    const item = p.equipment[slot];
+    if (!item) return sum;
+    const stats = getItemCurrentStats(item);
+    return sum + (stats[statKey] || 0);
+  }, 0);
+}
+
 function getMaxHp(p) {
-  const base = p.baseStats.hp + p.upgradeLevels.hp * 10 + (p.equipment.ring ? p.equipment.ring.value : 0);
+  const base = p.baseStats.hp + p.upgradeLevels.hp * 10 + getEquipmentStatTotal(p, 'hp');
   const skillMult = p.equippedSkill === 'nature' ? 1.15 : 1;
   const petMult = 1 + getPetBonusValue('hp');
   const setMult = 1 + getSetBonusTotals(p).hp;
   const titleMult = 1 + getTitleBonus(p, 'hp');
-  return Math.round(base * skillMult * petMult * setMult * titleMult * getPrestigeMultiplier(p));
+  return Math.round(base * skillMult * petMult * setMult * titleMult * getPrestigeMultiplier(p) * getAwakeningMultiplier(p));
 }
 function getAtk(p) {
-  const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0);
+  const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + getEquipmentStatTotal(p, 'atk');
   const skillMult = p.equippedSkill === 'fire' ? 1.08 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
   const petMult = 1 + getPetBonusValue('atk');
   const setMult = 1 + getSetBonusTotals(p).atk;
   const bestiaryMult = 1 + getBestiaryAtkBonus(p);
   const titleMult = 1 + getTitleBonus(p, 'atk');
-  return Math.round(base * skillMult * buffMult * petMult * setMult * bestiaryMult * titleMult * getPrestigeMultiplier(p));
+  return Math.round(base * skillMult * buffMult * petMult * setMult * bestiaryMult * titleMult * getPrestigeMultiplier(p) * getAwakeningMultiplier(p));
 }
 function getDef(p) {
-  const base = p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0) + (p.equipment.helmet ? p.equipment.helmet.value : 0);
+  const base = p.baseStats.def + p.upgradeLevels.def * 1 + getEquipmentStatTotal(p, 'def');
   const skillMult = p.equippedSkill === 'shield' ? 1.10 : 1;
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
   const setMult = 1 + getSetBonusTotals(p).def;
   const titleMult = 1 + getTitleBonus(p, 'def');
-  return Math.round(base * skillMult * buffMult * setMult * titleMult * getPrestigeMultiplier(p));
+  return Math.round(base * skillMult * buffMult * setMult * titleMult * getPrestigeMultiplier(p) * getAwakeningMultiplier(p));
 }
 function getCP(p)    { return Math.round(getMaxHp(p) * 0.5 + getAtk(p) * 2 + getDef(p) * 1.5); }
 function getPlayerLevel(p) { return 1 + p.upgradeLevels.hp + p.upgradeLevels.atk + p.upgradeLevels.def; }
@@ -1847,16 +2294,18 @@ function getUpgradeCost(statKey) {
 function getCritChance(p) {
   const weapon = p.equipment.weapon;
   const weaponBonus = weapon && weapon.perk === 'crit' ? weapon.perkValue : 0;
-  const glovesBonus = p.equipment.gloves ? p.equipment.gloves.value / 100 : 0;
+  const equipBonus = getEquipmentStatTotal(p, 'crit') / 100;
   const setBonus = getSetBonusTotals(p).crit;
   const titleBonus = getTitleBonus(p, 'crit');
-  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + glovesBonus + weaponBonus + setBonus + titleBonus);
+  const weatherBonus = getWeatherBonus('crit');
+  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + equipBonus + weaponBonus + setBonus + titleBonus + weatherBonus);
 }
 function getDodgeChance(p) {
   const weapon = p.equipment.weapon;
   const weaponBonus = weapon && weapon.perk === 'dodge' ? weapon.perkValue : 0;
-  const bootsBonus = p.equipment.boots ? p.equipment.boots.value / 100 : 0;
-  return Math.min(0.5, 0.05 + p.upgradeLevels.def * 0.005 + bootsBonus + weaponBonus);
+  const equipBonus = getEquipmentStatTotal(p, 'dodge') / 100;
+  const weatherBonus = getWeatherBonus('dodge');
+  return Math.min(0.5, 0.05 + p.upgradeLevels.def * 0.005 + equipBonus + weaponBonus + weatherBonus);
 }
 
 function doPrestige() {
@@ -1979,9 +2428,8 @@ function rollPetRarity() {
   return PET_RARITY_WEIGHTS[0].key;
 }
 
-function rollPetGacha() {
-  if (player.gems < PET_GACHA_COST) return null;
-  player.gems -= PET_GACHA_COST;
+// แยกตรรกะการสุ่มตัวสัตว์เลี้ยงออกจากการหักค่าใช้จ่าย เพื่อให้ใช้ร่วมกันได้ทั้งจ่ายด้วยเพชรและตั๋วสุ่ม
+function resolvePetGachaRoll() {
   const rarity = rollPetRarity();
   const candidates = PET_DEFS.filter(p => p.rarity === rarity);
   const pet = candidates[Math.floor(Math.random() * candidates.length)];
@@ -1996,15 +2444,32 @@ function rollPetGacha() {
   }
   return pet;
 }
+function rollPetGacha() {
+  if (player.gems < PET_GACHA_COST) return null;
+  player.gems -= PET_GACHA_COST;
+  return resolvePetGachaRoll();
+}
+// สุ่มด้วยตั๋วสุ่มสัตว์เลี้ยง (ได้จากมอนสเตอร์ปกติแบบสุ่ม) แทนการจ่ายเพชร ให้สายฟรี/สายฟาร์มเข้าถึงระบบนี้ได้
+function rollPetGachaWithTicket() {
+  if (player.petTickets < 1) return null;
+  player.petTickets -= 1;
+  return resolvePetGachaRoll();
+}
 
+// Math Audit: เดิม cost = 50*level (เติบโตแบบ "เชิงเส้น" ไม่ใช่ exponential เหมือนระบบอื่นๆ ในเกม)
+// และไม่มีเพดานเลเวล ทำให้เลเวลสัตว์เลี้ยง (และบัฟ ATK/HP ที่ผูกกับมัน) ไต่ขึ้นได้ไม่จำกัดตราบเท่าที่มี
+// Gold/อาหารสัตว์เลี้ยงมากพอ ในเกมแบบ Idle ที่ Gold โตแบบทวีคูณตามเวลา นี่คือช่องโหว่ให้ค่า ATK พุ่งจน
+// เกมหมดความท้าทายได้ในระยะยาว — แก้โดยเปลี่ยน cost เป็น exponential (เหมือน getUpgradeCost/getEnhanceCost)
+// และเพิ่มเพดานเลเวลสูงสุด (PET_MAX_LEVEL) ให้บัฟจากสัตว์เลี้ยงยังคง "แข็งแกร่งมากตอนเลี้ยงเต็มที่" แต่มีขอบเขต
+const PET_MAX_LEVEL = 30;
 function getPetLevelUpCost(petKey) {
   const owned = player.pets[petKey];
-  return owned ? 50 * owned.level : 0;
+  return owned ? Math.floor(50 * Math.pow(1.15, owned.level)) : 0;
 }
 
 function levelUpPet(petKey) {
   const owned = player.pets[petKey];
-  if (!owned) return;
+  if (!owned || owned.level >= PET_MAX_LEVEL) return;
   const cost = getPetLevelUpCost(petKey);
   if (player.gold < cost) return;
   player.gold -= cost;
@@ -2017,7 +2482,7 @@ function levelUpPet(petKey) {
 // ป้อนอาหารสัตว์เลี้ยง (ได้จาก Boss Raid): ฟรี ไม่ใช้ Gold แลกกับเลเวลได้ 1 อาหาร = 1 เลเวล
 function feedPet(petKey) {
   const owned = player.pets[petKey];
-  if (!owned || player.petFood <= 0) return;
+  if (!owned || player.petFood <= 0 || owned.level >= PET_MAX_LEVEL) return;
   player.petFood -= 1;
   owned.level += 1;
   const def = PET_DEFS.find(p => p.key === petKey);
@@ -2102,6 +2567,35 @@ function collectPetDispatch(petKey) {
   renderAll();
 }
 
+// ===============================================
+// อีเวนต์สภาพอากาศ (Weather Events) — หมุนเวียนแบบเรียลไทม์ ให้บัฟเล็กๆ ชั่วคราวเพิ่มสีสัน/บรรยากาศ
+// ตั้งใจให้เป็น "ไม่สะสม ไม่ถาวร" (มีได้แค่ 1 สภาพอากาศต่อครั้ง หมดเวลาแล้ววนสุ่มใหม่) เพื่อไม่ให้
+// ไปแตะ chain ตัวคูณสเตตัสถาวรที่ต้องระวังเรื่อง stacking ตามที่สรุปไว้ใน Math Audit ก่อนหน้า
+// ===============================================
+const WEATHER_TYPES = [
+  { key: 'clear', name: 'ท้องฟ้าแจ่มใส', icon: '☀️', desc: 'ไม่มีผลพิเศษ', tint: 'transparent', effect: {} },
+  { key: 'rain',  name: 'ฝนตก',          icon: '🌧️', desc: '+10% Gold ที่ได้รับ', tint: 'rgba(60,90,160,0.18)', effect: { goldMult: 0.10 } },
+  { key: 'storm', name: 'พายุฟ้าคะนอง',  icon: '⚡', desc: '+8% โอกาสคริติคอล', tint: 'rgba(90,70,140,0.20)', effect: { crit: 0.08 } },
+  { key: 'snow',  name: 'หิมะตก',        icon: '❄️', desc: 'ลด ATK มอนสเตอร์ 8%', tint: 'rgba(200,220,255,0.16)', effect: { monsterAtkReduction: 0.08 } },
+  { key: 'fog',   name: 'หมอกลง',        icon: '🌫️', desc: '+6% โอกาสหลบหลีก', tint: 'rgba(150,150,150,0.20)', effect: { dodge: 0.06 } },
+];
+const WEATHER_INTERVAL_MS = 15 * 60 * 1000; // เปลี่ยนสภาพอากาศทุก 15 นาที (เวลาจริง)
+
+function ensureWeather() {
+  if (!player.weatherKey || !player.weatherChangesAt || Date.now() >= player.weatherChangesAt) {
+    const w = WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)];
+    player.weatherKey = w.key;
+    player.weatherChangesAt = Date.now() + WEATHER_INTERVAL_MS;
+  }
+}
+function getCurrentWeather() {
+  ensureWeather();
+  return WEATHER_TYPES.find(w => w.key === player.weatherKey) || WEATHER_TYPES[0];
+}
+function getWeatherBonus(key) {
+  return getCurrentWeather().effect[key] || 0;
+}
+
 function ensureEncounter() {
   if (!player.encounter) {
     // วัตถุโบราณ "มงกุฎจอมมาร": มีโอกาส 3% ข้ามด่านปกติที่เหลือไปเจอบอส (ด่านคูณ 5) ทันที
@@ -2179,6 +2673,9 @@ function raidAttack() {
   if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
   raidSession.hp = Math.max(0, raidSession.hp - dmg);
   raidSession.damageDealt += dmg;
+  player.personalBests.biggestHit = Math.max(player.personalBests.biggestHit, dmg);
+  addDailyChallengeProgress('deal_damage', dmg);
+  if (isCrit) playSfxCrit(); else playSfxAttack();
   spawnDamagePopup(document.getElementById('raidBossSprite').parentElement, { kind: isCrit ? 'crit' : 'hit', dmg });
   triggerHitEffect(document.getElementById('raidBossSprite'));
   renderRaidActive();
@@ -2233,6 +2730,125 @@ function renderRaidModal() {
 }
 
 // ===============================================
+// บอสประจำสัปดาห์ (Weekly World Boss) — เหมือน Boss Raid แต่แข็งแกร่งกว่ามาก จำกัดแค่ 1 ครั้ง/สัปดาห์
+// (Date.now()-based cooldown 7 วัน เหมือน Boss Raid ไม่ใช่ตัดตามปฏิทินสัปดาห์ กันปัญหา timezone/เขตเวลา)
+// ใช้ Demon King ตายตัวเสมอ (ไม่สุ่ม) ให้รู้สึกเป็น "บอสประจำสัปดาห์" ตัวจริงจังตัวเดียว
+// ===============================================
+const WEEKLY_BOSS_DURATION_MS = 45000;
+const WEEKLY_BOSS_COOLDOWN_MS = 7 * 24 * 3600 * 1000;
+let weeklyBossSession = null;
+
+function isWeeklyBossOnCooldown() {
+  return Date.now() < (player.weeklyBossCooldownUntil || 0);
+}
+
+function startWeeklyBoss() {
+  if (isWeeklyBossOnCooldown() || weeklyBossSession) return;
+  const boss = MONSTERS.find(m => m.key === 'demon_king');
+  const atk = getAtk(player);
+  weeklyBossSession = {
+    boss,
+    maxHp: atk * 150,
+    hp: atk * 150,
+    damageDealt: 0,
+    threshold: atk * 40,
+    endsAt: Date.now() + WEEKLY_BOSS_DURATION_MS,
+  };
+  document.getElementById('weeklyBossSprite').src = boss.icon;
+  document.getElementById('weeklyBossIntro').style.display = 'none';
+  document.getElementById('weeklyBossResult').style.display = 'none';
+  document.getElementById('weeklyBossActive').style.display = 'block';
+  renderWeeklyBossActive();
+  weeklyBossSession.tickHandle = setInterval(weeklyBossTick, 100);
+}
+
+function weeklyBossTick() {
+  if (!weeklyBossSession) return;
+  const msLeft = weeklyBossSession.endsAt - Date.now();
+  if (msLeft <= 0 || weeklyBossSession.hp <= 0) {
+    endWeeklyBoss();
+    return;
+  }
+  renderWeeklyBossActive();
+}
+
+function weeklyBossAttack() {
+  if (!weeklyBossSession || weeklyBossSession.hp <= 0) return;
+  const atk = getAtk(player);
+  const isCrit = Math.random() < getCritChance(player);
+  let dmg = Math.max(1, atk);
+  if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
+  weeklyBossSession.hp = Math.max(0, weeklyBossSession.hp - dmg);
+  weeklyBossSession.damageDealt += dmg;
+  player.personalBests.biggestHit = Math.max(player.personalBests.biggestHit, dmg);
+  addDailyChallengeProgress('deal_damage', dmg);
+  if (isCrit) playSfxCrit(); else playSfxAttack();
+  spawnDamagePopup(document.getElementById('weeklyBossSprite').parentElement, { kind: isCrit ? 'crit' : 'hit', dmg });
+  triggerHitEffect(document.getElementById('weeklyBossSprite'));
+  renderWeeklyBossActive();
+  if (weeklyBossSession.hp <= 0) endWeeklyBoss();
+}
+
+function renderWeeklyBossActive() {
+  if (!weeklyBossSession) return;
+  const msLeft = Math.max(0, weeklyBossSession.endsAt - Date.now());
+  document.getElementById('weeklyBossTimer').textContent = `${(msLeft / 1000).toFixed(1)}s`;
+  const pct = Math.max(0, Math.min(100, (weeklyBossSession.hp / weeklyBossSession.maxHp) * 100));
+  document.getElementById('weeklyBossHpFill').style.width = pct + '%';
+  document.getElementById('weeklyBossHpLabel').textContent = `${weeklyBossSession.hp} / ${weeklyBossSession.maxHp}`;
+}
+
+function endWeeklyBoss() {
+  if (!weeklyBossSession) return;
+  clearInterval(weeklyBossSession.tickHandle);
+  const success = weeklyBossSession.damageDealt >= weeklyBossSession.threshold;
+  player.weeklyBossCooldownUntil = Date.now() + WEEKLY_BOSS_COOLDOWN_MS;
+  document.getElementById('weeklyBossActive').style.display = 'none';
+  const resultText = document.getElementById('weeklyBossResultText');
+  if (success) {
+    const bossSoulReward = 5;
+    player.bossSouls += bossSoulReward;
+    player.mysteryChests += 1;
+    let bonusText = '';
+    const undiscovered = RELIC_DEFS.filter(r => !hasRelic(r.key));
+    if (undiscovered.length > 0 && Math.random() < 0.4) {
+      const relic = undiscovered[Math.floor(Math.random() * undiscovered.length)];
+      player.relics.push(relic.key);
+      bonusText = ` และ ✨ วัตถุโบราณ: ${relic.name}!`;
+      showToast(`✨ พบวัตถุโบราณ: ${relic.name}!`);
+    } else {
+      const gemReward = 20;
+      player.gems += gemReward;
+      bonusText = ` และ 💎 เพชร +${gemReward}`;
+    }
+    resultText.textContent = `สำเร็จ! ทำดาเมจรวม ${weeklyBossSession.damageDealt} ได้รับ 💀 วิญญาณบอส +${bossSoulReward}, 🎁 หีบปริศนา +1${bonusText}`;
+    appendLog([`บอสประจำสัปดาห์สำเร็จ! ได้รับวิญญาณบอส +${bossSoulReward}, หีบปริศนา +1${bonusText}`]);
+    showToast('🎉 ปราบบอสประจำสัปดาห์สำเร็จ!');
+  } else {
+    resultText.textContent = `ยังไม่ถึงเกณฑ์ (ทำดาเมจ ${weeklyBossSession.damageDealt} / ${weeklyBossSession.threshold}) ลองใหม่สัปดาห์หน้านะ!`;
+  }
+  document.getElementById('weeklyBossResult').style.display = 'block';
+  document.getElementById('btnCloseWeeklyBoss').style.display = 'none';
+  weeklyBossSession = null;
+  renderWeeklyBossModal();
+  renderAll();
+}
+
+function renderWeeklyBossModal() {
+  const btn = document.getElementById('btnStartWeeklyBoss');
+  const note = document.getElementById('weeklyBossCooldownNote');
+  if (isWeeklyBossOnCooldown()) {
+    btn.disabled = true;
+    const msLeft = player.weeklyBossCooldownUntil - Date.now();
+    const days = Math.floor(msLeft / 86400000), hours = Math.floor((msLeft % 86400000) / 3600000);
+    note.textContent = `รออีก ${days} วัน ${hours} ชั่วโมงก่อนเข้ารอบถัดไป`;
+  } else {
+    btn.disabled = false;
+    note.textContent = '';
+  }
+}
+
+// ===============================================
 // หอคอยไร้ขีดจำกัด (Infinite Tower) — โหมดไต่ชั้นแยกจากด่านปกติและ Boss Raid โดยสิ้นเชิง
 // ใช้ resolver ของตัวเอง (resolveTowerFloor) ไม่แตะ resolveBattle เดิม เพื่อไม่เสี่ยงต่อความสมดุลที่
 // ตรวจสอบแล้วของด่านปกติ — สเกลศัตรูอิงจากพลัง ATK/DEF/HP ปัจจุบันของผู้เล่นเอง (ไม่ใช่ด่าน) คูณด้วย
@@ -2241,11 +2857,27 @@ function renderRaidModal() {
 // ===============================================
 const TOWER_MONSTER_POOL = ['dark_knight', 'necromancer', 'stone_golem', 'red_demon', 'armored_golem_warrior', 'purple_dragon', 'demon_king'];
 const TOWER_GROWTH_PER_FLOOR = 1.18;
+
+// ของสะสมพิเศษจากหอคอย (Tower Curios) — จงใจให้เป็นของสะสมล้วนๆ ไม่มีบัฟสเตตัสเลย (ต่างจากรางวัลรายชั้น
+// ปกติที่ให้วัตถุโบราณ/เพชร) เพื่อไม่เพิ่มเลเยอร์ตัวคูณสเตตัสอีกชั้นตามที่ Math Audit เตือนไว้ก่อนหน้า
+// ได้ทุกๆ 20 ชั้น เป็นของชิ้นเดียวไม่ซ้ำ มีแค่ flavor text ให้เก็บโชว์
+const TOWER_CURIO_DEFS = [
+  { floor: 20,  key: 'cracked_hourglass', name: 'นาฬิกาทรายแตกร้าว',        flavor: 'เข็มนาฬิกาหยุดเดินตั้งแต่เมื่อไหร่ก็ไม่มีใครรู้...' },
+  { floor: 40,  key: 'silent_bell',       name: 'ระฆังไร้เสียง',             flavor: 'สั่นแค่ไหนก็ไม่มีเสียงออกมา แปลกดี' },
+  { floor: 60,  key: 'frozen_flame',      name: 'เปลวเพลิงแช่แข็ง',          flavor: 'ร้อนแรงแต่เย็นยะเยือกในเวลาเดียวกัน' },
+  { floor: 80,  key: 'moth_crown',        name: 'มงกุฎปีกผีเสื้อกลางคืน',     flavor: 'สวมแล้วรู้สึกเหมือนบินได้ (แต่ก็แค่รู้สึก)' },
+  { floor: 100, key: 'echoing_key',       name: 'กุญแจที่ไม่มีประตูให้ไข',    flavor: 'ไขอะไรไม่ได้เลยสักอย่าง...หรือยังไขไม่เจอ?' },
+];
+// Math Audit: 1.18^floor ในทางทฤษฎีจะล้นเป็น Infinity เมื่อ floor สูงมากๆ (ราวชั้น 4000+) ซึ่งถ้าเกิดขึ้น
+// ระหว่างเล่นจริงจะทำให้ maxHp/atk/def ของศัตรูกลายเป็น Infinity (ยังไม่ถึงขั้น NaN เพราะไม่มีการหาร 0/0
+// เกิดขึ้นที่ไหน แต่ก็ไม่ใช่ค่าที่ควรเกิดขึ้น) — ครอบเลขชี้กำลังไว้ไม่ให้เกิน 2000 (1.18^2000 ยังเป็นเลขจำกัด
+// ราว 10^147 ห่างไกลจาก Infinity มาก) เป็นแนวป้องกันเชิงรุก แม้ในทางปฏิบัติจะไม่มีทางไต่ถึงชั้นขนาดนั้นด้วยมือ
+const TOWER_GROWTH_EXPONENT_CAP = 2000;
 let towerSession = null; // { floor, playerHp } — ชั่วคราว ไม่ persist ข้าม session เหมือน raidSession
 
 function getTowerMonster(floor) {
   const atk = getAtk(player), def = getDef(player), maxHp = getMaxHp(player);
-  const growth = Math.pow(TOWER_GROWTH_PER_FLOOR, floor - 1);
+  const growth = Math.pow(TOWER_GROWTH_PER_FLOOR, Math.min(floor - 1, TOWER_GROWTH_EXPONENT_CAP));
   const base = MONSTERS.find(m => m.key === TOWER_MONSTER_POOL[(floor - 1) % TOWER_MONSTER_POOL.length]);
   return {
     key: base.key, name: `${base.name} (ชั้น ${floor})`, icon: base.icon, element: base.element, tier: 'tower',
@@ -2269,7 +2901,7 @@ function resolveTowerFloor(monster, startPlayerHp) {
   const skill = getEquippedSkill(player);
   const skillKey = skill ? skill.key : null;
   const effectiveMonsterDef = monster.def * (1 - (weapon && weapon.perk === 'armorpen' ? weapon.perkValue : 0));
-  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1);
+  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1) * (1 - getWeatherBonus('monsterAtkReduction'));
   const lifestealPct = (weapon && weapon.perk === 'lifesteal' ? weapon.perkValue : 0) + (skillKey === 'dark' ? 0.08 : 0);
   let usedImmortalHeartThisFight = false;
   const events = [];
@@ -2366,6 +2998,13 @@ function towerAttack() {
       }
     }
     player.towerHighestFloor = Math.max(player.towerHighestFloor, floor);
+    // ของสะสมพิเศษ (Tower Curios): ให้เพิ่มเป็นโบนัสทุกๆ ชั้นหมุด (20/40/60/80/100) แยกจากรางวัลรายชั้นปกติ
+    const curio = TOWER_CURIO_DEFS.find(c => c.floor === floor);
+    if (curio && !player.towerCurios.includes(curio.key)) {
+      player.towerCurios.push(curio.key);
+      rewardText += ` 🎐 พบของสะสม: ${curio.name}!`;
+      showToast(`🎐 พบของสะสมพิเศษ: ${curio.name}!`);
+    }
     appendLog([`ผ่านชั้น ${floor}!${rewardText}`]);
     towerSession.floor += 1;
     saveGame();
@@ -2398,6 +3037,24 @@ function endTowerRun(retreated) {
 
 function renderTowerModal() {
   document.getElementById('towerHighestFloorLabel').textContent = player.towerHighestFloor;
+  document.getElementById('towerCurioCount').textContent = player.towerCurios.length;
+  document.getElementById('towerCurioTotal').textContent = TOWER_CURIO_DEFS.length;
+  const grid = document.getElementById('towerCurioGrid');
+  grid.innerHTML = '';
+  TOWER_CURIO_DEFS.forEach(curio => {
+    const found = player.towerCurios.includes(curio.key);
+    const card = document.createElement('div');
+    card.className = 'relic-card ' + (found ? 'relic-card--found' : 'relic-card--undiscovered');
+    if (found) card.title = curio.flavor;
+    const icon = document.createElement('span');
+    icon.style.fontSize = '22px';
+    icon.textContent = found ? '🎐' : '❔';
+    const name = document.createElement('span');
+    name.className = 'relic-name';
+    name.textContent = found ? curio.name : `ชั้น ${curio.floor}`;
+    card.append(icon, name);
+    grid.appendChild(card);
+  });
 }
 
 // ===============================================
@@ -2540,6 +3197,19 @@ function saveGame() {
     elixirs: player.elixirs,
     towerHighestFloor: player.towerHighestFloor,
     towerClaimedFloors: player.towerClaimedFloors,
+    lifetimeUpgrades: player.lifetimeUpgrades,
+    awakeningLevel: player.awakeningLevel,
+    bossSouls: player.bossSouls,
+    petTickets: player.petTickets,
+    mysteryChests: player.mysteryChests,
+    weatherKey: player.weatherKey,
+    weatherChangesAt: player.weatherChangesAt,
+    personalBests: player.personalBests,
+    unlockedAchievements: player.unlockedAchievements,
+    megaElixirs: player.megaElixirs,
+    dailyChallenge: player.dailyChallenge,
+    weeklyBossCooldownUntil: player.weeklyBossCooldownUntil,
+    towerCurios: player.towerCurios,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -2563,7 +3233,7 @@ function loadGame() {
       gems: data.gems || 0,
       buffFightsLeft: data.buffFightsLeft || 0,
       buffMultiplier: data.buffMultiplier || 1,
-      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false }, data.settings || {}),
+      settings: Object.assign({ animationsEnabled: true, autoBattleSpeed: 'normal', autoEquipEnabled: false, soundEnabled: true, autoDisposeMode: 'sell' }, data.settings || {}),
       stats: Object.assign(
         { monstersKilled: 0, bigBossKills: 0, chestsOpened: 0, upgradesPurchased: 0, prestigeCount: 0, itemsByRarity: { common: 0, good: 0, rare: 0, epic: 0, legendary: 0 } },
         data.stats || {},
@@ -2583,7 +3253,24 @@ function loadGame() {
       elixirs: data.elixirs || 0,
       towerHighestFloor: data.towerHighestFloor || 0,
       towerClaimedFloors: data.towerClaimedFloors || [],
+      lifetimeUpgrades: data.lifetimeUpgrades || 0,
+      awakeningLevel: data.awakeningLevel || 0,
+      bossSouls: data.bossSouls || 0,
+      petTickets: data.petTickets || 0,
+      mysteryChests: data.mysteryChests || 0,
+      weatherKey: data.weatherKey || null,
+      weatherChangesAt: data.weatherChangesAt || 0,
+      personalBests: Object.assign({ highestStageEver: data.highestStage || 1, highestCP: 0, mostGoldHeld: 0, biggestHit: 0 }, data.personalBests || {}),
+      unlockedAchievements: data.unlockedAchievements || [],
+      megaElixirs: data.megaElixirs || 0,
+      dailyChallenge: Object.assign({ key: null, assignedDate: null, progress: 0, claimed: false }, data.dailyChallenge || {}),
+      weeklyBossCooldownUntil: data.weeklyBossCooldownUntil || 0,
+      towerCurios: data.towerCurios || [],
     });
+    // ย้ายไอเทมรูปแบบเก่า (ยุคก่อน Multi-Stat Equipment ที่เก็บ .value ค่าเดียว) ให้เป็น .baseStats
+    // แบบใหม่ กันเซฟเก่าพังตอนโหลด — ทำทั้งของที่สวมอยู่และในคลังไอเทม
+    EQUIP_SLOTS.forEach(slot => { if (player.equipment[slot]) migrateItemToMultiStat(player.equipment[slot]); });
+    player.inventory.forEach(migrateItemToMultiStat);
     if (data.lastSeenAt) {
       pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
     }
@@ -2611,7 +3298,7 @@ function resolveBattle() {
   // หอก (spear): ทะลุ DEF มอนสเตอร์บางส่วน — ลด DEF ที่ใช้คำนวณดาเมจลงตาม perkValue
   const effectiveMonsterDef = monster.def * (1 - (weapon && weapon.perk === 'armorpen' ? weapon.perkValue : 0));
   // สกิลน้ำแข็ง: ลด ATK ของมอนสเตอร์ลง 10% ตลอดไฟต์นี้
-  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1);
+  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1) * (1 - getWeatherBonus('monsterAtkReduction'));
   // รวม % ฮีลจากไม้เท้า (perk) และสกิลออร่ามืด (dark) เข้าด้วยกัน ถ้ามีทั้งคู่จะฮีลรวมทีเดียว
   const lifestealPct = (weapon && weapon.perk === 'lifesteal' ? weapon.perkValue : 0) + (skillKey === 'dark' ? 0.08 : 0);
   let usedImmortalHeartThisFight = false; // จำกัดวัตถุโบราณ "หัวใจอมตะ" ให้ใช้ได้แค่ครั้งเดียวต่อไฟต์
@@ -2702,18 +3389,22 @@ function finalizeBattle(result) {
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
     // อัตราสเกล 0.2 -> 0.3 ต่อด่าน: จากการจำลองพบว่ารายได้ทองเดิมโตช้ากว่าค่าอัปเกรดที่โตแบบ
     // exponential (20*1.15^n ต่อสเตตัส) มากพอที่จะทำให้ผู้เล่นไล่ตามไม่ทันตั้งแต่ราวด่าน 30-40
-    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult * (1 + getTitleBonus(player, 'goldMult')));
+    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult * (1 + getTitleBonus(player, 'goldMult') + getWeatherBonus('goldMult')));
     player.gold += goldDrop;
     appendLog([`ได้รับ ${goldDrop} Gold`]);
+    addDailyChallengeProgress('kill_monsters', 1);
+    addDailyChallengeProgress('earn_gold', goldDrop);
 
     if (result.monster.tier === 'midboss') {
       grantChest(1);
-      appendLog(['ได้รับกล่องสมบัติ 1 ใบ']);
+      player.bossSouls += 1;
+      appendLog(['ได้รับกล่องสมบัติ 1 ใบ', 'ได้รับวิญญาณบอส +1']);
     } else if (result.monster.tier === 'bigboss') {
       player.stats.bigBossKills += 1;
       grantChest(3);
       player.gems += 1;
-      appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด']);
+      player.bossSouls += 3;
+      appendLog(['ได้รับกล่องสมบัติ 3 ใบ', 'ได้รับเพชร +1 เม็ด', 'ได้รับวิญญาณบอส +3']);
       // วัตถุโบราณ: ดรอปจาก Demon King โดยเฉพาะ ที่ด่านคูณ 100 (100, 200, 300, ...) เท่านั้น โอกาส 20%
       if (result.monster.key === 'demon_king' && player.stage % 100 === 0) {
         const undiscovered = RELIC_DEFS.filter(r => !hasRelic(r.key));
@@ -2724,16 +3415,39 @@ function finalizeBattle(result) {
           showToast(`✨ พบวัตถุโบราณ: ${relic.name}!`);
         }
       }
-    } else if (Math.random() < 0.08 + getPetBonusValue('chestDropBonus')) {
-      // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม (+ โบนัสจากสัตว์เลี้ยงประเภท chestDropBonus ถ้ามี)
-      // แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลยจนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไป
-      grantChest(1);
-      appendLog(['มอนสเตอร์ดรอปกล่องสมบัติ +1 ใบ!']);
+    } else {
+      if (Math.random() < 0.08 + getPetBonusValue('chestDropBonus')) {
+        // มอนสเตอร์ปกติมีโอกาส 8% ดรอปกล่องสมบัติเพิ่ม (+ โบนัสจากสัตว์เลี้ยงประเภท chestDropBonus ถ้ามี)
+        // แก้ปัญหาช่วงด่านแรกๆ (1-4) ที่ไม่มีกล่องเลยจนกว่าจะถึงมิดบอสด่าน 5 ทำให้จังหวะเปิดกล่องรอนานเกินไป
+        grantChest(1);
+        appendLog(['มอนสเตอร์ดรอปกล่องสมบัติ +1 ใบ!']);
+      }
+      // ตั๋วสุ่มสัตว์เลี้ยง: โอกาสน้อย (1%) จากมอนสเตอร์ปกติ ให้สายฟรีเข้าถึงสัตว์เลี้ยงได้โดยไม่ต้องพึ่งเพชรอย่างเดียว
+      if (Math.random() < 0.01) {
+        player.petTickets += 1;
+        appendLog(['🎫 ได้รับตั๋วสุ่มสัตว์เลี้ยง +1!']);
+        showToast('🎫 ได้รับตั๋วสุ่มสัตว์เลี้ยง!');
+      }
+    }
+    // หีบสมบัติปริศนา: โอกาสเล็กน้อยจากทุกชัยชนะ (ไม่ว่ามอนสเตอร์ปกติหรือบอส) ดรอปแยกจากกล่องสมบัติปกติ
+    if (Math.random() < 0.03) {
+      player.mysteryChests += 1;
+      appendLog(['🎁 พบหีบสมบัติปริศนา!']);
     }
 
     player.stage += 1;
     player.highestStage = Math.max(player.highestStage || 1, player.stage);
+    player.personalBests.highestStageEver = Math.max(player.personalBests.highestStageEver, player.stage); // สถิติตลอดชีพ ไม่รีเซ็ตตอน Prestige
     player.encounter = null; // สุ่มมอนสเตอร์ใหม่สำหรับด่านถัดไป
+  } else {
+    // บทลงโทษเมื่อพ่ายแพ้: ถอยหลัง 1 ด่าน (ต่ำสุดด่าน 1) กันไม่ให้ auto-battle ชนกำแพงด่านเดิมซ้ำๆ
+    // ไม่รู้จบโดยไม่ยอมอัปเกรด บังคับให้ต้องวางแผนดัน CP ให้พอถึงจะผ่านด่านไปได้จริง (highestStage ไม่ถูกแตะ
+    // เพราะเป็นสถิติ "เคยไปถึงสูงสุด" ใช้คำนวณ Prestige ไม่ใช่ตำแหน่งปัจจุบัน)
+    if (player.stage > 1) {
+      player.stage -= 1;
+      appendLog([`พ่ายแพ้! ถอยกลับไปด่าน ${player.stage}`]);
+    }
+    player.encounter = null; // สุ่มมอนสเตอร์ใหม่ (เต็ม HP) สำหรับด่านที่ถอยกลับมา
   }
   if (player.buffFightsLeft > 0) {
     player.buffFightsLeft -= 1;
@@ -2799,6 +3513,12 @@ function playEvents(events, monsterMaxHp, done) {
     const ev = events[i++];
     appendLog([ev.text]);
     renderLiveHpBars(ev.playerHp, ev.monsterHp, monsterMaxHp);
+    if (ev.kind === 'crit') playSfxCrit();
+    else if (ev.kind === 'hit') playSfxAttack();
+    if (ev.target === 'monster' && (ev.kind === 'hit' || ev.kind === 'crit') && ev.dmg) {
+      player.personalBests.biggestHit = Math.max(player.personalBests.biggestHit, ev.dmg);
+      addDailyChallengeProgress('deal_damage', ev.dmg);
+    }
     if (animationsOn) {
       if (ev.target === 'monster') {
         spawnDamagePopup(document.getElementById('bgScene'), ev);
@@ -2875,10 +3595,20 @@ function renderEquipSlot(slotKey, item) {
     img.alt = item.name;
     img.onerror = () => { img.style.display = 'none'; };
     el.insertBefore(img, el.firstChild);
+    // hover เพื่อดูสเตตัสครบทุกบรรทัดของไอเทม (ask: "แสดงรายละเอียดว่าบวกสเตตัสอะไรบ้าง")
+    el.title = `${item.name}\n${formatItemStatsText(item)}`;
+  } else {
+    el.title = '';
   }
-  const isPercentSlot = slotKey === 'gloves' || slotKey === 'boots';
+  const stats = item ? getItemCurrentStats(item) : {};
+  const primaryKey = item ? SLOT_PRIMARY_STAT[slotKey] : null;
+  const isPercentStat = primaryKey === 'crit' || primaryKey === 'dodge';
   const enhanceTag = item && item.enhanceLevel ? ` (+${item.enhanceLevel})` : '';
-  el.querySelector('.slot-label').textContent = item ? `+${item.value}${isPercentSlot ? '%' : ''}${enhanceTag}` : SLOT_NAMES[slotKey];
+  const extraCount = item ? Object.keys(stats).length - 1 : 0;
+  const extraTag = extraCount > 0 ? ` +${extraCount}` : '';
+  el.querySelector('.slot-label').textContent = item
+    ? `+${stats[primaryKey]}${isPercentStat ? '%' : ''}${enhanceTag}${extraTag}`
+    : SLOT_NAMES[slotKey];
 }
 
 function renderSetBonusBox() {
@@ -2887,8 +3617,11 @@ function renderSetBonusBox() {
   const lines = [];
   if (info.rarity.tier > 0) {
     const rarityLabel = RARITY_TABLE.find(r => r.key === info.rarity.key).label;
-    const bonus = SET_BONUS_RARITY_TIERS[info.rarity.tier];
-    lines.push(`🎯 เซ็ต ${rarityLabel} x${info.rarity.tier}: ${formatSetBonusText(bonus)}`);
+    const scale = SET_BONUS_RARITY_SCALE[info.rarity.key] || 1;
+    const baseBonus = SET_BONUS_RARITY_TIERS[info.rarity.tier];
+    const scaledBonus = {};
+    Object.keys(baseBonus).forEach(k => { scaledBonus[k] = baseBonus[k] * scale; });
+    lines.push(`🎯 เซ็ต ${rarityLabel} x${info.rarity.tier}: ${formatSetBonusText(scaledBonus)}`);
   }
   if (info.element.tier > 0) {
     const elementLabel = ELEMENT_NAMES_TH[info.element.key];
@@ -2912,6 +3645,10 @@ function renderCharacterPanel() {
   document.getElementById('goldValue').textContent = Math.floor(player.gold);
   document.getElementById('gemsValue').textContent = player.gems;
   document.getElementById('playerLevel').textContent = getPlayerLevel(player);
+
+  // สถิติส่วนตัว (Personal Best) — เช็คทุกครั้งที่ render เพราะ Gold/CP เปลี่ยนได้ตลอด ไม่ต้องรอ event เฉพาะจุด
+  player.personalBests.highestCP = Math.max(player.personalBests.highestCP, getCP(player));
+  player.personalBests.mostGoldHeld = Math.max(player.personalBests.mostGoldHeld, Math.floor(player.gold));
 
   document.getElementById('redPotionCount').textContent = player.potions.red;
   document.getElementById('bluePotionCount').textContent = player.potions.blue;
@@ -2960,18 +3697,103 @@ function renderCharacterPanel() {
   renderEnhanceList();
   renderTitleList();
   renderAlchemyBox();
+  renderAwakeningBox();
+  checkAchievements(); // ต้องเช็คหลังอัปเดต personalBests ข้างบนแล้ว ก่อน renderAchievementGrid ที่อ่านผลลัพธ์ต่อ
+  renderAchievementGrid();
+  renderPersonalBests();
 
   const dailyBtn = document.getElementById('btnOpenDailyLogin');
   dailyBtn.classList.toggle('daily-login-btn--ready', !isDailyLoginClaimedToday(player));
+
+  document.querySelector('.panel--character').classList.toggle('awakened', player.awakeningLevel > 0);
 }
 
 function renderAlchemyBox() {
   document.getElementById('elixirCount').textContent = player.elixirs;
   document.getElementById('btnCraftElixir').disabled = player.potions.red < ALCHEMY_RECIPE.red || player.potions.blue < ALCHEMY_RECIPE.blue;
   document.getElementById('btnUseElixir').disabled = player.elixirs <= 0 || player.animating || player.autoBattle;
+
+  document.getElementById('megaElixirCount').textContent = player.megaElixirs;
+  document.getElementById('btnCraftMegaElixir').disabled = player.elixirs < MEGA_ALCHEMY_RECIPE.elixirs || player.bossSouls < MEGA_ALCHEMY_RECIPE.bossSouls;
+  document.getElementById('btnUseMegaElixir').disabled = player.megaElixirs <= 0 || player.animating || player.autoBattle;
+}
+
+function renderAchievementGrid() {
+  document.getElementById('achievementCount').textContent = player.unlockedAchievements.length;
+  document.getElementById('achievementTotal').textContent = ACHIEVEMENT_DEFS.length;
+  const grid = document.getElementById('achievementGrid');
+  grid.innerHTML = '';
+  ACHIEVEMENT_DEFS.forEach(ach => {
+    const unlocked = player.unlockedAchievements.includes(ach.key);
+    const card = document.createElement('div');
+    card.className = 'relic-card ' + (unlocked ? 'relic-card--found' : 'relic-card--undiscovered');
+    if (unlocked) card.title = ach.desc;
+    const icon = document.createElement('span');
+    icon.style.fontSize = '22px';
+    icon.textContent = unlocked ? '🏆' : '❔';
+    const name = document.createElement('span');
+    name.className = 'relic-name';
+    name.textContent = unlocked ? ach.name : '???';
+    card.append(icon, name);
+    grid.appendChild(card);
+  });
+}
+
+function renderPersonalBests() {
+  document.getElementById('pbHighestStage').textContent = player.personalBests.highestStageEver;
+  document.getElementById('pbHighestCP').textContent = player.personalBests.highestCP;
+  document.getElementById('pbMostGold').textContent = player.personalBests.mostGoldHeld;
+  document.getElementById('pbBiggestHit').textContent = player.personalBests.biggestHit;
+}
+
+function renderAwakeningBox() {
+  document.getElementById('awakeningLevelLabel').textContent = player.awakeningLevel;
+  document.getElementById('awakeningTotalLabel').textContent = AWAKENING_TIERS.length;
+  document.getElementById('awakeningMultLabel').textContent = `x${getAwakeningMultiplier(player).toFixed(1)}`;
+  document.getElementById('lifetimeUpgradesLabel').textContent = player.lifetimeUpgrades;
+
+  const tier = getNextAwakeningTier(player);
+  const info = document.getElementById('awakeningNextInfo');
+  const fill = document.getElementById('awakeningProgressFill');
+  if (!tier) {
+    fill.style.width = '100%';
+    info.innerHTML = `<div class="alchemy-row"><span class="alchemy-desc">ปลุกพลังครบทุกระดับแล้ว! (x${getAwakeningMultiplier(player).toFixed(1)} CP สูงสุด)</span></div>`;
+    return;
+  }
+  const progressPct = Math.min(100, (player.lifetimeUpgrades / tier.requiredUpgrades) * 100);
+  fill.style.width = progressPct + '%';
+  info.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'alchemy-row';
+  const desc = document.createElement('span');
+  desc.className = 'alchemy-desc';
+  desc.textContent = `ระดับถัดไป: ต้องอัปเกรดครบ ${tier.requiredUpgrades} ครั้ง, ${tier.cost.gold} Gold, ${tier.cost.gems} เพชร (x${tier.mult} CP)`;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn--success';
+  btn.id = 'btnAwaken';
+  btn.textContent = 'ปลุกพลัง';
+  btn.disabled = !canAwaken(player);
+  row.append(desc, btn);
+  info.appendChild(row);
+}
+
+function renderDailyChallengeBox() {
+  const def = getDailyChallengeDef();
+  const row = document.getElementById('dailyChallengeRow');
+  const progress = Math.min(def.target, player.dailyChallenge.progress);
+  const complete = progress >= def.target;
+  row.className = 'quest-row' + (player.dailyChallenge.claimed ? ' quest-row--claimed' : complete ? ' quest-row--ready' : '');
+  document.getElementById('dailyChallengeName').textContent = def.name;
+  document.getElementById('dailyChallengeDesc').textContent = def.desc + ' (รีเซ็ตใหม่ทุกวัน)';
+  document.getElementById('dailyChallengeProgressFill').style.width = `${Math.round((progress / def.target) * 100)}%`;
+  document.getElementById('dailyChallengeProgressLabel').textContent = `${progress}/${def.target}`;
+  const btn = document.getElementById('btnClaimDailyChallenge');
+  btn.disabled = !complete || player.dailyChallenge.claimed;
+  btn.textContent = player.dailyChallenge.claimed ? 'รับไปแล้ว' : 'รับรางวัล';
 }
 
 function renderQuestPanel() {
+  renderDailyChallengeBox();
   const list = document.getElementById('questList');
   list.innerHTML = '';
   let readyCount = 0;
@@ -3107,7 +3929,7 @@ function renderEnhanceList() {
     img.onerror = () => { img.style.display = 'none'; };
     const name = document.createElement('span');
     name.className = 'enhance-name';
-    name.innerHTML = `<span class="enhance-level">+${level}</span>${item.name}`;
+    name.innerHTML = `<span class="enhance-level">+${level}</span>${item.name}<div class="enhance-stats-sub">${formatItemStatsText(item)}</div>`;
     const btn = document.createElement('button');
     btn.className = 'btn btn--success';
     const maxed = level >= ENHANCE_MAX_LEVEL;
@@ -3161,7 +3983,7 @@ function renderChestPanel() {
     const nameEl = document.getElementById('gachaItemName');
     nameEl.textContent = item.name;
     nameEl.className = `rarity-${item.rarity}`;
-    document.getElementById('gachaItemValue').textContent = `${formatItemValue(item)} (ขายได้ ${getSellValue(item)} Gold)`;
+    document.getElementById('gachaItemValue').textContent = `${formatItemStatsText(item)} (ขายได้ ${getSellValue(item)} Gold, ย่อยได้ 🔨${dismantleItem(item)})`;
     sprite.style.backgroundImage = `url('${CHEST_ICONS[item.rarity].open}')`;
     resultBox.className = 'gacha-result' + (item.rarity === 'legendary' ? ' inventory-item--legendary' : '');
   } else {
@@ -3169,9 +3991,33 @@ function renderChestPanel() {
     resultBox.className = 'gacha-result';
   }
 
+  document.getElementById('mysteryChestCount').textContent = player.mysteryChests;
+  document.getElementById('btnOpenMysteryChest').disabled = player.mysteryChests <= 0;
+
   renderInventory();
   renderGemShop();
   renderPetGrid();
+  renderBossSoulForge();
+}
+
+function renderBossSoulForge() {
+  document.getElementById('bossSoulCount').textContent = player.bossSouls;
+  const list = document.getElementById('bossSoulForgeList');
+  list.innerHTML = '';
+  BOSS_SOUL_FORGE.forEach(recipe => {
+    const row = document.createElement('div');
+    row.className = 'enhance-row';
+    const name = document.createElement('span');
+    name.className = 'enhance-name';
+    name.textContent = `${recipe.name} (💀 ${recipe.cost})`;
+    const btn = document.createElement('button');
+    btn.className = 'btn btn--success';
+    btn.textContent = 'หลอม';
+    btn.dataset.key = recipe.key;
+    btn.disabled = player.bossSouls < recipe.cost;
+    row.append(name, btn);
+    list.appendChild(row);
+  });
 }
 
 function renderInventory() {
@@ -3191,7 +4037,7 @@ function renderInventory() {
     img.onerror = () => { img.style.display = 'none'; };
     const name = document.createElement('span');
     name.className = `inv-name rarity-${item.rarity}`;
-    name.textContent = `${item.name} ${formatItemValue(item)}`;
+    name.textContent = `${item.name} (${formatItemStatsText(item)})`;
     const btnEquip = document.createElement('button');
     btnEquip.className = 'btn btn--info';
     btnEquip.textContent = 'สวม';
@@ -3241,6 +4087,8 @@ const PET_BUFF_LABELS = { atk: 'ATK', hp: 'HP สูงสุด', chestDropBonu
 
 function renderPetGrid() {
   document.getElementById('btnRollPet').disabled = player.gems < PET_GACHA_COST;
+  document.getElementById('petTicketCount').textContent = player.petTickets;
+  document.getElementById('btnRollPetTicket').disabled = player.petTickets < 1;
   document.getElementById('petFoodCount').textContent = player.petFood;
   const grid = document.getElementById('petGrid');
   grid.innerHTML = '';
@@ -3277,20 +4125,21 @@ function renderPetGrid() {
     btnEquip.dataset.action = 'equip';
     btnEquip.dataset.pet = key;
 
+    const atMaxLevel = owned.level >= PET_MAX_LEVEL;
     const upgradeCost = getPetLevelUpCost(key);
     const btnUpgrade = document.createElement('button');
     btnUpgrade.className = 'btn btn--success';
-    btnUpgrade.textContent = `อัปเลเวล (${upgradeCost} Gold)`;
+    btnUpgrade.textContent = atMaxLevel ? 'เลเวลสูงสุดแล้ว' : `อัปเลเวล (${upgradeCost} Gold)`;
     btnUpgrade.dataset.action = 'upgrade';
     btnUpgrade.dataset.pet = key;
-    btnUpgrade.disabled = player.gold < upgradeCost;
+    btnUpgrade.disabled = atMaxLevel || player.gold < upgradeCost;
 
     const btnFeed = document.createElement('button');
     btnFeed.className = 'btn btn--info';
-    btnFeed.textContent = 'ป้อนอาหาร (ฟรี)';
+    btnFeed.textContent = atMaxLevel ? 'เลเวลสูงสุดแล้ว' : 'ป้อนอาหาร (ฟรี)';
     btnFeed.dataset.action = 'feed';
     btnFeed.dataset.pet = key;
-    btnFeed.disabled = player.petFood <= 0;
+    btnFeed.disabled = atMaxLevel || player.petFood <= 0;
 
     card.append(icon, name, lvStars, desc, btnEquip, btnUpgrade, btnFeed);
 
@@ -3352,6 +4201,12 @@ function renderBattlePanel() {
   tierBadge.textContent = tierLabel(monster.tier);
   tierBadge.className = `tier-badge tier-${monster.tier}`;
 
+  const weather = getCurrentWeather();
+  const weatherBadge = document.getElementById('weatherBadge');
+  weatherBadge.textContent = weather.icon;
+  weatherBadge.title = `${weather.name}: ${weather.desc}`;
+  document.getElementById('weatherTint').style.backgroundColor = weather.tint;
+
   const hpPct = Math.max(0, Math.min(100, (monster.hp / monster.maxHp) * 100));
   document.getElementById('monsterHpFill').style.width = hpPct + '%';
   document.getElementById('monsterHpLabel').textContent = `${Math.max(0, monster.hp)} / ${monster.maxHp}`;
@@ -3381,6 +4236,7 @@ document.getElementById('btnUpgradeHp').addEventListener('click', () => {
   player.upgradeLevels.hp += 1;
   player.currentHp = getMaxHp(player);
   player.stats.upgradesPurchased += 1;
+  player.lifetimeUpgrades += 1;
   renderAll();
 });
 
@@ -3390,6 +4246,7 @@ document.getElementById('btnUpgradeAtk').addEventListener('click', () => {
   player.gold -= cost;
   player.upgradeLevels.atk += 1;
   player.stats.upgradesPurchased += 1;
+  player.lifetimeUpgrades += 1;
   renderAll();
 });
 
@@ -3399,6 +4256,7 @@ document.getElementById('btnUpgradeDef').addEventListener('click', () => {
   player.gold -= cost;
   player.upgradeLevels.def += 1;
   player.stats.upgradesPurchased += 1;
+  player.lifetimeUpgrades += 1;
   renderAll();
 });
 
@@ -3421,6 +4279,8 @@ document.getElementById('btnOpenChest').addEventListener('click', () => {
     player.stats.itemsByRarity[item.rarity] += 1;
     player.pendingGacha = item;
     appendLog([`เปิดกล่อง: ได้รับ ${item.name}`]);
+    addDailyChallengeProgress('open_chests', 1);
+    playSfxChestOpen();
     autoResolveItemIfEnabled(item);
     renderAll();
     const spriteAfter = document.getElementById('chestSprite');
@@ -3457,6 +4317,16 @@ document.getElementById('btnSellItem').addEventListener('click', () => {
   player.gold += value;
   player.pendingGacha = null;
   appendLog([`ขาย ${item.name} ได้ ${value} Gold`]);
+  renderAll();
+});
+
+document.getElementById('btnDismantleItem').addEventListener('click', () => {
+  if (!player.pendingGacha) return;
+  const item = player.pendingGacha;
+  const stones = dismantleItem(item);
+  player.enhanceStones += stones;
+  player.pendingGacha = null;
+  appendLog([`ย่อย ${item.name} ได้หินหลอม +${stones}`]);
   renderAll();
 });
 
@@ -3509,11 +4379,17 @@ document.getElementById('titleList').addEventListener('click', (e) => {
   renderAll();
 });
 
+document.getElementById('awakeningNextInfo').addEventListener('click', (e) => {
+  if (e.target.closest('#btnAwaken')) doAwaken();
+});
+
 document.getElementById('questList').addEventListener('click', (e) => {
   const btn = e.target.closest('.quest-claim-btn');
   if (!btn || btn.disabled) return;
   claimQuest(btn.dataset.key);
 });
+
+document.getElementById('btnClaimDailyChallenge').addEventListener('click', () => claimDailyChallenge());
 
 document.getElementById('btnUseRedPotion').addEventListener('click', () => usePotion('red'));
 document.getElementById('btnUseBluePotion').addEventListener('click', () => usePotion('blue'));
@@ -3554,6 +4430,32 @@ document.getElementById('btnCloseRaid').addEventListener('click', () => {
     saveGame();
   }
   document.getElementById('raidModal').style.display = 'none';
+});
+
+document.getElementById('btnOpenWeeklyBoss').addEventListener('click', () => {
+  document.getElementById('weeklyBossIntro').style.display = 'block';
+  document.getElementById('weeklyBossActive').style.display = 'none';
+  document.getElementById('weeklyBossResult').style.display = 'none';
+  document.getElementById('btnCloseWeeklyBoss').style.display = 'inline-block';
+  renderWeeklyBossModal();
+  document.getElementById('weeklyBossModal').style.display = 'flex';
+});
+document.getElementById('btnStartWeeklyBoss').addEventListener('click', () => startWeeklyBoss());
+document.getElementById('btnWeeklyBossAttack').addEventListener('click', () => weeklyBossAttack());
+document.getElementById('btnCloseWeeklyBossResult').addEventListener('click', () => {
+  document.getElementById('weeklyBossResult').style.display = 'none';
+  document.getElementById('weeklyBossIntro').style.display = 'block';
+  document.getElementById('btnCloseWeeklyBoss').style.display = 'inline-block';
+  renderWeeklyBossModal();
+});
+document.getElementById('btnCloseWeeklyBoss').addEventListener('click', () => {
+  if (weeklyBossSession) {
+    clearInterval(weeklyBossSession.tickHandle);
+    weeklyBossSession = null;
+    player.weeklyBossCooldownUntil = Date.now() + WEEKLY_BOSS_COOLDOWN_MS;
+    saveGame();
+  }
+  document.getElementById('weeklyBossModal').style.display = 'none';
 });
 
 document.getElementById('btnOpenTower').addEventListener('click', () => {
@@ -3597,6 +4499,8 @@ document.getElementById('btnCloseDailyLogin').addEventListener('click', () => {
 
 document.getElementById('btnCraftElixir').addEventListener('click', () => craftElixir());
 document.getElementById('btnUseElixir').addEventListener('click', () => useElixir());
+document.getElementById('btnCraftMegaElixir').addEventListener('click', () => craftMegaElixir());
+document.getElementById('btnUseMegaElixir').addEventListener('click', () => useMegaElixir());
 
 document.querySelectorAll('.collapsible-header').forEach(header => {
   header.addEventListener('click', () => {
@@ -3604,6 +4508,30 @@ document.querySelectorAll('.collapsible-header').forEach(header => {
     const collapsed = body.classList.toggle('collapsed');
     header.classList.toggle('collapsed', collapsed);
   });
+});
+
+// แถบเมนูด้านข้างของพาเนลตัวละคร (Prestige/ปลุกพลัง/ตีบวก/สกิล/ฉายา/วัตถุโบราณ/สมุดภาพ/ผสมยา)
+// แสดงทีละแท็บแทนการกาง accordion ซ้อนกันหลายอันเหมือนเดิม เรียงลำดับตามความสำคัญ/ความถี่ในการใช้งาน
+const CHAR_TAB_IDS = ['prestigeBody', 'awakeningBody', 'enhanceBody', 'skillBody', 'titleBody', 'relicBody', 'bestiaryBody', 'alchemyBody', 'achievementBody', 'personalBestBody'];
+function selectCharTab(tabId) {
+  CHAR_TAB_IDS.forEach(id => {
+    document.getElementById(id).classList.toggle('char-tab-panel--active', id === tabId);
+  });
+  document.querySelectorAll('#charTabBar .char-tab-btn').forEach(btn => {
+    btn.classList.toggle('char-tab-btn--active', btn.dataset.tab === tabId);
+  });
+}
+document.getElementById('charTabBar').addEventListener('click', (e) => {
+  const btn = e.target.closest('.char-tab-btn');
+  if (!btn) return;
+  selectCharTab(btn.dataset.tab);
+});
+selectCharTab('prestigeBody');
+document.getElementById('btnToggleSound').addEventListener('click', () => {
+  player.settings.soundEnabled = !player.settings.soundEnabled;
+  renderSettingsModal();
+  saveGame();
+  if (player.settings.soundEnabled) playSfxClick();
 });
 document.getElementById('btnToggleAnimations').addEventListener('click', () => {
   player.settings.animationsEnabled = !player.settings.animationsEnabled;
@@ -3621,6 +4549,11 @@ document.getElementById('btnToggleAutoEquip').addEventListener('click', () => {
   renderSettingsModal();
   saveGame();
 });
+document.getElementById('btnCycleAutoDispose').addEventListener('click', () => {
+  player.settings.autoDisposeMode = player.settings.autoDisposeMode === 'sell' ? 'dismantle' : 'sell';
+  renderSettingsModal();
+  saveGame();
+});
 document.getElementById('btnResetSave').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเซฟทั้งหมด? การกระทำนี้ย้อนกลับไม่ได้')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน */ }
@@ -3628,9 +4561,11 @@ document.getElementById('btnResetSave').addEventListener('click', () => {
 });
 
 function renderSettingsModal() {
+  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
   document.getElementById('btnToggleAnimations').textContent = player.settings.animationsEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
   document.getElementById('btnCycleAutoSpeed').textContent = AUTO_BATTLE_SPEED_LABELS[player.settings.autoBattleSpeed];
   document.getElementById('btnToggleAutoEquip').textContent = player.settings.autoEquipEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+  document.getElementById('btnCycleAutoDispose').textContent = player.settings.autoDisposeMode === 'dismantle' ? 'ย่อยเป็นหินหลอม' : 'ขายเป็น Gold';
 }
 
 document.getElementById('gemShopList').addEventListener('click', (e) => {
@@ -3642,6 +4577,21 @@ document.getElementById('gemShopList').addEventListener('click', (e) => {
 document.getElementById('btnRollPet').addEventListener('click', () => {
   rollPetGacha();
   renderAll();
+});
+
+document.getElementById('btnRollPetTicket').addEventListener('click', () => {
+  rollPetGachaWithTicket();
+  renderAll();
+});
+
+document.getElementById('btnOpenMysteryChest').addEventListener('click', () => {
+  openMysteryChest();
+});
+
+document.getElementById('bossSoulForgeList').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !btn.dataset.key) return;
+  craftFromBossSouls(btn.dataset.key);
 });
 
 document.getElementById('petGrid').addEventListener('click', (e) => {
@@ -3681,6 +4631,12 @@ document.getElementById('btnAutoBattle').addEventListener('click', () => {
   toggleAutoBattle();
 });
 
+// เสียงบิ๊ปสั้นๆ เวลากดปุ่ม UI ทั่วไป — ใช้ delegate เดียวจับทุกปุ่ม .btn ในหน้า กันไม่ต้องผูกทีละปุ่ม
+// (ปุ่มที่ disabled จะไม่ยิง click event เองอยู่แล้วตามพฤติกรรมมาตรฐานของเบราว์เซอร์ จึงไม่ต้องกันซ้ำ)
+document.body.addEventListener('click', (e) => {
+  if (e.target.closest('.btn')) playSfxClick();
+});
+
 /* =====================================================================
    INIT
    ===================================================================== */
@@ -3691,11 +4647,14 @@ renderSettingsModal();
 // อัปเดตตัวนับ cooldown ของ Boss Raid มุมล่างของหน้าจอ intro ทุกวินาที เผื่อผู้เล่นเปิดโมดัลค้างไว้ดูนับถอยหลัง
 setInterval(() => {
   if (!raidSession && document.getElementById('raidModal').style.display !== 'none') renderRaidModal();
+  if (!weeklyBossSession && document.getElementById('weeklyBossModal').style.display !== 'none') renderWeeklyBossModal();
 }, 1000);
 // อัปเดตนับถอยหลังการส่งสัตว์เลี้ยงสำรวจในคลังสัตว์เลี้ยงทุก 30 วินาที (ไม่ถี่เกินไปเพราะแค่แสดงชม./นาที)
 setInterval(() => {
   if (document.getElementById('petBody') && !document.getElementById('petBody').classList.contains('collapsed')) renderPetGrid();
 }, 30000);
+// เช็คว่าสภาพอากาศหมดเวลาแล้วหรือยัง (ทุก 1 นาที) แม้ผู้เล่นจะไม่ได้กดสู้เลยก็ยังหมุนเวียนแบบเรียลไทม์
+setInterval(() => { renderBattlePanel(); }, 60000);
 
 if (pendingOfflineReport) {
   document.getElementById('welcomeBackText').innerHTML =
