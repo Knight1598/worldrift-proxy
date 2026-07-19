@@ -167,13 +167,6 @@
   .inventory-item--legendary {
     animation: legendaryGlow 1.6s ease-in-out infinite;
   }
-  /* ชีตต้นฉบับไม่มีภาพ Legendary แยกจาก Epic จริงๆ (ดาบมีแค่ 4 ระดับสี, แหวน/สร้อยมีแค่ 2 แบบ)
-     ใช้ CSS filter ปรับโทนสีให้ดูพิเศษกว่า Epic แทนไปก่อน จนกว่าจะมีไฟล์ภาพจริงมาแทนที่ */
-  .item-slot--legendary img,
-  .inventory-item--legendary img,
-  .gacha-result.inventory-item--legendary img {
-    filter: sepia(0.3) saturate(1.8) hue-rotate(-8deg) brightness(1.15) drop-shadow(0 0 5px #ffcc33);
-  }
 
   h1.title {
     text-align: center;
@@ -334,6 +327,7 @@
     margin-bottom: 10px;
   }
   .gold-display img { width: 18px; height: 18px; vertical-align: middle; margin-right: 4px; }
+  .icon-inline { width: 18px; height: 18px; vertical-align: middle; margin-right: 4px; }
 
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (แถบเลือด HP)
@@ -1221,7 +1215,7 @@
       <div class="chest-open-area">
         <div class="chest-sprite" id="chestSprite"></div>
         <button class="btn btn--primary" id="btnOpenChest">เปิดกล่อง</button>
-        <button class="btn btn--info" id="btnOpenMysteryChest" style="margin-top:6px;">🎁 เปิดหีบปริศนา (มี <span id="mysteryChestCount">0</span>)</button>
+        <button class="btn btn--info" id="btnOpenMysteryChest" style="margin-top:6px;"><img class="icon-inline" src="assets/ui/mystery_chest.png" alt="" onerror="this.style.display='none'"> เปิดหีบปริศนา (มี <span id="mysteryChestCount">0</span>)</button>
 
         <div class="gacha-result" id="gachaResult" style="display:none;">
           <img id="gachaItemIcon" src="" alt="item" onerror="this.style.display='none'">
@@ -1253,7 +1247,7 @@
         </div>
         <div class="collapsible-body" id="petBody">
           <button class="btn btn--primary" id="btnRollPet">สุ่มสัตว์เลี้ยง (5 💎)</button>
-          <button class="btn btn--info" id="btnRollPetTicket" style="margin-top:6px;">🎫 สุ่มด้วยตั๋ว (มี <span id="petTicketCount">0</span>)</button>
+          <button class="btn btn--info" id="btnRollPetTicket" style="margin-top:6px;"><img class="icon-inline" src="assets/ui/pet_ticket.png" alt="" onerror="this.style.display='none'"> สุ่มด้วยตั๋ว (มี <span id="petTicketCount">0</span>)</button>
           <div class="pet-food-count">🍖 อาหารสัตว์เลี้ยง: <span id="petFoodCount">0</span></div>
           <div class="pet-grid" id="petGrid"></div>
         </div>
@@ -1261,7 +1255,7 @@
 
       <div class="relic-section">
         <div class="collapsible-header collapsed" data-target="bossSoulBody">
-          <span>💀 วิญญาณบอส (<span id="bossSoulCount">0</span>)</span>
+          <span><img class="icon-inline" src="assets/ui/boss_soul.png" alt="" onerror="this.style.display='none'"> วิญญาณบอส (<span id="bossSoulCount">0</span>)</span>
           <span class="collapse-arrow">▾</span>
         </div>
         <div class="collapsible-body collapsed" id="bossSoulBody">
@@ -1397,27 +1391,26 @@ const EQUIPMENT_ICONS = {
     good: 'assets/equipment/sword_iron.png',
     rare: 'assets/equipment/sword_silver_gem.png',
     epic: 'assets/equipment/sword_gold_gem.png',
-    legendary: 'assets/equipment/sword_gold_gem.png',
+    legendary: 'assets/equipment/sword_legendary.png',
   },
   armor: {
     common: 'assets/equipment/shield_wood.png',
     good: 'assets/equipment/shoulder_leather.png',
     rare: 'assets/equipment/shield_steel.png',
     epic: 'assets/equipment/shoulder_steel.png',
-    legendary: 'assets/equipment/shield_holy_blue.png',
+    legendary: 'assets/equipment/armor_legendary.png',
   },
   ring: {
     common: 'assets/equipment/ring.png',
     good: 'assets/equipment/ring.png',
     rare: 'assets/equipment/necklace.png',
     epic: 'assets/equipment/necklace.png',
-    legendary: 'assets/equipment/ring.png',
+    legendary: 'assets/equipment/ring_legendary.png',
   },
-  // ชีตต้นฉบับมีไอคอนหมวก/ถุงมือ/บูทอย่างละ 1 แบบเท่านั้น (ไม่มีเวอร์ชันแยกตาม
-  // ความหายาก) จึงใช้ไฟล์เดียวซ้ำทุก rarity เหมือนที่ ring.png ทำอยู่แล้ว
-  helmet: { common: 'assets/equipment/helmet.png', good: 'assets/equipment/helmet.png', rare: 'assets/equipment/helmet.png', epic: 'assets/equipment/helmet.png', legendary: 'assets/equipment/helmet.png' },
-  gloves: { common: 'assets/equipment/gloves.png', good: 'assets/equipment/gloves.png', rare: 'assets/equipment/gloves.png', epic: 'assets/equipment/gloves.png', legendary: 'assets/equipment/gloves.png' },
-  boots:  { common: 'assets/equipment/boots.png',  good: 'assets/equipment/boots.png',  rare: 'assets/equipment/boots.png',  epic: 'assets/equipment/boots.png',  legendary: 'assets/equipment/boots.png' },
+  // หมวก/ถุงมือ/บูทตอนนี้มีไอคอน Legendary จริงแยกต่างหากแล้ว (ก่อนหน้านี้ใช้ไฟล์เดียวซ้ำทุก rarity)
+  helmet: { common: 'assets/equipment/helmet.png', good: 'assets/equipment/helmet.png', rare: 'assets/equipment/helmet.png', epic: 'assets/equipment/helmet.png', legendary: 'assets/equipment/helmet_legendary.png' },
+  gloves: { common: 'assets/equipment/gloves.png', good: 'assets/equipment/gloves.png', rare: 'assets/equipment/gloves.png', epic: 'assets/equipment/gloves.png', legendary: 'assets/equipment/gloves_legendary.png' },
+  boots:  { common: 'assets/equipment/boots.png',  good: 'assets/equipment/boots.png',  rare: 'assets/equipment/boots.png',  epic: 'assets/equipment/boots.png',  legendary: 'assets/equipment/boots_legendary.png' },
 };
 // Asset สำรอง (มีในชีตแต่ไม่ผูกกับระบบหลัก): potion_red.png, potion_blue.png (ดูระบบโพชั่นด้านล่าง)
 
@@ -1429,17 +1422,18 @@ const SLOT_NAMES = { weapon: 'อาวุธ', armor: 'เกราะ', ring: 
 // ===============================================
 const WEAPON_FAMILIES = [
   { key: 'sword', name: 'ดาบ',    iconByRarity: EQUIPMENT_ICONS.weapon, perk: null,        perkValue: 0 },
-  { key: 'axe',   name: 'ขวาน',   icon: 'assets/equipment/axe.png',   perk: 'crit',      perkValue: 0.05 }, // +5% โอกาสคริติคอล
-  { key: 'spear', name: 'หอก',    icon: 'assets/equipment/spear.png', perk: 'armorpen',  perkValue: 0.25 }, // ทะลุ DEF มอนสเตอร์ 25%
-  { key: 'bow',   name: 'ธนู',    icon: 'assets/equipment/bow.png',   perk: 'dodge',     perkValue: 0.04 }, // +4% โอกาสหลบหลีก
-  { key: 'wand',  name: 'ไม้เท้า', icon: 'assets/equipment/wand.png',  perk: 'lifesteal', perkValue: 0.10 }, // ฮีล 10% ของดาเมจที่ทำได้
+  { key: 'axe',   name: 'ขวาน',   icon: 'assets/equipment/axe.png',   iconLegendary: 'assets/equipment/axe_legendary.png',   perk: 'crit',      perkValue: 0.05 }, // +5% โอกาสคริติคอล
+  { key: 'spear', name: 'หอก',    icon: 'assets/equipment/spear.png', iconLegendary: 'assets/equipment/spear_legendary.png', perk: 'armorpen',  perkValue: 0.25 }, // ทะลุ DEF มอนสเตอร์ 25%
+  { key: 'bow',   name: 'ธนู',    icon: 'assets/equipment/bow.png',   iconLegendary: 'assets/equipment/bow_legendary.png',   perk: 'dodge',     perkValue: 0.04 }, // +4% โอกาสหลบหลีก
+  { key: 'wand',  name: 'ไม้เท้า', icon: 'assets/equipment/wand.png',  iconLegendary: 'assets/equipment/wand_legendary.png',  perk: 'lifesteal', perkValue: 0.10 }, // ฮีล 10% ของดาเมจที่ทำได้
 ];
 function getWeaponFamily(key) {
   return WEAPON_FAMILIES.find(f => f.key === key) || WEAPON_FAMILIES[0];
 }
 function getWeaponIcon(familyKey, rarityKey) {
   const fam = getWeaponFamily(familyKey);
-  return fam.iconByRarity ? fam.iconByRarity[rarityKey] : fam.icon;
+  if (fam.iconByRarity) return fam.iconByRarity[rarityKey];
+  return (rarityKey === 'legendary' && fam.iconLegendary) ? fam.iconLegendary : fam.icon;
 }
 
 // ===============================================
@@ -1988,10 +1982,10 @@ function getEquippedSkill(p) { return PASSIVE_SKILLS.find(s => s.key === p.equip
 // เอฟเฟกต์เป็นความสามารถเชิงกลไก ไม่ใช่แค่บวกสเตตัส และไม่ถูกรีเซ็ตตอน Prestige (ต่างจากภารกิจ)
 // ===============================================
 const RELIC_DEFS = [
-  { key: 'demon_crown',    name: 'มงกุฎจอมมาร',          desc: 'มีโอกาส 3% ที่จะข้ามด่านปกติไปเจอบอสทันที', icon: 'assets/skills/dark_aura.png' },
-  { key: 'broken_sword',   name: 'ดาบผู้กล้าแตกหัก',      desc: 'มีโอกาส 5% ที่การโจมตีจะติด One-hit Kill ใส่มอนสเตอร์ปกติ (ไม่รวมบอส)', icon: 'assets/skills/physical.png' },
-  { key: 'hourglass',      name: 'นาฬิกาทรายแห่งกาลเวลา', desc: 'ลดคูลดาวน์ของ Boss Raid ลงครึ่งหนึ่ง', icon: 'assets/ui/gem_purple.png' },
-  { key: 'immortal_heart', name: 'หัวใจอมตะ',            desc: 'มีโอกาส 15% ที่จะรอดจากดาเมจถึงตาย เหลือ HP 1', icon: 'assets/skills/holy.png' },
+  { key: 'demon_crown',    name: 'มงกุฎจอมมาร',          desc: 'มีโอกาส 3% ที่จะข้ามด่านปกติไปเจอบอสทันที', icon: 'assets/relics/demon_crown.png' },
+  { key: 'broken_sword',   name: 'ดาบผู้กล้าแตกหัก',      desc: 'มีโอกาส 5% ที่การโจมตีจะติด One-hit Kill ใส่มอนสเตอร์ปกติ (ไม่รวมบอส)', icon: 'assets/relics/broken_sword.png' },
+  { key: 'hourglass',      name: 'นาฬิกาทรายแห่งกาลเวลา', desc: 'ลดคูลดาวน์ของ Boss Raid ลงครึ่งหนึ่ง', icon: 'assets/relics/hourglass.png' },
+  { key: 'immortal_heart', name: 'หัวใจอมตะ',            desc: 'มีโอกาส 15% ที่จะรอดจากดาเมจถึงตาย เหลือ HP 1', icon: 'assets/relics/immortal_heart.png' },
 ];
 const RELIC_DROP_CHANCE = 0.2;
 function hasRelic(key) { return player.relics.includes(key); }
@@ -4134,7 +4128,9 @@ function renderChestPanel() {
   if (player.pendingGacha) {
     resultBox.style.display = 'block';
     const item = player.pendingGacha;
-    document.getElementById('gachaItemIcon').src = item.icon;
+    const iconEl = document.getElementById('gachaItemIcon');
+    iconEl.style.display = '';
+    iconEl.src = item.icon;
     const nameEl = document.getElementById('gachaItemName');
     nameEl.textContent = item.name;
     nameEl.className = `rarity-${item.rarity}`;
