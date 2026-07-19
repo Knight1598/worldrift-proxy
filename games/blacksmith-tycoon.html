@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blacksmith Tycoon</title>
+<style>
+  :root {
+    --bg: #fdf6e3;
+    --panel-bg: #fffaf0;
+    --panel-border: #e8d5a8;
+    --text-main: #4a3728;
+    --text-dim: #9a8a75;
+    --accent-gold: #d4a017;
+    --accent-gold-light: #f4d35e;
+    --primary: #ff9f45;
+    --primary-dark: #e8792a;
+    --success: #6bbf6b;
+    --danger: #e35d5d;
+    --shadow: 0 3px 0 rgba(0,0,0,0.15);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, sans-serif;
+    background: var(--bg);
+    color: var(--text-main);
+    min-height: 100vh;
+  }
+
+  .app-header {
+    text-align: center;
+    padding: 10px 12px 6px;
+    position: relative;
+  }
+  .app-header h1 {
+    font-size: 1.2rem;
+    margin: 0 0 6px;
+    color: var(--primary-dark);
+  }
+  .gold-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel-bg);
+    border: 2px solid var(--accent-gold);
+    border-radius: 999px;
+    padding: 6px 18px;
+    font-size: 1.15rem;
+    font-weight: bold;
+    color: var(--accent-gold);
+    box-shadow: var(--shadow);
+  }
+  .gold-counter .coin-icon { width: 22px; height: 22px; image-rendering: pixelated; }
+
+  .btn-tertiary {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.06);
+    color: var(--text-dim);
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  .btn-tertiary:hover { background: rgba(0,0,0,0.12); }
+
+  .game-wrap {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 12px 24px;
+  }
+
+  /* ===== Stage stand view ===== */
+  .stand-panel {
+    background: var(--panel-bg);
+    border: 3px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 14px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+  }
+  .stand-title {
+    text-align: center;
+    font-size: 1rem;
+    font-weight: bold;
+    margin-bottom: 2px;
+  }
+  .stand-product {
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+  .stand-stage-view {
+    position: relative;
+    height: 170px;
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    image-rendering: pixelated;
+    background-image: url('assets/blacksmith/tile_wood_wall.png'), url('assets/blacksmith/tile_stone_floor.png');
+    background-repeat: repeat-x, repeat-x;
+    background-position: top left, bottom left;
+    background-size: auto 68%, auto 42%;
+  }
+  .stand-tint-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    mix-blend-mode: soft-light;
+    opacity: 0.85;
+    pointer-events: none;
+    transition: background 0.6s ease;
+  }
+  .stand-booth {
+    position: relative;
+    z-index: 2;
+    max-width: 220px;
+    max-height: 140px;
+    image-rendering: pixelated;
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.08s ease;
+    filter: drop-shadow(0 4px 3px rgba(0,0,0,0.25));
+  }
+  .stand-booth:active { transform: scale(0.96); }
+  .stand-booth.tap-bump { animation: tapBump 0.18s ease; }
+  @keyframes tapBump { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+  .customer-lane {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .customer {
+    position: absolute;
+    bottom: 8px;
+    width: 44px;
+    height: 48px;
+    transition: left 1.1s linear, opacity 0.4s ease;
+    z-index: 3;
+  }
+  .customer-img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .customer-bubble {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 22px; height: 22px;
+    opacity: 0;
+    transition: opacity 0.2s ease, top 0.2s ease;
+  }
+  .customer-bubble img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .customer-bubble.show { opacity: 1; top: -26px; }
+
+  .coin-fly {
+    position: absolute;
+    width: 20px; height: 20px;
+    pointer-events: none;
+    z-index: 5;
+    transition: left 0.7s cubic-bezier(.2,.7,.3,1), top 0.7s cubic-bezier(.2,.7,.3,1), opacity 0.7s ease;
+  }
+  .coin-fly img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .tip-float {
+    position: absolute;
+    font-size: 0.85rem;
+    font-weight: bold;
+    color: var(--success);
+    pointer-events: none;
+    z-index: 5;
+    animation: tipFloat 1s ease forwards;
+  }
+  @keyframes tipFloat {
+    0% { opacity: 0; transform: translateY(0); }
+    15% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-40px); }
+  }
+
+  /* ===== Stage checklist ===== */
+  .stage-progress {
+    margin: 10px 0 4px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+  .stage-progress-dots { display: flex; gap: 6px; justify-content: center; margin-top: 4px; }
+  .stage-progress-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #e5dcc5;
+    border: 2px solid var(--panel-border);
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+  .stage-progress-dot.done { background: var(--success); border-color: var(--success); }
+
+  /* ===== Upgrade cards ===== */
+  .upgrade-list { display: flex; flex-direction: column; gap: 8px; }
+  .upgrade-card {
+    background: var(--panel-bg);
+    border: 2px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: var(--shadow);
+  }
+  .upgrade-icon { font-size: 1.6rem; width: 34px; text-align: center; }
+  .upgrade-info { flex: 1; min-width: 0; }
+  .upgrade-name { font-weight: bold; font-size: 0.88rem; }
+  .upgrade-desc { font-size: 0.72rem; color: var(--text-dim); margin-top: 1px; }
+  .upgrade-level { font-size: 0.72rem; color: var(--accent-gold); margin-top: 2px; font-weight: bold; }
+
+  .buy-btn {
+    border: none;
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 0.78rem;
+    font-weight: bold;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 78px;
+  }
+  .buy-btn--affordable {
+    background: linear-gradient(180deg, #ffcf6b, var(--primary));
+    color: #5a2e00;
+    box-shadow: 0 3px 0 var(--primary-dark);
+    animation: affordablePulse 1.4s ease-in-out infinite;
+  }
+  .buy-btn--affordable:active { transform: translateY(2px); box-shadow: none; }
+  @keyframes affordablePulse {
+    0%, 100% { box-shadow: 0 3px 0 var(--primary-dark); }
+    50% { box-shadow: 0 3px 0 var(--primary-dark), 0 0 10px 2px rgba(255,159,69,0.6); }
+  }
+  .buy-btn--disabled {
+    background: #e5dcc5;
+    color: #a89b82;
+    cursor: not-allowed;
+  }
+  .buy-btn--maxed {
+    background: var(--success);
+    color: #fff;
+    cursor: default;
+  }
+
+  /* ===== Modals ===== */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(40, 25, 10, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 16px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: var(--panel-bg);
+    border: 3px solid var(--accent-gold);
+    border-radius: 18px;
+    padding: 24px 20px;
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 8px 0 rgba(0,0,0,0.15);
+  }
+  .modal-box h2 { margin: 0 0 10px; color: var(--primary-dark); font-size: 1.15rem; }
+  .modal-box p { font-size: 0.85rem; line-height: 1.5; color: var(--text-main); margin: 0 0 16px; }
+  .modal-emoji-big { font-size: 3rem; margin-bottom: 8px; }
+
+  .btn-cta-mega {
+    border: none;
+    border-radius: 14px;
+    padding: 14px 20px;
+    font-size: 1rem;
+    font-weight: bold;
+    color: #fff;
+    background: linear-gradient(180deg, #ffd76a, var(--primary-dark));
+    box-shadow: 0 5px 0 #a84f10;
+    cursor: pointer;
+    width: 100%;
+    animation: ctaGlow 1s ease-in-out infinite;
+  }
+  .btn-cta-mega:active { transform: translateY(3px); box-shadow: none; }
+  @keyframes ctaGlow {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.15); }
+  }
+
+  .btn-secondary-modal {
+    margin-top: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .settings-row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; font-size: 0.85rem; }
+  .settings-row button { border: 2px solid var(--panel-border); background: #fff; border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 0.8rem; }
+
+  .stats-footer {
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 14px;
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>⚒️ Blacksmith Tycoon</h1>
+  <div class="gold-counter"><img class="coin-icon" src="assets/blacksmith/coin.png" alt="gold"><span id="goldValue">0</span></div>
+  <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
+</div>
+
+<div class="game-wrap">
+  <div class="stand-panel">
+    <div class="stand-title" id="stageName">แผงขายของริมทาง</div>
+    <div class="stand-product" id="stageProduct">ขาย ของกินของใช้ทั่วไป</div>
+    <div class="stand-stage-view" id="standStageView">
+      <div class="stand-tint-overlay" id="standTintOverlay"></div>
+      <div class="customer-lane" id="customerLane"></div>
+      <img class="stand-booth" id="standBooth" src="assets/blacksmith/station_stall.png" alt="">
+    </div>
+    <div class="stage-progress">
+      อัปเกรดเต็มขั้นแล้ว <span id="stageProgressCount">0</span>/<span id="stageProgressTotal">4</span>
+      <div class="stage-progress-dots" id="stageProgressDots"></div>
+    </div>
+  </div>
+
+  <div class="upgrade-list" id="upgradeList"></div>
+
+  <div class="stats-footer" id="statsFooter"></div>
+</div>
+
+<div class="modal-overlay" id="stageCompleteModal">
+  <div class="modal-box">
+    <div class="modal-emoji-big">🎉</div>
+    <h2 id="stageCompleteTitle">ร้านเต็มขั้นแล้ว!</h2>
+    <p id="stageCompleteText"></p>
+    <button class="btn-cta-mega" id="btnAdvanceStage">ไปกันเลย!</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="welcomeBackModal">
+  <div class="modal-box">
+    <div class="modal-emoji-big">👋</div>
+    <h2>ยินดีต้อนรับกลับ!</h2>
+    <p id="welcomeBackText"></p>
+    <button class="btn-cta-mega" id="btnCloseWelcomeBack">รับเลย!</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box">
+    <h2>⚙️ ตั้งค่า</h2>
+    <div class="settings-row">
+      <span>เสียง</span>
+      <button id="btnToggleSound">เปิดอยู่</button>
+    </div>
+    <div class="settings-row">
+      <span>รีเซ็ตเกม</span>
+      <button id="btnResetGame">รีเซ็ต</button>
+    </div>
+    <button class="btn-secondary-modal" id="btnCloseSettings">ปิด</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="gameCompleteModal">
+  <div class="modal-box">
+    <div class="modal-emoji-big">👑</div>
+    <h2>สร้างอาณาจักรช่างตีเหล็กสำเร็จ!</h2>
+    <p>คุณอัปเกรดร้านจนสุดทางแล้วในเวอร์ชันนี้ ขอบคุณที่เล่นจนจบ — ระบบใหม่กำลังจะตามมาเร็วๆ นี้!</p>
+    <button class="btn-cta-mega" id="btnCloseGameComplete">เยี่ยมไปเลย!</button>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   ข้อมูลเกม (Stages / Upgrades)
+   ===================================================================== */
+const STAGES = [
+  { key: 'stall',   name: 'แผงขายของริมทาง',    product: 'ของกินของใช้ทั่วไป', stationImg: 'assets/blacksmith/station_stall.png',
+    customerImgs: ['assets/blacksmith/rogue.png', 'assets/blacksmith/villager_woman.png', 'assets/blacksmith/farmer_man.png'],
+    color: '#f3e3c9', baseRevenue: 5   },
+  { key: 'forge',   name: 'โรงตีดาบ',           product: 'ดาบ',               stationImg: 'assets/blacksmith/station_forge.png',
+    customerImgs: ['assets/blacksmith/knight.png'],
+    color: '#dcdbe0', baseRevenue: 25  },
+  { key: 'alchemy', name: 'ห้องเล่นแร่แปรธาตุ',  product: 'โพชั่นวิเศษ',        stationImg: 'assets/blacksmith/station_alchemy.png',
+    customerImgs: ['assets/blacksmith/wizard.png'],
+    color: '#e3d9f3', baseRevenue: 125 },
+];
+function getRandomCustomerImg() {
+  const imgs = getStage().customerImgs;
+  return imgs[Math.floor(Math.random() * imgs.length)];
+}
+
+// ไอคอนสินค้าที่ขาย เปลี่ยนดีไซน์ (tier) ตามระดับอัปเกรด "คุณภาพสินค้า" ที่ซื้อไปแล้ว — ให้เห็นภาพว่าซื้ออัปเกรด
+// แล้วของที่ขายเปลี่ยนจริง ไม่ใช่แค่ตัวเลขขยับ (จับต้องได้ตามที่ตั้งใจออกแบบไว้)
+const PRODUCT_TIERS = {
+  stall:   [{ minLevel: 0, icon: 'assets/blacksmith/coin.png' }],
+  forge:   [{ minLevel: 0, icon: 'assets/blacksmith/sword_bronze.png' }, { minLevel: 2, icon: 'assets/blacksmith/sword_silver.png' }, { minLevel: 4, icon: 'assets/blacksmith/sword_blue.png' }],
+  alchemy: [{ minLevel: 0, icon: 'assets/blacksmith/potion_red.png' }, { minLevel: 3, icon: 'assets/blacksmith/potion_blue.png' }],
+};
+function getProductIcon() {
+  const tiers = PRODUCT_TIERS[getStage().key];
+  const level = player.upgradeLevels.portion;
+  let icon = tiers[0].icon;
+  tiers.forEach(t => { if (level >= t.minLevel) icon = t.icon; });
+  return icon;
+}
+
+const UPGRADE_TYPES = [
+  { key: 'speed',   name: 'ความเร็วในการขาย', icon: '⚡', desc: 'ลูกค้ามาถี่ขึ้น',        maxLevel: 5, baseCostMult: 8  },
+  { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 5, baseCostMult: 10 },
+  { key: 'signage', name: 'ป้ายร้าน',         icon: '📣', desc: 'มีโอกาสลูกค้ามาเป็นคู่',  maxLevel: 5, baseCostMult: 12 },
+  { key: 'decor',   name: 'ตกแต่งร้าน',        icon: '✨', desc: 'ลูกค้ามีโอกาสให้ทิป',     maxLevel: 5, baseCostMult: 14 },
+];
+
+const BASE_SPAWN_INTERVAL_MS = 4000;
+const MIN_SPAWN_INTERVAL_MS = 1500;
+const SPEED_LEVEL_MS_REDUCTION = 500;
+const PORTION_LEVEL_BONUS = 0.25;
+const SIGNAGE_LEVEL_BONUS_CUSTOMER_CHANCE = 0.1;
+const DECOR_LEVEL_TIP_CHANCE = 0.08;
+const UPGRADE_COST_GROWTH = 1.6;
+const OFFLINE_MAX_HOURS = 8;
+const OFFLINE_EFFICIENCY = 0.5; // รายได้ตอนไม่อยู่หน้าจอ = ครึ่งหนึ่งของอัตราปกติ (มาตรฐานเกม idle ทั่วไป)
+
+const SAVE_KEY = 'blacksmithTycoonSave_v1';
+
+/* =====================================================================
+   Player State
+   ===================================================================== */
+let player = {
+  gold: 0,
+  stageIndex: 0,
+  upgradeLevels: { speed: 0, portion: 0, signage: 0, decor: 0 },
+  staffHired: false,
+  lastSeenAt: Date.now(),
+  settings: { soundEnabled: true },
+  stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
+};
+
+let spawnTimerId = null;
+let audioCtx = null;
+
+/* =====================================================================
+   Formulas
+   ===================================================================== */
+function getStage() { return STAGES[player.stageIndex]; }
+function getUpgradeType(key) { return UPGRADE_TYPES.find(u => u.key === key); }
+
+function getUpgradeCost(key) {
+  const type = getUpgradeType(key);
+  const level = player.upgradeLevels[key];
+  return Math.ceil(getStage().baseRevenue * type.baseCostMult * Math.pow(UPGRADE_COST_GROWTH, level));
+}
+
+function getRevenuePerSale() {
+  return getStage().baseRevenue * (1 + PORTION_LEVEL_BONUS * player.upgradeLevels.portion);
+}
+
+function getSpawnIntervalMs() {
+  return Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - player.upgradeLevels.speed * SPEED_LEVEL_MS_REDUCTION);
+}
+
+function getBonusCustomerChance() {
+  return player.upgradeLevels.signage * SIGNAGE_LEVEL_BONUS_CUSTOMER_CHANCE;
+}
+
+function getTipChance() {
+  return player.upgradeLevels.decor * DECOR_LEVEL_TIP_CHANCE;
+}
+
+function isStageMaxed() {
+  return UPGRADE_TYPES.every(u => player.upgradeLevels[u.key] >= u.maxLevel);
+}
+
+function getStageProgressCount() {
+  return UPGRADE_TYPES.filter(u => player.upgradeLevels[u.key] >= u.maxLevel).length;
+}
+
+/* =====================================================================
+   Sound (Web Audio API, self-contained — ไม่โหลดไฟล์เสียงภายนอก)
+   ===================================================================== */
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (Ctx) audioCtx = new Ctx();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+function playTone(freq, duration, type, volume, startDelay) {
+  if (!player.settings.soundEnabled) return;
+  const ctx = ensureAudioCtx();
+  if (!ctx) return;
+  const t0 = ctx.currentTime + (startDelay || 0);
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, t0);
+  gain.gain.setValueAtTime(volume || 0.1, t0);
+  gain.gain.exponentialRampToValueAtTime(0.001, t0 + duration);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(t0);
+  osc.stop(t0 + duration);
+}
+function playSfxCashRegister() { playTone(1200, 0.05, 'square', 0.08); playTone(1600, 0.06, 'square', 0.06, 0.04); }
+function playSfxUpgrade() { [523, 659, 784].forEach((f, i) => playTone(f, 0.1, 'triangle', 0.09, i * 0.05)); }
+function playSfxStageComplete() { [523, 659, 784, 1047, 1319].forEach((f, i) => playTone(f, 0.16, 'triangle', 0.11, i * 0.09)); }
+function playSfxTap() { playTone(700, 0.03, 'square', 0.05); }
+
+/* =====================================================================
+   Customer spawn / walk / pay loop
+   ===================================================================== */
+function scheduleNextCustomer() {
+  if (spawnTimerId) clearTimeout(spawnTimerId);
+  spawnTimerId = setTimeout(() => {
+    spawnCustomer();
+    if (Math.random() < getBonusCustomerChance()) {
+      setTimeout(() => spawnCustomer(), 250);
+    }
+    scheduleNextCustomer();
+  }, getSpawnIntervalMs());
+}
+
+function spawnCustomer() {
+  const lane = document.getElementById('customerLane');
+  const laneWidth = lane.clientWidth || 300;
+  const el = document.createElement('div');
+  el.className = 'customer';
+  const img = document.createElement('img');
+  img.className = 'customer-img';
+  img.src = getRandomCustomerImg();
+  img.alt = '';
+  el.appendChild(img);
+  el.style.left = (laneWidth - 20) + 'px';
+  const bubble = document.createElement('div');
+  bubble.className = 'customer-bubble';
+  const bubbleImg = document.createElement('img');
+  bubbleImg.src = getProductIcon();
+  bubbleImg.alt = '';
+  bubble.appendChild(bubbleImg);
+  el.appendChild(bubble);
+  lane.appendChild(el);
+
+  const standX = laneWidth / 2 + 55; // หยุดข้างแผง ไม่ใช่ตรงกลางแผง กันไม่ให้ตัวลูกค้าถูกบังโดยแผง
+  requestAnimationFrame(() => {
+    el.style.left = standX + 'px';
+  });
+
+  setTimeout(() => {
+    bubble.classList.add('show');
+    completeSale(el);
+  }, 1150);
+}
+
+function completeSale(customerEl) {
+  const revenue = getRevenuePerSale();
+  player.gold += revenue;
+  player.stats.totalGoldEarned += revenue;
+  player.stats.totalCustomersServed += 1;
+  playSfxCashRegister();
+  spawnCoinFly(customerEl);
+
+  if (Math.random() < getTipChance()) {
+    const tip = Math.round(revenue * (0.5 + Math.random()));
+    player.gold += tip;
+    player.stats.totalGoldEarned += tip;
+    spawnTipFloat(customerEl, tip);
+  }
+
+  renderGold();
+  renderUpgradeList();
+
+  setTimeout(() => {
+    customerEl.style.left = (customerEl.parentElement.clientWidth + 20) + 'px';
+    customerEl.style.opacity = '0';
+    setTimeout(() => customerEl.remove(), 1200);
+  }, 500);
+}
+
+function spawnCoinFly(customerEl) {
+  const lane = document.getElementById('customerLane');
+  const coin = document.createElement('div');
+  coin.className = 'coin-fly';
+  const coinImg = document.createElement('img');
+  coinImg.src = 'assets/blacksmith/coin.png';
+  coinImg.alt = '';
+  coin.appendChild(coinImg);
+  const cx = parseFloat(customerEl.style.left) || 0;
+  coin.style.left = cx + 'px';
+  coin.style.top = '10px';
+  lane.appendChild(coin);
+  requestAnimationFrame(() => {
+    coin.style.left = '-10px';
+    coin.style.top = '-30px';
+    coin.style.opacity = '0';
+  });
+  setTimeout(() => coin.remove(), 750);
+}
+
+function spawnTipFloat(customerEl, amount) {
+  const lane = document.getElementById('customerLane');
+  const el = document.createElement('div');
+  el.className = 'tip-float';
+  el.textContent = `+${amount} ทิป!`;
+  el.style.left = (parseFloat(customerEl.style.left) || 0) + 'px';
+  el.style.top = '30px';
+  lane.appendChild(el);
+  setTimeout(() => el.remove(), 1050);
+}
+
+/* =====================================================================
+   Upgrades / Stage progression
+   ===================================================================== */
+function buyUpgrade(key) {
+  const type = getUpgradeType(key);
+  const level = player.upgradeLevels[key];
+  if (level >= type.maxLevel) return;
+  const cost = getUpgradeCost(key);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  player.upgradeLevels[key] += 1;
+  playSfxUpgrade();
+  renderGold();
+  renderUpgradeList();
+  renderStageProgress();
+  saveGame();
+  if (isStageMaxed()) showStageCompleteModal();
+}
+
+function showStageCompleteModal() {
+  const stage = getStage();
+  const isLast = player.stageIndex >= STAGES.length - 1;
+  document.getElementById('stageCompleteTitle').textContent = `${stage.name} เต็มขั้นแล้ว!`;
+  if (isLast) {
+    document.getElementById('stageCompleteText').textContent = 'คุณอัปเกรดร้านสุดท้ายจนเต็มขั้นแล้ว! กดเพื่อรับรางวัลปิดท้าย';
+    document.getElementById('btnAdvanceStage').textContent = 'รับรางวัล!';
+  } else {
+    const next = STAGES[player.stageIndex + 1];
+    document.getElementById('stageCompleteText').textContent = `พร้อมขยับไปเปิด "${next.name}" ขาย${next.product}แล้ว! Gold ที่มีอยู่ไม่หายไปไหน เอาไปต่อยอดร้านใหม่ได้เลย`;
+    document.getElementById('btnAdvanceStage').textContent = `ไปกันเลย! (${next.name})`;
+  }
+  playSfxStageComplete();
+  document.getElementById('stageCompleteModal').classList.add('show');
+}
+
+function advanceStage() {
+  document.getElementById('stageCompleteModal').classList.remove('show');
+  const wasFirstStage = player.stageIndex === 0;
+  if (player.stageIndex >= STAGES.length - 1) {
+    document.getElementById('gameCompleteModal').classList.add('show');
+    return;
+  }
+  player.stageIndex += 1;
+  player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
+  if (wasFirstStage) {
+    player.staffHired = true; // ปลดล็อกรายได้ตอนไม่อยู่หน้าจอ หลังผ่านร้านแรกสำเร็จ
+  }
+  renderAll();
+  scheduleNextCustomer();
+  saveGame();
+}
+
+/* =====================================================================
+   Offline Earnings (ปลดล็อกหลังจ้างพนักงานร้านแรกสำเร็จ)
+   ===================================================================== */
+function applyOfflineEarnings() {
+  if (!player.staffHired) return;
+  const elapsedMs = Math.min(Date.now() - player.lastSeenAt, OFFLINE_MAX_HOURS * 3600 * 1000);
+  if (elapsedMs < 30000) return; // น้อยกว่า 30 วินาทีไม่ต้องโชว์ ป้องกันรีเฟรชถี่ๆ แล้วเจอ modal ทุกครั้ง
+  const customersPerMs = 1 / getSpawnIntervalMs();
+  const earned = Math.floor(elapsedMs * customersPerMs * getRevenuePerSale() * OFFLINE_EFFICIENCY);
+  if (earned <= 0) return;
+  player.gold += earned;
+  player.stats.totalGoldEarned += earned;
+  const hours = (elapsedMs / 3600000).toFixed(1);
+  document.getElementById('welcomeBackText').textContent = `ระหว่างที่คุณไม่อยู่ (${hours} ชม.) ร้านขายได้ Gold +${earned}!`;
+  document.getElementById('welcomeBackModal').classList.add('show');
+}
+
+/* =====================================================================
+   Rendering
+   ===================================================================== */
+function renderGold() {
+  document.getElementById('goldValue').textContent = Math.floor(player.gold).toLocaleString();
+}
+
+function renderStageView() {
+  const stage = getStage();
+  document.getElementById('stageName').textContent = stage.name;
+  document.getElementById('stageProduct').textContent = `ขาย ${stage.product}`;
+  document.getElementById('standTintOverlay').style.background = stage.color;
+  document.getElementById('standBooth').src = stage.stationImg;
+}
+
+function renderStageProgress() {
+  const total = UPGRADE_TYPES.length;
+  const done = getStageProgressCount();
+  document.getElementById('stageProgressCount').textContent = done;
+  document.getElementById('stageProgressTotal').textContent = total;
+  const dotsEl = document.getElementById('stageProgressDots');
+  dotsEl.innerHTML = '';
+  UPGRADE_TYPES.forEach(u => {
+    const dot = document.createElement('div');
+    dot.className = 'stage-progress-dot' + (player.upgradeLevels[u.key] >= u.maxLevel ? ' done' : '');
+    dotsEl.appendChild(dot);
+  });
+}
+
+function renderUpgradeList() {
+  const listEl = document.getElementById('upgradeList');
+  listEl.innerHTML = '';
+  UPGRADE_TYPES.forEach(type => {
+    const level = player.upgradeLevels[type.key];
+    const maxed = level >= type.maxLevel;
+    const cost = maxed ? null : getUpgradeCost(type.key);
+    const affordable = !maxed && player.gold >= cost;
+
+    const card = document.createElement('div');
+    card.className = 'upgrade-card';
+
+    const icon = document.createElement('div');
+    icon.className = 'upgrade-icon';
+    icon.textContent = type.icon;
+
+    const info = document.createElement('div');
+    info.className = 'upgrade-info';
+    const name = document.createElement('div');
+    name.className = 'upgrade-name';
+    name.textContent = type.name;
+    const desc = document.createElement('div');
+    desc.className = 'upgrade-desc';
+    desc.textContent = type.desc;
+    const lvl = document.createElement('div');
+    lvl.className = 'upgrade-level';
+    lvl.textContent = `ระดับ ${level}/${type.maxLevel}`;
+    info.append(name, desc, lvl);
+
+    const btn = document.createElement('button');
+    btn.className = 'buy-btn ' + (maxed ? 'buy-btn--maxed' : affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
+    btn.textContent = maxed ? 'เต็มขั้น ✓' : `ซื้อ (${cost.toLocaleString()})`;
+    btn.disabled = maxed || !affordable;
+    btn.addEventListener('click', () => buyUpgrade(type.key));
+
+    card.append(icon, info, btn);
+    listEl.appendChild(card);
+  });
+}
+
+function renderStatsFooter() {
+  document.getElementById('statsFooter').textContent =
+    `เสิร์ฟลูกค้าไปแล้ว ${player.stats.totalCustomersServed.toLocaleString()} คน | รายได้สะสมทั้งหมด ${Math.floor(player.stats.totalGoldEarned).toLocaleString()} Gold`;
+}
+
+function renderAll() {
+  renderGold();
+  renderStageView();
+  renderStageProgress();
+  renderUpgradeList();
+  renderStatsFooter();
+}
+
+/* =====================================================================
+   Save / Load
+   ===================================================================== */
+function saveGame() {
+  const data = {
+    gold: player.gold,
+    stageIndex: player.stageIndex,
+    upgradeLevels: player.upgradeLevels,
+    staffHired: player.staffHired,
+    lastSeenAt: Date.now(),
+    settings: player.settings,
+    stats: player.stats,
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน */ }
+}
+
+function loadGame() {
+  let raw;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { return; }
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    Object.assign(player, {
+      gold: data.gold || 0,
+      stageIndex: data.stageIndex || 0,
+      upgradeLevels: Object.assign({ speed: 0, portion: 0, signage: 0, decor: 0 }, data.upgradeLevels || {}),
+      staffHired: data.staffHired || false,
+      lastSeenAt: data.lastSeenAt || Date.now(),
+      settings: Object.assign({ soundEnabled: true }, data.settings || {}),
+      stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
+    });
+  } catch (e) { /* เซฟเสีย ใช้ค่าเริ่มต้นแทน */ }
+}
+
+/* =====================================================================
+   Event listeners
+   ===================================================================== */
+document.getElementById('standBooth').addEventListener('click', (e) => {
+  e.currentTarget.classList.remove('tap-bump');
+  void e.currentTarget.offsetWidth;
+  e.currentTarget.classList.add('tap-bump');
+  playSfxTap();
+});
+
+document.getElementById('btnAdvanceStage').addEventListener('click', () => advanceStage());
+document.getElementById('btnCloseWelcomeBack').addEventListener('click', () => {
+  document.getElementById('welcomeBackModal').classList.remove('show');
+  renderGold();
+});
+document.getElementById('btnCloseGameComplete').addEventListener('click', () => {
+  document.getElementById('gameCompleteModal').classList.remove('show');
+});
+
+document.getElementById('btnOpenSettings').addEventListener('click', () => {
+  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+  document.getElementById('settingsModal').classList.add('show');
+});
+document.getElementById('btnCloseSettings').addEventListener('click', () => {
+  document.getElementById('settingsModal').classList.remove('show');
+});
+document.getElementById('btnToggleSound').addEventListener('click', () => {
+  player.settings.soundEnabled = !player.settings.soundEnabled;
+  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+  saveGame();
+});
+document.getElementById('btnResetGame').addEventListener('click', () => {
+  if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  location.reload();
+});
+
+/* =====================================================================
+   Autosave + Init
+   ===================================================================== */
+setInterval(saveGame, 10000);
+window.addEventListener('beforeunload', saveGame);
+
+loadGame();
+applyOfflineEarnings();
+renderAll();
+scheduleNextCustomer();
+</script>
+</body>
+</html>
