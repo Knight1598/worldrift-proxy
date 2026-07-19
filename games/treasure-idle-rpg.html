@@ -692,6 +692,20 @@
 
   /* ปลุกพลังแฝง (Awakening) */
   .awakening-box { font-size: 0.72rem; color: #cfc7ae; margin-top: 6px; }
+
+  .share-textarea {
+    width: 100%;
+    margin-top: 8px;
+    background: #0c0d15;
+    color: var(--text-main);
+    border: 2px solid var(--divider);
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 0.7rem;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+  }
   .awakening-mult { color: var(--accent-gold); font-weight: bold; font-size: 0.85rem; }
   .awakening-tiers { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
   @keyframes awakeningPulse {
@@ -1101,6 +1115,8 @@
           <button class="char-tab-btn" data-tab="alchemyBody"><span class="char-tab-icon">⚗️</span>ผสมยา</button>
           <button class="char-tab-btn" data-tab="achievementBody"><span class="char-tab-icon">🏆</span>ความสำเร็จ</button>
           <button class="char-tab-btn" data-tab="personalBestBody"><span class="char-tab-icon">📊</span>สถิติ</button>
+          <button class="char-tab-btn" data-tab="workshopBody"><span class="char-tab-icon">🏭</span>โรงงาน</button>
+          <button class="char-tab-btn" data-tab="echoBody"><span class="char-tab-icon">📸</span>เงาอดีต</button>
         </div>
 
         <div class="char-tab-panel" id="prestigeBody">
@@ -1176,6 +1192,23 @@
           <div class="row"><span>CP สูงสุดที่เคยมี</span><span id="pbHighestCP">0</span></div>
           <div class="row"><span>Gold สูงสุดที่เคยถือ</span><span id="pbMostGold">0</span></div>
           <div class="row"><span>ดาเมจครั้งเดียวสูงสุด</span><span id="pbBiggestHit">0</span></div>
+          <p class="raid-desc" style="margin:12px 0 6px;">📋 สร้างข้อความสรุปตัวละครไว้โชว์เพื่อน (คัดลอกเองได้เลย)</p>
+          <button class="btn btn--info" id="btnGenerateShareText">สร้างข้อความ</button>
+          <textarea class="share-textarea" id="shareTextarea" readonly rows="6" style="display:none;"></textarea>
+        </div>
+
+        <div class="char-tab-panel" id="workshopBody">
+          <p class="raid-desc" style="margin:0 0 6px;">🏭 โรงงานผลิต Gold พาสซีฟ — ทำงานตอนเปิดหน้าเกมอยู่ (ต่างจาก Offline Earnings ที่คำนวณตอนกลับมาเปิดหลังปิดแท็บไป)</p>
+          <div class="row"><span>ระดับโรงงาน</span><span id="workshopLevelLabel">0/20</span></div>
+          <div class="row"><span>Gold/วินาที</span><span id="workshopRateLabel">0</span></div>
+          <button class="btn btn--success" id="btnUpgradeWorkshop">อัปเกรดโรงงาน</button>
+        </div>
+
+        <div class="char-tab-panel" id="echoBody">
+          <p class="raid-desc" style="margin:0 0 6px;">📸 บันทึกเงาสเตตัสปัจจุบันไว้ แล้วย้อนมาท้าดวลทีหลังเพื่อดูว่าเติบโตขึ้นแค่ไหน ชนะครั้งแรกของแต่ละเงาได้เพชรตามเปอร์เซ็นต์ที่เติบโต</p>
+          <div id="echoSnapshotInfo" class="raid-desc">ยังไม่มีเงาที่บันทึกไว้</div>
+          <button class="btn btn--info" id="btnSaveEcho">บันทึกเงาปัจจุบัน</button>
+          <button class="btn btn--danger" id="btnFightEcho" style="margin-top:6px;">ท้าดวลเงาในอดีต</button>
         </div>
       </div>
     </section>
@@ -1929,6 +1962,8 @@ let player = {
   dailyChallenge: { key: null, assignedDate: null, progress: 0, claimed: false }, // ภารกิจสุ่มรายวัน
   weeklyBossCooldownUntil: 0, // timestamp (Date.now()) ที่จะเข้าบอสประจำสัปดาห์รอบถัดไปได้
   towerCurios: [], // key ของสะสมพิเศษจากหอคอยที่เก็บได้แล้ว — ถาวร ไม่รีเซ็ตตอน Prestige ไม่มีบัฟสเตตัส
+  workshopLevel: 0, // ระดับโรงงานผลิต Gold พาสซีฟ (ดู WORKSHOP_MAX_LEVEL) — ทำงานตอนเปิดเกมอยู่ ต่างจาก Offline Earnings
+  echoSnapshot: null, // { atk, def, hp, cp, stage, claimed } สแนปช็อตสเตตัสที่บันทึกไว้ ใช้ท้าดวล Echo Battle
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -3158,6 +3193,99 @@ function computeOfflineEarnings(elapsedMs) {
   return { hours: Math.round(hours * 10) / 10, gold: goldEarned, chests: chestsEarned };
 }
 
+// ===============================================
+// โรงงานผลิต Gold พาสซีฟ (Auto-Gold Workshop) — ต่างจาก Offline Earnings ตรงที่ทำงาน "ตอนเปิดเกมอยู่"
+// เท่านั้น (ผ่าน setInterval) ไม่ใช่คำนวณย้อนหลังตอนกลับมาเปิด ให้เป็นรายได้เสริมระหว่างดูหน้าจอเฉยๆ
+// ===============================================
+const WORKSHOP_MAX_LEVEL = 20;
+const WORKSHOP_GOLD_PER_SEC_PER_CP_PER_LEVEL = 0.002; // ตั้งใจให้อ่อนกว่า Offline Earnings (0.02/CP) เพราะระบบนี้ทำงานพร้อมกับที่ผู้เล่นอาจกำลังเล่นสดอยู่ด้วย
+function getWorkshopUpgradeCost(level) {
+  return Math.floor(200 * Math.pow(1.3, level));
+}
+function getWorkshopGoldPerSec(p) {
+  return p.workshopLevel * WORKSHOP_GOLD_PER_SEC_PER_CP_PER_LEVEL * getCP(p);
+}
+function upgradeWorkshop() {
+  if (player.workshopLevel >= WORKSHOP_MAX_LEVEL) return;
+  const cost = getWorkshopUpgradeCost(player.workshopLevel);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  player.workshopLevel += 1;
+  appendLog([`🏭 อัปเกรดโรงงานเป็นระดับ ${player.workshopLevel}!`]);
+  renderAll();
+}
+
+// ===============================================
+// เงาในอดีต (Echo Battle) — บันทึกสแนปช็อตสเตตัสปัจจุบันไว้ แล้วย้อนมาท้าดวลทีหลังเพื่อดูว่าเติบโตขึ้นแค่ไหน
+// ใช้ resolver แยกของตัวเอง (เหมือน Tower) ไม่แตะ resolveBattle เดิม เพื่อไม่เสี่ยงต่อ balance ที่ตรวจแล้ว
+// ===============================================
+function saveEchoSnapshot() {
+  player.echoSnapshot = {
+    atk: getAtk(player), def: getDef(player), hp: getMaxHp(player), cp: getCP(player),
+    stage: player.stage, claimed: false,
+  };
+  appendLog(['📸 บันทึกเงาสเตตัสปัจจุบันไว้แล้ว! กลับมาท้าดวลดูการเติบโตได้ทีหลัง']);
+  renderAll();
+}
+function resolveEchoBattle() {
+  const echo = player.echoSnapshot;
+  let playerHp = getMaxHp(player);
+  const maxHp = getMaxHp(player);
+  let echoHp = echo.hp;
+  const atk = getAtk(player), def = getDef(player);
+  const playerCrit = getCritChance(player), playerDodge = getDodgeChance(player);
+  const events = [];
+  let turn = 0;
+  while (playerHp > 0 && echoHp > 0 && turn < 200) {
+    turn++;
+    let dmg = Math.max(1, Math.round(atk - echo.def));
+    if (Math.random() < playerCrit) dmg = Math.round(dmg * CRIT_MULT);
+    echoHp -= dmg;
+    events.push(`คุณโจมตีเงาในอดีต เป็นดาเมจ ${dmg}`);
+    if (echoHp <= 0) { events.push('เงาในอดีตพ่ายแพ้!'); break; }
+    let edmg = Math.max(1, Math.round(echo.atk - def));
+    if (Math.random() < 0.1) edmg = Math.round(edmg * CRIT_MULT);
+    if (Math.random() < playerDodge) { events.push('คุณหลบการโจมตีของเงาสำเร็จ!'); continue; }
+    playerHp -= edmg;
+    events.push(`เงาในอดีตโจมตีคุณ เป็นดาเมจ ${edmg}`);
+    if (playerHp <= 0) { events.push('คุณพ่ายแพ้ต่อเงาในอดีต...'); break; }
+  }
+  return { victory: echoHp <= 0 && playerHp > 0, events };
+}
+function fightEcho() {
+  if (!player.echoSnapshot) return;
+  const result = resolveEchoBattle();
+  appendLog(result.events);
+  if (result.victory) {
+    const growthPct = Math.round(((getCP(player) - player.echoSnapshot.cp) / player.echoSnapshot.cp) * 100);
+    if (!player.echoSnapshot.claimed) {
+      const gemReward = Math.min(10, Math.max(1, Math.floor(growthPct / 20)));
+      player.gems += gemReward;
+      player.echoSnapshot.claimed = true;
+      appendLog([`🏆 ชนะเงาในอดีต! เติบโตขึ้น ${growthPct}% ได้รับเพชร +${gemReward}`]);
+      showToast(`🏆 ชนะเงาในอดีต! (+${growthPct}% CP)`);
+    } else {
+      appendLog([`ชนะเงาในอดีต! เติบโตขึ้น ${growthPct}% (เคยรับรางวัลไปแล้วสำหรับเงาชุดนี้)`]);
+    }
+  } else {
+    showToast('แพ้เงาในอดีต... ฝึกฝนต่ออีกหน่อยนะ');
+  }
+  renderAll();
+}
+// สร้างข้อความสรุปตัวละครแบบ plain text ให้คัดลอกไปโชว์เพื่อนได้ (Share Snapshot) — ไม่มี backend/ลิงก์จริง
+// แค่ข้อความล้วนๆ ที่ผู้เล่นคัดลอกเองไปวางที่ไหนก็ได้
+function generateShareText(p) {
+  const title = getEquippedTitle(p);
+  const lines = [
+    '⚔️ Treasure Idle RPG — สรุปตัวละคร',
+    `Lv.${getPlayerLevel(p)} | CP ${getCP(p)} | ด่านสูงสุดที่เคยไปถึง ${p.personalBests.highestStageEver}`,
+    `Prestige x${p.prestigePoints} | ปลุกพลังแฝง x${getAwakeningMultiplier(p).toFixed(1)}`,
+    title ? `ฉายา: ${title.name}` : null,
+    `ป้ายความสำเร็จ ${p.unlockedAchievements.length}/${ACHIEVEMENT_DEFS.length} | วัตถุโบราณ ${p.relics.length}/${RELIC_DEFS.length} | หอคอยชั้น ${p.towerHighestFloor}`,
+  ].filter(Boolean);
+  return lines.join('\n');
+}
+
 /* =====================================================================
    SAVE / LOAD (localStorage — เก็บความคืบหน้าไว้เมื่อปิดแท็บ/รีเฟรช)
    ===================================================================== */
@@ -3210,6 +3338,8 @@ function saveGame() {
     dailyChallenge: player.dailyChallenge,
     weeklyBossCooldownUntil: player.weeklyBossCooldownUntil,
     towerCurios: player.towerCurios,
+    workshopLevel: player.workshopLevel,
+    echoSnapshot: player.echoSnapshot,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -3266,6 +3396,8 @@ function loadGame() {
       dailyChallenge: Object.assign({ key: null, assignedDate: null, progress: 0, claimed: false }, data.dailyChallenge || {}),
       weeklyBossCooldownUntil: data.weeklyBossCooldownUntil || 0,
       towerCurios: data.towerCurios || [],
+      workshopLevel: data.workshopLevel || 0,
+      echoSnapshot: data.echoSnapshot || null,
     });
     // ย้ายไอเทมรูปแบบเก่า (ยุคก่อน Multi-Stat Equipment ที่เก็บ .value ค่าเดียว) ให้เป็น .baseStats
     // แบบใหม่ กันเซฟเก่าพังตอนโหลด — ทำทั้งของที่สวมอยู่และในคลังไอเทม
@@ -3701,6 +3833,8 @@ function renderCharacterPanel() {
   checkAchievements(); // ต้องเช็คหลังอัปเดต personalBests ข้างบนแล้ว ก่อน renderAchievementGrid ที่อ่านผลลัพธ์ต่อ
   renderAchievementGrid();
   renderPersonalBests();
+  renderWorkshopBox();
+  renderEchoBox();
 
   const dailyBtn = document.getElementById('btnOpenDailyLogin');
   dailyBtn.classList.toggle('daily-login-btn--ready', !isDailyLoginClaimedToday(player));
@@ -3744,6 +3878,27 @@ function renderPersonalBests() {
   document.getElementById('pbHighestCP').textContent = player.personalBests.highestCP;
   document.getElementById('pbMostGold').textContent = player.personalBests.mostGoldHeld;
   document.getElementById('pbBiggestHit').textContent = player.personalBests.biggestHit;
+}
+
+function renderWorkshopBox() {
+  document.getElementById('workshopLevelLabel').textContent = `${player.workshopLevel}/${WORKSHOP_MAX_LEVEL}`;
+  document.getElementById('workshopRateLabel').textContent = getWorkshopGoldPerSec(player).toFixed(2);
+  const maxed = player.workshopLevel >= WORKSHOP_MAX_LEVEL;
+  const cost = getWorkshopUpgradeCost(player.workshopLevel);
+  const btn = document.getElementById('btnUpgradeWorkshop');
+  btn.textContent = maxed ? 'อัปเกรดสูงสุดแล้ว' : `อัปเกรดโรงงาน (${cost} Gold)`;
+  btn.disabled = maxed || player.gold < cost;
+}
+
+function renderEchoBox() {
+  const info = document.getElementById('echoSnapshotInfo');
+  const snap = player.echoSnapshot;
+  if (!snap) {
+    info.textContent = 'ยังไม่มีเงาที่บันทึกไว้';
+  } else {
+    info.textContent = `เงาบันทึกไว้ตอนด่าน ${snap.stage}, CP ${snap.cp}${snap.claimed ? ' (รับรางวัลไปแล้ว)' : ' (ยังไม่เคยเอาชนะ)'}`;
+  }
+  document.getElementById('btnFightEcho').disabled = !snap;
 }
 
 function renderAwakeningBox() {
@@ -4502,6 +4657,28 @@ document.getElementById('btnUseElixir').addEventListener('click', () => useElixi
 document.getElementById('btnCraftMegaElixir').addEventListener('click', () => craftMegaElixir());
 document.getElementById('btnUseMegaElixir').addEventListener('click', () => useMegaElixir());
 
+document.getElementById('btnUpgradeWorkshop').addEventListener('click', () => upgradeWorkshop());
+document.getElementById('btnSaveEcho').addEventListener('click', () => saveEchoSnapshot());
+document.getElementById('btnFightEcho').addEventListener('click', () => fightEcho());
+
+document.getElementById('btnGenerateShareText').addEventListener('click', () => {
+  const text = generateShareText(player);
+  const box = document.getElementById('shareTextarea');
+  box.value = text;
+  box.style.display = 'block';
+  box.focus();
+  box.select();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('📋 คัดลอกไปยังคลิปบอร์ดแล้ว!');
+    }).catch(() => {
+      showToast('📋 เลือกข้อความไว้แล้ว กด Ctrl+C เพื่อคัดลอก');
+    });
+  } else {
+    showToast('📋 เลือกข้อความไว้แล้ว กด Ctrl+C เพื่อคัดลอก');
+  }
+});
+
 document.querySelectorAll('.collapsible-header').forEach(header => {
   header.addEventListener('click', () => {
     const body = document.getElementById(header.dataset.target);
@@ -4512,7 +4689,7 @@ document.querySelectorAll('.collapsible-header').forEach(header => {
 
 // แถบเมนูด้านข้างของพาเนลตัวละคร (Prestige/ปลุกพลัง/ตีบวก/สกิล/ฉายา/วัตถุโบราณ/สมุดภาพ/ผสมยา)
 // แสดงทีละแท็บแทนการกาง accordion ซ้อนกันหลายอันเหมือนเดิม เรียงลำดับตามความสำคัญ/ความถี่ในการใช้งาน
-const CHAR_TAB_IDS = ['prestigeBody', 'awakeningBody', 'enhanceBody', 'skillBody', 'titleBody', 'relicBody', 'bestiaryBody', 'alchemyBody', 'achievementBody', 'personalBestBody'];
+const CHAR_TAB_IDS = ['prestigeBody', 'awakeningBody', 'enhanceBody', 'skillBody', 'titleBody', 'relicBody', 'bestiaryBody', 'alchemyBody', 'achievementBody', 'personalBestBody', 'workshopBody', 'echoBody'];
 function selectCharTab(tabId) {
   CHAR_TAB_IDS.forEach(id => {
     document.getElementById(id).classList.toggle('char-tab-panel--active', id === tabId);
@@ -4655,6 +4832,13 @@ setInterval(() => {
 }, 30000);
 // เช็คว่าสภาพอากาศหมดเวลาแล้วหรือยัง (ทุก 1 นาที) แม้ผู้เล่นจะไม่ได้กดสู้เลยก็ยังหมุนเวียนแบบเรียลไทม์
 setInterval(() => { renderBattlePanel(); }, 60000);
+// โรงงานผลิต Gold พาสซีฟ: ทำงานทุก 5 วินาทีตอนเปิดหน้าเกมอยู่ (ไม่ใช่ตอนออฟไลน์ — นั่นคือ Offline Earnings)
+setInterval(() => {
+  if (player.workshopLevel > 0) {
+    player.gold += getWorkshopGoldPerSec(player) * 5;
+    renderAll();
+  }
+}, 5000);
 
 if (pendingOfflineReport) {
   document.getElementById('welcomeBackText').innerHTML =
