@@ -2789,6 +2789,15 @@ function finalizeBattle(result) {
     player.stage += 1;
     player.highestStage = Math.max(player.highestStage || 1, player.stage);
     player.encounter = null; // สุ่มมอนสเตอร์ใหม่สำหรับด่านถัดไป
+  } else {
+    // บทลงโทษเมื่อพ่ายแพ้: ถอยหลัง 1 ด่าน (ต่ำสุดด่าน 1) กันไม่ให้ auto-battle ชนกำแพงด่านเดิมซ้ำๆ
+    // ไม่รู้จบโดยไม่ยอมอัปเกรด บังคับให้ต้องวางแผนดัน CP ให้พอถึงจะผ่านด่านไปได้จริง (highestStage ไม่ถูกแตะ
+    // เพราะเป็นสถิติ "เคยไปถึงสูงสุด" ใช้คำนวณ Prestige ไม่ใช่ตำแหน่งปัจจุบัน)
+    if (player.stage > 1) {
+      player.stage -= 1;
+      appendLog([`พ่ายแพ้! ถอยกลับไปด่าน ${player.stage}`]);
+    }
+    player.encounter = null; // สุ่มมอนสเตอร์ใหม่ (เต็ม HP) สำหรับด่านที่ถอยกลับมา
   }
   if (player.buffFightsLeft > 0) {
     player.buffFightsLeft -= 1;
