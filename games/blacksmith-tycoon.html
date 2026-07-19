@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lemonade Stand Tycoon</title>
+<title>Blacksmith Tycoon</title>
 <style>
   :root {
     --bg: #fdf6e3;
@@ -51,7 +51,7 @@
     color: var(--accent-gold);
     box-shadow: var(--shadow);
   }
-  .gold-counter .coin-icon { font-size: 1.2rem; }
+  .gold-counter .coin-icon { width: 22px; height: 22px; image-rendering: pixelated; }
 
   .btn-tertiary {
     position: absolute;
@@ -96,7 +96,7 @@
   }
   .stand-stage-view {
     position: relative;
-    height: 150px;
+    height: 170px;
     border-radius: 12px;
     overflow: hidden;
     display: flex;
@@ -107,21 +107,17 @@
   .stand-booth {
     position: relative;
     z-index: 2;
-    width: 90px;
-    height: 90px;
-    border-radius: 14px 14px 6px 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2.6rem;
-    box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+    max-width: 220px;
+    max-height: 140px;
+    image-rendering: pixelated;
     cursor: pointer;
     user-select: none;
     transition: transform 0.08s ease;
+    filter: drop-shadow(0 4px 3px rgba(0,0,0,0.25));
   }
-  .stand-booth:active { transform: scale(0.94); }
+  .stand-booth:active { transform: scale(0.96); }
   .stand-booth.tap-bump { animation: tapBump 0.18s ease; }
-  @keyframes tapBump { 0% { transform: scale(1); } 50% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  @keyframes tapBump { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
 
   .customer-lane {
     position: absolute;
@@ -131,28 +127,32 @@
   .customer {
     position: absolute;
     bottom: 8px;
-    font-size: 1.8rem;
+    width: 44px;
+    height: 48px;
     transition: left 1.1s linear, opacity 0.4s ease;
     z-index: 3;
   }
+  .customer-img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
   .customer-bubble {
     position: absolute;
     top: -18px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 0.9rem;
+    width: 22px; height: 22px;
     opacity: 0;
     transition: opacity 0.2s ease, top 0.2s ease;
   }
+  .customer-bubble img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
   .customer-bubble.show { opacity: 1; top: -26px; }
 
   .coin-fly {
     position: absolute;
-    font-size: 1.1rem;
+    width: 20px; height: 20px;
     pointer-events: none;
     z-index: 5;
     transition: left 0.7s cubic-bezier(.2,.7,.3,1), top 0.7s cubic-bezier(.2,.7,.3,1), opacity 0.7s ease;
   }
+  .coin-fly img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
   .tip-float {
     position: absolute;
     font-size: 0.85rem;
@@ -304,18 +304,18 @@
 <body>
 
 <div class="app-header">
-  <h1>🍋 Lemonade Stand Tycoon</h1>
-  <div class="gold-counter"><span class="coin-icon">🪙</span><span id="goldValue">0</span></div>
+  <h1>⚒️ Blacksmith Tycoon</h1>
+  <div class="gold-counter"><img class="coin-icon" src="assets/blacksmith/coin.png" alt="gold"><span id="goldValue">0</span></div>
   <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
 </div>
 
 <div class="game-wrap">
   <div class="stand-panel">
-    <div class="stand-title" id="stageName">แผงริมทาง</div>
-    <div class="stand-product" id="stageProduct">ขาย น้ำมะนาว</div>
+    <div class="stand-title" id="stageName">แผงขายของริมทาง</div>
+    <div class="stand-product" id="stageProduct">ขาย ของกินของใช้ทั่วไป</div>
     <div class="stand-stage-view" id="standStageView">
       <div class="customer-lane" id="customerLane"></div>
-      <div class="stand-booth" id="standBooth">🍋</div>
+      <img class="stand-booth" id="standBooth" src="assets/blacksmith/station_stall.png" alt="">
     </div>
     <div class="stage-progress">
       อัปเกรดเต็มขั้นแล้ว <span id="stageProgressCount">0</span>/<span id="stageProgressTotal">4</span>
@@ -364,8 +364,8 @@
 <div class="modal-overlay" id="gameCompleteModal">
   <div class="modal-box">
     <div class="modal-emoji-big">👑</div>
-    <h2>สร้างอาณาจักรร้านค้าสำเร็จ!</h2>
-    <p>คุณอัปเกรดร้านค้าจนสุดทางแล้วในเวอร์ชันนี้ ขอบคุณที่เล่นจนจบ — ระบบใหม่กำลังจะตามมาเร็วๆ นี้!</p>
+    <h2>สร้างอาณาจักรช่างตีเหล็กสำเร็จ!</h2>
+    <p>คุณอัปเกรดร้านจนสุดทางแล้วในเวอร์ชันนี้ ขอบคุณที่เล่นจนจบ — ระบบใหม่กำลังจะตามมาเร็วๆ นี้!</p>
     <button class="btn-cta-mega" id="btnCloseGameComplete">เยี่ยมไปเลย!</button>
   </div>
 </div>
@@ -375,18 +375,31 @@
    ข้อมูลเกม (Stages / Upgrades)
    ===================================================================== */
 const STAGES = [
-  { key: 'stand', name: 'แผงริมทาง',         product: 'น้ำมะนาว',     emoji: '🍋', color: '#fff3c4', boothColor: '#f4d35e', baseRevenue: 5   },
-  { key: 'cart',  name: 'รถเข็นขายของ',       product: 'สมูทตี้ผลไม้',  emoji: '🥤', color: '#ffe0c2', boothColor: '#f77f00', baseRevenue: 15  },
-  { key: 'stall', name: 'แผงในตลาด',         product: 'กาแฟสด',       emoji: '☕', color: '#e8d9c8', boothColor: '#8d6a4f', baseRevenue: 45  },
-  { key: 'cafe',  name: 'คาเฟ่น่ารัก',        product: 'เค้กชิ้น',      emoji: '🍰', color: '#fbdce6', boothColor: '#e07a9e', baseRevenue: 135 },
-  { key: 'shop',  name: 'ร้านใหญ่ใจกลางเมือง', product: 'เมนูพรีเมียม',  emoji: '🍽️', color: '#e2d9f3', boothColor: '#6a4c93', baseRevenue: 405 },
+  { key: 'stall',   name: 'แผงขายของริมทาง',    product: 'ของกินของใช้ทั่วไป', stationImg: 'assets/blacksmith/station_stall.png',   customerImg: 'assets/blacksmith/rogue.png',   color: '#f3e3c9', baseRevenue: 5   },
+  { key: 'forge',   name: 'โรงตีดาบ',           product: 'ดาบ',               stationImg: 'assets/blacksmith/station_forge.png',   customerImg: 'assets/blacksmith/knight.png',  color: '#dcdbe0', baseRevenue: 25  },
+  { key: 'alchemy', name: 'ห้องเล่นแร่แปรธาตุ',  product: 'โพชั่นวิเศษ',        stationImg: 'assets/blacksmith/station_alchemy.png', customerImg: 'assets/blacksmith/wizard.png',  color: '#e3d9f3', baseRevenue: 125 },
 ];
 
+// ไอคอนสินค้าที่ขาย เปลี่ยนดีไซน์ (tier) ตามระดับอัปเกรด "คุณภาพสินค้า" ที่ซื้อไปแล้ว — ให้เห็นภาพว่าซื้ออัปเกรด
+// แล้วของที่ขายเปลี่ยนจริง ไม่ใช่แค่ตัวเลขขยับ (จับต้องได้ตามที่ตั้งใจออกแบบไว้)
+const PRODUCT_TIERS = {
+  stall:   [{ minLevel: 0, icon: 'assets/blacksmith/coin.png' }],
+  forge:   [{ minLevel: 0, icon: 'assets/blacksmith/sword_bronze.png' }, { minLevel: 2, icon: 'assets/blacksmith/sword_silver.png' }, { minLevel: 4, icon: 'assets/blacksmith/sword_blue.png' }],
+  alchemy: [{ minLevel: 0, icon: 'assets/blacksmith/potion_red.png' }, { minLevel: 3, icon: 'assets/blacksmith/potion_blue.png' }],
+};
+function getProductIcon() {
+  const tiers = PRODUCT_TIERS[getStage().key];
+  const level = player.upgradeLevels.portion;
+  let icon = tiers[0].icon;
+  tiers.forEach(t => { if (level >= t.minLevel) icon = t.icon; });
+  return icon;
+}
+
 const UPGRADE_TYPES = [
-  { key: 'speed',   name: 'ความเร็วเสิร์ฟ', icon: '⚡', desc: 'ลูกค้ามาถี่ขึ้น',        maxLevel: 5, baseCostMult: 8  },
-  { key: 'portion', name: 'ขนาด/ราคา',      icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น', maxLevel: 5, baseCostMult: 10 },
-  { key: 'signage', name: 'ป้ายโฆษณา',      icon: '📣', desc: 'มีโอกาสลูกค้ามาเป็นคู่',  maxLevel: 5, baseCostMult: 12 },
-  { key: 'decor',   name: 'ตกแต่งร้าน',      icon: '✨', desc: 'ลูกค้ามีโอกาสให้ทิป',     maxLevel: 5, baseCostMult: 14 },
+  { key: 'speed',   name: 'ความเร็วในการขาย', icon: '⚡', desc: 'ลูกค้ามาถี่ขึ้น',        maxLevel: 5, baseCostMult: 8  },
+  { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 5, baseCostMult: 10 },
+  { key: 'signage', name: 'ป้ายร้าน',         icon: '📣', desc: 'มีโอกาสลูกค้ามาเป็นคู่',  maxLevel: 5, baseCostMult: 12 },
+  { key: 'decor',   name: 'ตกแต่งร้าน',        icon: '✨', desc: 'ลูกค้ามีโอกาสให้ทิป',     maxLevel: 5, baseCostMult: 14 },
 ];
 
 const BASE_SPAWN_INTERVAL_MS = 4000;
@@ -399,7 +412,7 @@ const UPGRADE_COST_GROWTH = 1.6;
 const OFFLINE_MAX_HOURS = 8;
 const OFFLINE_EFFICIENCY = 0.5; // รายได้ตอนไม่อยู่หน้าจอ = ครึ่งหนึ่งของอัตราปกติ (มาตรฐานเกม idle ทั่วไป)
 
-const SAVE_KEY = 'lemonadeStandTycoonSave_v1';
+const SAVE_KEY = 'blacksmithTycoonSave_v1';
 
 /* =====================================================================
    Player State
@@ -487,8 +500,6 @@ function playSfxTap() { playTone(700, 0.03, 'square', 0.05); }
 /* =====================================================================
    Customer spawn / walk / pay loop
    ===================================================================== */
-const CUSTOMER_COLORS = ['#ff9f45', '#6bbf6b', '#5aa9e6', '#e35d5d', '#c77dff', '#f4a259'];
-
 function scheduleNextCustomer() {
   if (spawnTimerId) clearTimeout(spawnTimerId);
   spawnTimerId = setTimeout(() => {
@@ -505,12 +516,18 @@ function spawnCustomer() {
   const laneWidth = lane.clientWidth || 300;
   const el = document.createElement('div');
   el.className = 'customer';
-  el.textContent = '🧍';
-  el.style.color = CUSTOMER_COLORS[Math.floor(Math.random() * CUSTOMER_COLORS.length)];
+  const img = document.createElement('img');
+  img.className = 'customer-img';
+  img.src = getStage().customerImg;
+  img.alt = '';
+  el.appendChild(img);
   el.style.left = (laneWidth - 20) + 'px';
   const bubble = document.createElement('div');
   bubble.className = 'customer-bubble';
-  bubble.textContent = getStage().emoji;
+  const bubbleImg = document.createElement('img');
+  bubbleImg.src = getProductIcon();
+  bubbleImg.alt = '';
+  bubble.appendChild(bubbleImg);
   el.appendChild(bubble);
   lane.appendChild(el);
 
@@ -554,7 +571,10 @@ function spawnCoinFly(customerEl) {
   const lane = document.getElementById('customerLane');
   const coin = document.createElement('div');
   coin.className = 'coin-fly';
-  coin.textContent = '🪙';
+  const coinImg = document.createElement('img');
+  coinImg.src = 'assets/blacksmith/coin.png';
+  coinImg.alt = '';
+  coin.appendChild(coinImg);
   const cx = parseFloat(customerEl.style.left) || 0;
   coin.style.left = cx + 'px';
   coin.style.top = '10px';
@@ -659,9 +679,7 @@ function renderStageView() {
   document.getElementById('stageName').textContent = stage.name;
   document.getElementById('stageProduct').textContent = `ขาย ${stage.product}`;
   document.getElementById('standStageView').style.background = stage.color;
-  const booth = document.getElementById('standBooth');
-  booth.textContent = stage.emoji;
-  booth.style.background = stage.boothColor;
+  document.getElementById('standBooth').src = stage.stationImg;
 }
 
 function renderStageProgress() {
