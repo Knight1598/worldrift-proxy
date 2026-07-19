@@ -734,6 +734,26 @@
   .tier-midboss  { background: rgba(180,120,20,0.8); }
   .tier-bigboss  { background: rgba(180,20,20,0.85); }
 
+  /* อีเวนต์สภาพอากาศ (Weather Events) */
+  .weather-badge {
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    font-size: 0.85rem;
+    background: rgba(0,0,0,0.55);
+    padding: 2px 6px;
+    border-radius: 3px;
+    cursor: help;
+    z-index: 2;
+  }
+  .weather-tint {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    transition: background-color 1.2s ease;
+    z-index: 1;
+  }
+
   .monster-name { text-align: center; font-size: 0.85rem; margin-bottom: 4px; }
 
   .battle-buttons { display: flex; gap: 6px; }
@@ -1179,6 +1199,8 @@
       <div class="bg-scene" id="bgScene">
         <span class="stage-badge">ด่าน <span id="stageNum">1</span></span>
         <span class="tier-badge tier-normal" id="tierBadge">ปกติ</span>
+        <span class="weather-badge" id="weatherBadge" title="">☀️</span>
+        <div class="weather-tint" id="weatherTint"></div>
         <img class="monster-sprite" id="monsterSprite" src="" alt="monster" onerror="this.style.opacity='0'">
         <div class="battle-banner" id="battleBanner"></div>
       </div>
@@ -1772,6 +1794,8 @@ let player = {
   bossSouls: 0, // ได้จากปราบมิด/บิ๊กบอส ใช้คราฟต์อุปกรณ์ Legendary การันตี หรือแลกหินตีบวก
   petTickets: 0, // ได้จากมอนสเตอร์ปกติ (โอกาสน้อย) ใช้สุ่มสัตว์เลี้ยงแทนเพชรได้ 1 ตั๋ว/ครั้ง
   mysteryChests: 0, // หีบปริศนา ดรอปจากการต่อสู้เป็นบางครั้ง เปิดแล้วได้ Gold ก้อนใหญ่หรือโพชั่นสุ่ม
+  weatherKey: null, // สภาพอากาศปัจจุบัน (ดู WEATHER_TYPES) — หมุนเวียนอัตโนมัติ ไม่ถาวร ไม่สะสม
+  weatherChangesAt: 0, // timestamp (Date.now()) ที่จะสุ่มสภาพอากาศใหม่
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -2032,13 +2056,15 @@ function getCritChance(p) {
   const glovesBonus = p.equipment.gloves ? p.equipment.gloves.value / 100 : 0;
   const setBonus = getSetBonusTotals(p).crit;
   const titleBonus = getTitleBonus(p, 'crit');
-  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + glovesBonus + weaponBonus + setBonus + titleBonus);
+  const weatherBonus = getWeatherBonus('crit');
+  return Math.min(0.6, 0.10 + p.upgradeLevels.atk * 0.005 + glovesBonus + weaponBonus + setBonus + titleBonus + weatherBonus);
 }
 function getDodgeChance(p) {
   const weapon = p.equipment.weapon;
   const weaponBonus = weapon && weapon.perk === 'dodge' ? weapon.perkValue : 0;
   const bootsBonus = p.equipment.boots ? p.equipment.boots.value / 100 : 0;
-  return Math.min(0.5, 0.05 + p.upgradeLevels.def * 0.005 + bootsBonus + weaponBonus);
+  const weatherBonus = getWeatherBonus('dodge');
+  return Math.min(0.5, 0.05 + p.upgradeLevels.def * 0.005 + bootsBonus + weaponBonus + weatherBonus);
 }
 
 function doPrestige() {
@@ -2300,6 +2326,35 @@ function collectPetDispatch(petKey) {
   renderAll();
 }
 
+// ===============================================
+// อีเวนต์สภาพอากาศ (Weather Events) — หมุนเวียนแบบเรียลไทม์ ให้บัฟเล็กๆ ชั่วคราวเพิ่มสีสัน/บรรยากาศ
+// ตั้งใจให้เป็น "ไม่สะสม ไม่ถาวร" (มีได้แค่ 1 สภาพอากาศต่อครั้ง หมดเวลาแล้ววนสุ่มใหม่) เพื่อไม่ให้
+// ไปแตะ chain ตัวคูณสเตตัสถาวรที่ต้องระวังเรื่อง stacking ตามที่สรุปไว้ใน Math Audit ก่อนหน้า
+// ===============================================
+const WEATHER_TYPES = [
+  { key: 'clear', name: 'ท้องฟ้าแจ่มใส', icon: '☀️', desc: 'ไม่มีผลพิเศษ', tint: 'transparent', effect: {} },
+  { key: 'rain',  name: 'ฝนตก',          icon: '🌧️', desc: '+10% Gold ที่ได้รับ', tint: 'rgba(60,90,160,0.18)', effect: { goldMult: 0.10 } },
+  { key: 'storm', name: 'พายุฟ้าคะนอง',  icon: '⚡', desc: '+8% โอกาสคริติคอล', tint: 'rgba(90,70,140,0.20)', effect: { crit: 0.08 } },
+  { key: 'snow',  name: 'หิมะตก',        icon: '❄️', desc: 'ลด ATK มอนสเตอร์ 8%', tint: 'rgba(200,220,255,0.16)', effect: { monsterAtkReduction: 0.08 } },
+  { key: 'fog',   name: 'หมอกลง',        icon: '🌫️', desc: '+6% โอกาสหลบหลีก', tint: 'rgba(150,150,150,0.20)', effect: { dodge: 0.06 } },
+];
+const WEATHER_INTERVAL_MS = 15 * 60 * 1000; // เปลี่ยนสภาพอากาศทุก 15 นาที (เวลาจริง)
+
+function ensureWeather() {
+  if (!player.weatherKey || !player.weatherChangesAt || Date.now() >= player.weatherChangesAt) {
+    const w = WEATHER_TYPES[Math.floor(Math.random() * WEATHER_TYPES.length)];
+    player.weatherKey = w.key;
+    player.weatherChangesAt = Date.now() + WEATHER_INTERVAL_MS;
+  }
+}
+function getCurrentWeather() {
+  ensureWeather();
+  return WEATHER_TYPES.find(w => w.key === player.weatherKey) || WEATHER_TYPES[0];
+}
+function getWeatherBonus(key) {
+  return getCurrentWeather().effect[key] || 0;
+}
+
 function ensureEncounter() {
   if (!player.encounter) {
     // วัตถุโบราณ "มงกุฎจอมมาร": มีโอกาส 3% ข้ามด่านปกติที่เหลือไปเจอบอส (ด่านคูณ 5) ทันที
@@ -2473,7 +2528,7 @@ function resolveTowerFloor(monster, startPlayerHp) {
   const skill = getEquippedSkill(player);
   const skillKey = skill ? skill.key : null;
   const effectiveMonsterDef = monster.def * (1 - (weapon && weapon.perk === 'armorpen' ? weapon.perkValue : 0));
-  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1);
+  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1) * (1 - getWeatherBonus('monsterAtkReduction'));
   const lifestealPct = (weapon && weapon.perk === 'lifesteal' ? weapon.perkValue : 0) + (skillKey === 'dark' ? 0.08 : 0);
   let usedImmortalHeartThisFight = false;
   const events = [];
@@ -2749,6 +2804,8 @@ function saveGame() {
     bossSouls: player.bossSouls,
     petTickets: player.petTickets,
     mysteryChests: player.mysteryChests,
+    weatherKey: player.weatherKey,
+    weatherChangesAt: player.weatherChangesAt,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -2797,6 +2854,8 @@ function loadGame() {
       bossSouls: data.bossSouls || 0,
       petTickets: data.petTickets || 0,
       mysteryChests: data.mysteryChests || 0,
+      weatherKey: data.weatherKey || null,
+      weatherChangesAt: data.weatherChangesAt || 0,
     });
     if (data.lastSeenAt) {
       pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
@@ -2825,7 +2884,7 @@ function resolveBattle() {
   // หอก (spear): ทะลุ DEF มอนสเตอร์บางส่วน — ลด DEF ที่ใช้คำนวณดาเมจลงตาม perkValue
   const effectiveMonsterDef = monster.def * (1 - (weapon && weapon.perk === 'armorpen' ? weapon.perkValue : 0));
   // สกิลน้ำแข็ง: ลด ATK ของมอนสเตอร์ลง 10% ตลอดไฟต์นี้
-  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1);
+  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1) * (1 - getWeatherBonus('monsterAtkReduction'));
   // รวม % ฮีลจากไม้เท้า (perk) และสกิลออร่ามืด (dark) เข้าด้วยกัน ถ้ามีทั้งคู่จะฮีลรวมทีเดียว
   const lifestealPct = (weapon && weapon.perk === 'lifesteal' ? weapon.perkValue : 0) + (skillKey === 'dark' ? 0.08 : 0);
   let usedImmortalHeartThisFight = false; // จำกัดวัตถุโบราณ "หัวใจอมตะ" ให้ใช้ได้แค่ครั้งเดียวต่อไฟต์
@@ -2916,7 +2975,7 @@ function finalizeBattle(result) {
     const bossMult = result.monster.tier === 'bigboss' ? 5 : result.monster.tier === 'midboss' ? 3 : 1;
     // อัตราสเกล 0.2 -> 0.3 ต่อด่าน: จากการจำลองพบว่ารายได้ทองเดิมโตช้ากว่าค่าอัปเกรดที่โตแบบ
     // exponential (20*1.15^n ต่อสเตตัส) มากพอที่จะทำให้ผู้เล่นไล่ตามไม่ทันตั้งแต่ราวด่าน 30-40
-    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult * (1 + getTitleBonus(player, 'goldMult')));
+    const goldDrop = Math.floor(10 * (1 + (player.stage - 1) * 0.3) * bossMult * (1 + getTitleBonus(player, 'goldMult') + getWeatherBonus('goldMult')));
     player.gold += goldDrop;
     appendLog([`ได้รับ ${goldDrop} Gold`]);
 
@@ -3653,6 +3712,12 @@ function renderBattlePanel() {
   tierBadge.textContent = tierLabel(monster.tier);
   tierBadge.className = `tier-badge tier-${monster.tier}`;
 
+  const weather = getCurrentWeather();
+  const weatherBadge = document.getElementById('weatherBadge');
+  weatherBadge.textContent = weather.icon;
+  weatherBadge.title = `${weather.name}: ${weather.desc}`;
+  document.getElementById('weatherTint').style.backgroundColor = weather.tint;
+
   const hpPct = Math.max(0, Math.min(100, (monster.hp / monster.maxHp) * 100));
   document.getElementById('monsterHpFill').style.width = hpPct + '%';
   document.getElementById('monsterHpLabel').textContent = `${Math.max(0, monster.hp)} / ${monster.maxHp}`;
@@ -4033,6 +4098,8 @@ setInterval(() => {
 setInterval(() => {
   if (document.getElementById('petBody') && !document.getElementById('petBody').classList.contains('collapsed')) renderPetGrid();
 }, 30000);
+// เช็คว่าสภาพอากาศหมดเวลาแล้วหรือยัง (ทุก 1 นาที) แม้ผู้เล่นจะไม่ได้กดสู้เลยก็ยังหมุนเวียนแบบเรียลไทม์
+setInterval(() => { renderBattlePanel(); }, 60000);
 
 if (pendingOfflineReport) {
   document.getElementById('welcomeBackText').innerHTML =
