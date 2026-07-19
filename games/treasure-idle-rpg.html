@@ -613,6 +613,63 @@
   .enhance-row .btn { width: auto; margin-top: 0; padding: 4px 8px; font-size: 0.65rem; }
   .enhance-empty { text-align: center; font-size: 0.72rem; color: #8a84a0; padding: 8px 0; }
 
+  /* ล็อกอินรายวัน (Daily Login) */
+  .daily-login-btn {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: 2px solid var(--divider);
+    border-radius: 50%;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    padding: 0;
+    font-size: 1.05rem;
+    line-height: 1;
+  }
+  .daily-login-btn:hover { border-color: var(--accent-gold); }
+  .daily-login-btn--ready { border-color: var(--accent-gold); box-shadow: 0 0 6px 1px rgba(255,215,106,0.6); animation: legendaryGlow 1.6s ease-in-out infinite; }
+  .daily-login-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin: 10px 0; }
+  .daily-login-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: #1c1730;
+    border: 2px solid var(--divider);
+    border-radius: 4px;
+    padding: 6px 2px;
+    font-size: 0.55rem;
+    color: #8a84a0;
+  }
+  .daily-login-day--claimed { border-color: var(--accent-gold); color: var(--accent-gold); }
+  .daily-login-day--today { border-color: #4ec9ff; box-shadow: 0 0 6px 1px rgba(78,201,255,0.5); color: var(--text-main); }
+  .daily-login-day .dl-day-label { font-weight: bold; }
+
+  /* ระบบผสมยา (Alchemy) */
+  .alchemy-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1c1730;
+    border: 1px solid var(--divider);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 0.72rem;
+    margin-top: 6px;
+  }
+  .alchemy-row .alchemy-desc { flex: 1; }
+  .alchemy-row .btn { width: auto; margin-top: 0; padding: 4px 8px; font-size: 0.65rem; }
+
+  /* สัตว์เลี้ยง — ส่งสำรวจ (Pet Dispatch) */
+  .pet-dispatch-note { font-size: 0.6rem; color: #8a84a0; margin-top: 2px; }
+  .pet-dispatch-note--ready { color: var(--accent-gold); font-weight: bold; }
+
+  /* หอคอยไร้ขีดจำกัด (Infinite Tower) */
+  .tower-floor-label { font-size: 0.8rem; color: var(--accent-gold); margin-bottom: 6px; }
+
   /* ฉากต่อสู้ */
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังฉากต่อสู้ เปลี่ยนตามช่วงด่าน)
@@ -780,6 +837,7 @@
 <body>
 
 <h1 class="title">
+  <button class="daily-login-btn" id="btnOpenDailyLogin" title="ล็อกอินรายวัน">📅</button>
   ⚔ Treasure Idle RPG ⚔
   <button class="settings-gear-btn" id="btnOpenSettings" title="ตั้งค่า">
     <img src="assets/ui/icon_gear.png" alt="settings" onerror="this.style.display='none'">
@@ -840,6 +898,46 @@
     <h2>🎉 ยินดีต้อนรับกลับ!</h2>
     <p class="raid-desc" id="welcomeBackText"></p>
     <button class="btn btn--primary" id="btnCloseWelcomeBack">รับเลย!</button>
+  </div>
+</div>
+
+<div class="raid-modal" id="dailyLoginModal" style="display:none;">
+  <div class="raid-modal-box">
+    <h2>📅 ล็อกอินรายวัน</h2>
+    <p class="raid-desc">เข้าเกมทุกวันต่อเนื่องรับรางวัลสะสม 7 วัน พลาดวันไหนแต้มจะรีเซ็ตกลับวันที่ 1</p>
+    <div class="daily-login-grid" id="dailyLoginGrid"></div>
+    <button class="btn btn--primary" id="btnClaimDailyLogin">รับรางวัล</button>
+    <button class="btn btn--neutral" id="btnCloseDailyLogin">ปิด</button>
+  </div>
+</div>
+
+<div class="raid-modal" id="towerModal" style="display:none;">
+  <div class="raid-modal-box">
+    <h2>🗼 หอคอยไร้ขีดจำกัด</h2>
+    <div id="towerIntro">
+      <p class="raid-desc">ไต่หอคอยไปเรื่อยๆ ศัตรูจะเก่งขึ้นแบบก้าวกระโดดทุกชั้น ชั้นที่ไปถึงครั้งแรกจะได้รางวัลพิเศษ (วัตถุโบราณ หรือเพชรก้อนโต) แพ้เมื่อไหร่จบรอบ แต่สถิติชั้นสูงสุดจะถูกเก็บไว้เสมอ</p>
+      <div class="tower-floor-label">ชั้นสูงสุดที่เคยไปถึง: <span id="towerHighestFloorLabel">0</span></div>
+      <button class="btn btn--danger" id="btnStartTower">เข้าหอคอย (เริ่มชั้น 1)</button>
+    </div>
+    <div id="towerActive" style="display:none;">
+      <div class="tower-floor-label">ชั้น <span id="towerCurrentFloor">1</span></div>
+      <img class="raid-boss-sprite" id="towerMonsterSprite" src="" alt="tower monster">
+      <div class="hp-bar-bg" id="towerHpBarBg">
+        <div class="hp-bar-fill" id="towerHpFill" style="width:100%;"></div>
+        <div class="hp-bar-label" id="towerHpLabel">- / -</div>
+      </div>
+      <div class="hp-bar-bg" style="margin-top:6px;" id="towerPlayerHpBarBg">
+        <div class="hp-bar-fill" id="towerPlayerHpFill" style="width:100%;"></div>
+        <div class="hp-bar-label" id="towerPlayerHpLabel">- / -</div>
+      </div>
+      <button class="btn btn--danger" id="btnTowerAttack">⚔️ สู้ชั้นนี้!</button>
+      <button class="btn btn--neutral" id="btnTowerRetreat">ล่าถอย (เก็บสถิติไว้)</button>
+    </div>
+    <div id="towerResult" style="display:none;">
+      <div class="raid-result-text" id="towerResultText"></div>
+      <button class="btn btn--neutral" id="btnCloseTowerResult">ปิด</button>
+    </div>
+    <button class="btn btn--neutral" id="btnCloseTower">ปิด</button>
   </div>
 </div>
 
@@ -963,6 +1061,24 @@
           <div class="enhance-list" id="titleList"></div>
         </div>
       </div>
+
+      <div class="relic-section">
+        <div class="collapsible-header collapsed" data-target="alchemyBody">
+          <span>⚗️ ผสมยา (Alchemy)</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="alchemyBody">
+          <p class="raid-desc" style="margin:6px 0;">นำโพชั่นแดง+ฟ้าอย่างละ 3 มาผสมเป็น Elixir: ฟื้น HP เต็ม + บัฟ ATK/DEF +40% 5 ไฟต์</p>
+          <div class="alchemy-row">
+            <span class="alchemy-desc">Elixir ที่มี: <span id="elixirCount">0</span></span>
+            <button class="btn btn--info" id="btnCraftElixir">ผสม (🧪แดง x3 + 🧪ฟ้า x3)</button>
+          </div>
+          <div class="alchemy-row">
+            <span class="alchemy-desc">ใช้ Elixir ทันที</span>
+            <button class="btn btn--success" id="btnUseElixir">ใช้ Elixir</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ Panel 2: Chest / Gacha ============ -->
@@ -1029,6 +1145,7 @@
         <button class="btn btn--primary" id="btnAutoBattle">Auto-Battle: OFF</button>
       </div>
       <button class="btn btn--danger" id="btnOpenRaid" style="margin-top:10px;">⚔️ ดันเจี้ยนท้าทาย (Boss Raid)</button>
+      <button class="btn btn--danger" id="btnOpenTower" style="margin-top:8px;">🗼 หอคอยไร้ขีดจำกัด</button>
     </section>
 
     <!-- ============ Panel 4: Quests / Achievements ============ -->
@@ -1514,6 +1631,10 @@ let player = {
   enhanceStones: 0, // หินหลอม ได้จากย่อยไอเทมในคลัง ใช้ตีบวกอุปกรณ์ Epic/Legendary ที่สวมอยู่
   equippedTitle: null, // key ของฉายาที่เลือกสวมอยู่ (ดู TITLE_DEFS)
   unlockedTitles: [], // key ของฉายาที่ปลดล็อกแล้ว (ถาวร ไม่รีเซ็ตตอน Prestige แม้เงื่อนไขอ้างอิงจะกลับไม่ผ่านทีหลัง)
+  dailyLogin: { streak: 0, lastClaimDate: null }, // streak = วันล่าสุดที่รับแล้ว (1-7), lastClaimDate = 'YYYY-MM-DD'
+  elixirs: 0, // ได้จากผสมโพชั่นแดง+ฟ้าอย่างละ 3 (ดู ALCHEMY_RECIPE)
+  towerHighestFloor: 0, // ชั้นสูงสุดของหอคอยไร้ขีดจำกัดที่เคยไปถึง — ถาวร ไม่รีเซ็ตตอน Prestige
+  towerClaimedFloors: [], // เลขชั้นที่เคยรับรางวัลแรกเข้าไปแล้ว (กันรับซ้ำถ้าไต่ผ่านชั้นเดิมอีกรอบ)
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1580,6 +1701,103 @@ function getTitleBonusTotals(p) {
 }
 function getTitleBonus(p, key) {
   return getTitleBonusTotals(p)[key] || 0;
+}
+
+// ===============================================
+// ล็อกอินรายวัน (Daily Login) — วนรอบ 7 วัน อิงวันที่ปฏิทินจริง ไม่ใช่ตัวจับเวลา 24 ชม.
+// เพื่อไม่ให้ผู้เล่นถูกลงโทษถ้าเข้าเกมเร็ว/ช้ากว่ารอบก่อนไม่กี่ชั่วโมงในวันเดียวกัน
+// ===============================================
+const DAILY_LOGIN_REWARDS = [
+  { day: 1, gold: 100 },
+  { day: 2, chests: 1 },
+  { day: 3, gems: 3 },
+  { day: 4, enhanceStones: 5 },
+  { day: 5, petFood: 5 },
+  { day: 6, chests: 2, gems: 2 },
+  { day: 7, gems: 10, chests: 1 },
+];
+function todayDateString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function daysBetweenDateStrings(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000);
+}
+function isDailyLoginClaimedToday(p) {
+  return p.dailyLogin.lastClaimDate === todayDateString();
+}
+// วันถัดไปที่จะได้รับถ้ากดตอนนี้ (1-7) — ต่อเนื่องจากเมื่อวาน +1 (วนกลับ 1 หลังวัน 7), ข้ามวันไปแล้วรีเซ็ตกลับวัน 1
+function getDailyLoginNextDay(p) {
+  if (isDailyLoginClaimedToday(p)) return p.dailyLogin.streak;
+  if (!p.dailyLogin.lastClaimDate) return 1;
+  const diff = daysBetweenDateStrings(p.dailyLogin.lastClaimDate, todayDateString());
+  if (diff === 1) return p.dailyLogin.streak >= 7 ? 1 : p.dailyLogin.streak + 1;
+  return 1;
+}
+function claimDailyLogin() {
+  if (isDailyLoginClaimedToday(player)) return;
+  const day = getDailyLoginNextDay(player);
+  const reward = DAILY_LOGIN_REWARDS.find(r => r.day === day);
+  const parts = [];
+  if (reward.gold) { player.gold += reward.gold; parts.push(`${reward.gold} Gold`); }
+  if (reward.chests) { grantChest(reward.chests); parts.push(`กล่องสมบัติ x${reward.chests}`); }
+  if (reward.gems) { player.gems += reward.gems; parts.push(`เพชร x${reward.gems}`); }
+  if (reward.enhanceStones) { player.enhanceStones += reward.enhanceStones; parts.push(`หินหลอม x${reward.enhanceStones}`); }
+  if (reward.petFood) { player.petFood += reward.petFood; parts.push(`อาหารสัตว์เลี้ยง x${reward.petFood}`); }
+  player.dailyLogin.streak = day;
+  player.dailyLogin.lastClaimDate = todayDateString();
+  appendLog([`📅 ล็อกอินวันที่ ${day}: ได้รับ ${parts.join(', ')}`]);
+  showToast(`📅 รับรางวัลวันที่ ${day} แล้ว!`);
+  saveGame();
+  renderAll();
+}
+function renderDailyLoginModal() {
+  const grid = document.getElementById('dailyLoginGrid');
+  grid.innerHTML = '';
+  const claimedToday = isDailyLoginClaimedToday(player);
+  const nextDay = getDailyLoginNextDay(player);
+  DAILY_LOGIN_REWARDS.forEach(r => {
+    const cell = document.createElement('div');
+    const isClaimed = claimedToday ? r.day <= player.dailyLogin.streak : r.day < nextDay;
+    const isToday = r.day === nextDay && !claimedToday;
+    cell.className = 'daily-login-day' + (isClaimed ? ' daily-login-day--claimed' : '') + (isToday ? ' daily-login-day--today' : '');
+    const rewardParts = [];
+    if (r.gold) rewardParts.push(`${r.gold}G`);
+    if (r.chests) rewardParts.push(`🎁x${r.chests}`);
+    if (r.gems) rewardParts.push(`💎x${r.gems}`);
+    if (r.enhanceStones) rewardParts.push(`🔨x${r.enhanceStones}`);
+    if (r.petFood) rewardParts.push(`🍖x${r.petFood}`);
+    cell.innerHTML = `<span class="dl-day-label">วัน ${r.day}</span><span>${rewardParts.join(' ')}</span>`;
+    grid.appendChild(cell);
+  });
+  document.getElementById('btnClaimDailyLogin').disabled = claimedToday;
+  document.getElementById('btnClaimDailyLogin').textContent = claimedToday ? 'รับไปแล้ววันนี้' : `รับรางวัลวันที่ ${nextDay}`;
+}
+
+// ===============================================
+// ระบบผสมยา (Alchemy) — นำโพชั่นแดง+ฟ้ามาผสมเป็น Elixir บัฟใหญ่ครั้งเดียว
+// ===============================================
+const ALCHEMY_RECIPE = { red: 3, blue: 3 };
+const ELIXIR_HEAL_PCT = 1.0;      // ฟื้น HP เต็ม
+const ELIXIR_BUFF_MULT = 1.4;     // ATK/DEF +40%
+const ELIXIR_BUFF_FIGHTS = 5;
+function craftElixir() {
+  if (player.potions.red < ALCHEMY_RECIPE.red || player.potions.blue < ALCHEMY_RECIPE.blue) return;
+  player.potions.red -= ALCHEMY_RECIPE.red;
+  player.potions.blue -= ALCHEMY_RECIPE.blue;
+  player.elixirs += 1;
+  appendLog([`⚗️ ผสม Elixir สำเร็จ (ใช้โพชั่นแดง x${ALCHEMY_RECIPE.red} + ฟ้า x${ALCHEMY_RECIPE.blue})`]);
+  renderAll();
+}
+function useElixir() {
+  if (player.animating || player.autoBattle) return;
+  if (player.elixirs <= 0) return;
+  player.elixirs -= 1;
+  player.currentHp = getMaxHp(player);
+  player.buffFightsLeft = ELIXIR_BUFF_FIGHTS;
+  player.buffMultiplier = ELIXIR_BUFF_MULT;
+  appendLog([`⚗️ ใช้ Elixir: ฟื้น HP เต็ม + ATK/DEF +40% เป็นเวลา ${ELIXIR_BUFF_FIGHTS} ไฟต์`]);
+  renderAll();
 }
 
 // ===============================================
@@ -1825,6 +2043,65 @@ function getPetBonusValue(buffType) {
   return base * (1 + getTitleBonus(player, 'petBoost'));
 }
 
+// ===============================================
+// ส่งสัตว์เลี้ยงสำรวจ (Pet Dispatch) — เฉพาะสัตว์เลี้ยงที่ไม่ได้สวมใส่อยู่
+// ให้เลือกช่วงเวลา 4 หรือ 8 ชั่วโมง แล้วคำนวณรางวัลจากเวลาจริงที่ผ่านไปตอนกดเก็บ (เหมือน Offline Earnings
+// แต่แยกต่อสัตว์เลี้ยงแต่ละตัว ไม่ผูกกับ session ของเกมโดยรวม) — รางวัลสเกลตาม rarity/ดาว/เลเวลของสัตว์เลี้ยงนั้น
+// ===============================================
+const PET_DISPATCH_DURATIONS_MS = { short: 4 * 3600 * 1000, long: 8 * 3600 * 1000 };
+const PET_DISPATCH_RARITY_MULT = { common: 1, rare: 1.4, epic: 2, legendary: 3 };
+
+function canDispatchPet(petKey) {
+  const owned = player.pets[petKey];
+  if (!owned || owned.dispatchUntil) return false;
+  return player.equippedPet !== petKey;
+}
+function dispatchPet(petKey, durationKey) {
+  const owned = player.pets[petKey];
+  if (!canDispatchPet(petKey)) return;
+  const durationMs = PET_DISPATCH_DURATIONS_MS[durationKey];
+  if (!durationMs) return;
+  owned.dispatchUntil = Date.now() + durationMs;
+  owned.dispatchDurationMs = durationMs;
+  const def = PET_DEFS.find(p => p.key === petKey);
+  appendLog([`🐾 ส่ง ${def.name} ออกสำรวจ (${durationKey === 'short' ? '4' : '8'} ชั่วโมง)`]);
+  saveGame();
+  renderAll();
+}
+// คำนวณรางวัลจากเวลาที่ผ่านไปจริง (ปัดเพดานไม่เกิน duration ที่เลือกไว้ ป้องกันดองเซฟนานเกินคุ้ม)
+function getPetDispatchReward(petKey) {
+  const owned = player.pets[petKey];
+  if (!owned || !owned.dispatchUntil) return null;
+  const def = PET_DEFS.find(p => p.key === petKey);
+  const elapsedMs = Math.min(owned.dispatchDurationMs, Math.max(0, Date.now() - (owned.dispatchUntil - owned.dispatchDurationMs)));
+  const hours = elapsedMs / 3600000;
+  const rarityMult = PET_DISPATCH_RARITY_MULT[def.rarity] || 1;
+  const scale = hours * rarityMult * (1 + (owned.stars - 1) * 0.3) * (1 + owned.level * 0.05);
+  return {
+    gold: Math.round(30 * scale),
+    enhanceStones: Math.round(1 + scale * 0.4),
+    petFood: Math.round(1 + scale * 0.3),
+  };
+}
+function isDispatchReady(petKey) {
+  const owned = player.pets[petKey];
+  return !!(owned && owned.dispatchUntil && Date.now() >= owned.dispatchUntil);
+}
+function collectPetDispatch(petKey) {
+  const owned = player.pets[petKey];
+  if (!owned || !owned.dispatchUntil || !isDispatchReady(petKey)) return;
+  const reward = getPetDispatchReward(petKey);
+  player.gold += reward.gold;
+  player.enhanceStones += reward.enhanceStones;
+  player.petFood += reward.petFood;
+  owned.dispatchUntil = null;
+  owned.dispatchDurationMs = null;
+  const def = PET_DEFS.find(p => p.key === petKey);
+  appendLog([`🐾 ${def.name} กลับจากสำรวจ: +${reward.gold} Gold, +${reward.enhanceStones} 🔨, +${reward.petFood} 🍖`]);
+  saveGame();
+  renderAll();
+}
+
 function ensureEncounter() {
   if (!player.encounter) {
     // วัตถุโบราณ "มงกุฎจอมมาร": มีโอกาส 3% ข้ามด่านปกติที่เหลือไปเจอบอส (ด่านคูณ 5) ทันที
@@ -1953,6 +2230,174 @@ function renderRaidModal() {
     btn.disabled = false;
     note.textContent = '';
   }
+}
+
+// ===============================================
+// หอคอยไร้ขีดจำกัด (Infinite Tower) — โหมดไต่ชั้นแยกจากด่านปกติและ Boss Raid โดยสิ้นเชิง
+// ใช้ resolver ของตัวเอง (resolveTowerFloor) ไม่แตะ resolveBattle เดิม เพื่อไม่เสี่ยงต่อความสมดุลที่
+// ตรวจสอบแล้วของด่านปกติ — สเกลศัตรูอิงจากพลัง ATK/DEF/HP ปัจจุบันของผู้เล่นเอง (ไม่ใช่ด่าน) คูณด้วย
+// อัตราเติบโตแบบทวีคูณต่อชั้น ทำให้ท้าทายสมน้ำสมเนื้อไม่ว่าผู้เล่นจะไปไกลแค่ไหน แต่ท้ายที่สุดจะแพ้แน่นอน
+// (คีย์ของโหมด "ไร้ขีดจำกัด") HP ผู้เล่นไม่ฟื้นระหว่างชั้นในรอบเดียวกัน ต้องเลือกเองว่าจะไปต่อหรือล่าถอย
+// ===============================================
+const TOWER_MONSTER_POOL = ['dark_knight', 'necromancer', 'stone_golem', 'red_demon', 'armored_golem_warrior', 'purple_dragon', 'demon_king'];
+const TOWER_GROWTH_PER_FLOOR = 1.18;
+let towerSession = null; // { floor, playerHp } — ชั่วคราว ไม่ persist ข้าม session เหมือน raidSession
+
+function getTowerMonster(floor) {
+  const atk = getAtk(player), def = getDef(player), maxHp = getMaxHp(player);
+  const growth = Math.pow(TOWER_GROWTH_PER_FLOOR, floor - 1);
+  const base = MONSTERS.find(m => m.key === TOWER_MONSTER_POOL[(floor - 1) % TOWER_MONSTER_POOL.length]);
+  return {
+    key: base.key, name: `${base.name} (ชั้น ${floor})`, icon: base.icon, element: base.element, tier: 'tower',
+    maxHp: Math.round(maxHp * 0.8 * growth),
+    hp: Math.round(maxHp * 0.8 * growth),
+    atk: Math.round(atk * 0.5 * growth),
+    def: Math.round(def * 0.3 * growth),
+    crit: 0.08, dodge: 0.05,
+  };
+}
+
+// คำนวณผลการต่อสู้ทั้งไฟต์ทันที (ไม่ animate ทีละยกเหมือนด่านปกติ) คงกลไก crit/dodge/ธาตุ/lifesteal/
+// สกิล Passive/วัตถุโบราณหัวใจอมตะไว้เหมือนเดิม เพื่อให้ของที่ผู้เล่นสวมใส่มีผลจริงในโหมดนี้ด้วย
+function resolveTowerFloor(monster, startPlayerHp) {
+  let playerHp = startPlayerHp;
+  const maxHp = getMaxHp(player);
+  let monsterHp = monster.hp;
+  const atk = getAtk(player), def = getDef(player);
+  const playerCrit = getCritChance(player), playerDodge = getDodgeChance(player);
+  const weapon = player.equipment.weapon;
+  const skill = getEquippedSkill(player);
+  const skillKey = skill ? skill.key : null;
+  const effectiveMonsterDef = monster.def * (1 - (weapon && weapon.perk === 'armorpen' ? weapon.perkValue : 0));
+  const effectiveMonsterAtk = monster.atk * (skillKey === 'ice' ? 0.9 : 1);
+  const lifestealPct = (weapon && weapon.perk === 'lifesteal' ? weapon.perkValue : 0) + (skillKey === 'dark' ? 0.08 : 0);
+  let usedImmortalHeartThisFight = false;
+  const events = [];
+  let turn = 0;
+  while (playerHp > 0 && monsterHp > 0 && turn < 200) {
+    turn++;
+    if (Math.random() < monster.dodge) {
+      events.push(`${monster.name} หลบการโจมตีของคุณ!`);
+    } else {
+      let dmg = Math.max(1, Math.round(atk - effectiveMonsterDef));
+      const isCrit = Math.random() < playerCrit;
+      if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
+      if (weapon && weapon.element && monster.element) {
+        if (elementBeats(weapon.element, monster.element)) dmg = Math.round(dmg * 1.3);
+        else if (elementBeats(monster.element, weapon.element)) dmg = Math.max(1, Math.round(dmg * 0.8));
+      }
+      monsterHp -= dmg;
+      events.push(`คุณโจมตี ${monster.name}${isCrit ? ' คริติคอล!' : ''} เป็นดาเมจ ${dmg}`);
+      if (lifestealPct > 0 && playerHp > 0) {
+        const healAmt = Math.round(dmg * lifestealPct);
+        if (healAmt > 0) playerHp = Math.min(maxHp, playerHp + healAmt);
+      }
+    }
+    if (monsterHp <= 0) { events.push(`${monster.name} พ่ายแพ้!`); break; }
+    if (skillKey === 'holy' && playerHp > 0) playerHp = Math.min(maxHp, playerHp + Math.round(maxHp * 0.02));
+    if (Math.random() < playerDodge) {
+      events.push('คุณหลบการโจมตีสำเร็จ!');
+    } else {
+      let dmg = Math.max(1, Math.round(effectiveMonsterAtk - def));
+      const isCrit = Math.random() < monster.crit;
+      if (isCrit) dmg = Math.round(dmg * CRIT_MULT);
+      playerHp -= dmg;
+      events.push(`${monster.name} โจมตีคุณ${isCrit ? ' คริติคอล!' : ''} เป็นดาเมจ ${dmg}`);
+    }
+    if (playerHp <= 0) {
+      if (hasRelic('immortal_heart') && !usedImmortalHeartThisFight && Math.random() < 0.15) {
+        usedImmortalHeartThisFight = true;
+        playerHp = 1;
+        events.push('💗 หัวใจอมตะ: รอดจากดาเมจถึงตาย เหลือ HP 1!');
+      } else {
+        events.push('คุณพ่ายแพ้...');
+        break;
+      }
+    }
+  }
+  return { victory: monsterHp <= 0 && playerHp > 0, playerHp: Math.max(0, playerHp), monsterHp: Math.max(0, monsterHp), events };
+}
+
+function startTowerRun() {
+  if (towerSession) return;
+  towerSession = { floor: 1, playerHp: getMaxHp(player) };
+  document.getElementById('towerIntro').style.display = 'none';
+  document.getElementById('towerResult').style.display = 'none';
+  document.getElementById('towerActive').style.display = 'block';
+  document.getElementById('btnCloseTower').style.display = 'none';
+  renderTowerActive();
+}
+
+function renderTowerActive() {
+  if (!towerSession) return;
+  const monster = getTowerMonster(towerSession.floor);
+  document.getElementById('towerCurrentFloor').textContent = towerSession.floor;
+  document.getElementById('towerMonsterSprite').src = monster.icon;
+  document.getElementById('towerHpFill').style.width = '100%';
+  document.getElementById('towerHpLabel').textContent = `${monster.hp} / ${monster.maxHp}`;
+  const maxHp = getMaxHp(player);
+  const pct = Math.max(0, Math.min(100, (towerSession.playerHp / maxHp) * 100));
+  document.getElementById('towerPlayerHpFill').style.width = pct + '%';
+  document.getElementById('towerPlayerHpLabel').textContent = `${towerSession.playerHp} / ${maxHp}`;
+}
+
+function towerAttack() {
+  if (!towerSession) return;
+  const floor = towerSession.floor;
+  const monster = getTowerMonster(floor);
+  const result = resolveTowerFloor(monster, towerSession.playerHp);
+  towerSession.playerHp = result.playerHp;
+  appendLog(result.events);
+  if (result.victory) {
+    let rewardText = '';
+    if (!player.towerClaimedFloors.includes(floor)) {
+      player.towerClaimedFloors.push(floor);
+      // 25% โอกาสได้วัตถุโบราณที่ยังไม่เจอ (ถ้ายังเก็บไม่ครบ) ไม่งั้นได้เพชรก้อนโตแทน สเกลตามชั้น
+      if (player.relics.length < RELIC_DEFS.length && Math.random() < 0.25) {
+        const undiscovered = RELIC_DEFS.filter(r => !player.relics.includes(r.key));
+        const relic = undiscovered[Math.floor(Math.random() * undiscovered.length)];
+        player.relics.push(relic.key);
+        rewardText = ` ได้รับวัตถุโบราณ: ${relic.name}!`;
+        showToast(`🏆 พบวัตถุโบราณ: ${relic.name}!`);
+      } else {
+        const gemReward = 5 + floor * 2;
+        player.gems += gemReward;
+        rewardText = ` ได้รับเพชร +${gemReward}`;
+      }
+    }
+    player.towerHighestFloor = Math.max(player.towerHighestFloor, floor);
+    appendLog([`ผ่านชั้น ${floor}!${rewardText}`]);
+    towerSession.floor += 1;
+    saveGame();
+    renderTowerActive();
+    renderAll();
+  } else {
+    endTowerRun(false);
+  }
+}
+
+function retreatTower() {
+  if (!towerSession) return;
+  endTowerRun(true);
+}
+
+function endTowerRun(retreated) {
+  if (!towerSession) return;
+  const floor = towerSession.floor;
+  document.getElementById('towerActive').style.display = 'none';
+  const resultText = document.getElementById('towerResultText');
+  resultText.textContent = retreated
+    ? `ล่าถอยที่ชั้น ${floor} อย่างปลอดภัย ชั้นสูงสุดที่เคยไปถึง: ${player.towerHighestFloor}`
+    : `พ่ายแพ้ที่ชั้น ${floor}... ชั้นสูงสุดที่เคยไปถึง: ${player.towerHighestFloor}`;
+  document.getElementById('towerResult').style.display = 'block';
+  document.getElementById('btnCloseTower').style.display = 'none'; // ใช้ปุ่ม "ปิด" ในผลลัพธ์แทน กันปุ่มซ้อนกัน (เหมือน Boss Raid)
+  towerSession = null;
+  saveGame();
+  renderAll();
+}
+
+function renderTowerModal() {
+  document.getElementById('towerHighestFloorLabel').textContent = player.towerHighestFloor;
 }
 
 // ===============================================
@@ -2091,6 +2536,10 @@ function saveGame() {
     enhanceStones: player.enhanceStones,
     equippedTitle: player.equippedTitle,
     unlockedTitles: player.unlockedTitles,
+    dailyLogin: player.dailyLogin,
+    elixirs: player.elixirs,
+    towerHighestFloor: player.towerHighestFloor,
+    towerClaimedFloors: player.towerClaimedFloors,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -2130,6 +2579,10 @@ function loadGame() {
       enhanceStones: data.enhanceStones || 0,
       equippedTitle: data.equippedTitle || null,
       unlockedTitles: data.unlockedTitles || [],
+      dailyLogin: Object.assign({ streak: 0, lastClaimDate: null }, data.dailyLogin || {}),
+      elixirs: data.elixirs || 0,
+      towerHighestFloor: data.towerHighestFloor || 0,
+      towerClaimedFloors: data.towerClaimedFloors || [],
     });
     if (data.lastSeenAt) {
       pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
@@ -2506,6 +2959,16 @@ function renderCharacterPanel() {
   renderBestiaryGrid();
   renderEnhanceList();
   renderTitleList();
+  renderAlchemyBox();
+
+  const dailyBtn = document.getElementById('btnOpenDailyLogin');
+  dailyBtn.classList.toggle('daily-login-btn--ready', !isDailyLoginClaimedToday(player));
+}
+
+function renderAlchemyBox() {
+  document.getElementById('elixirCount').textContent = player.elixirs;
+  document.getElementById('btnCraftElixir').disabled = player.potions.red < ALCHEMY_RECIPE.red || player.potions.blue < ALCHEMY_RECIPE.blue;
+  document.getElementById('btnUseElixir').disabled = player.elixirs <= 0 || player.animating || player.autoBattle;
 }
 
 function renderQuestPanel() {
@@ -2830,6 +3293,38 @@ function renderPetGrid() {
     btnFeed.disabled = player.petFood <= 0;
 
     card.append(icon, name, lvStars, desc, btnEquip, btnUpgrade, btnFeed);
+
+    // ส่งสำรวจ (Pet Dispatch) — เฉพาะสัตว์เลี้ยงที่ไม่ได้ติดตั้งอยู่และยังไม่ได้ออกสำรวจ
+    const note = document.createElement('div');
+    note.className = 'pet-dispatch-note';
+    if (owned.dispatchUntil && isDispatchReady(key)) {
+      note.className += ' pet-dispatch-note--ready';
+      note.textContent = '🐾 สำรวจเสร็จแล้ว!';
+      const btnCollect = document.createElement('button');
+      btnCollect.className = 'btn btn--success';
+      btnCollect.textContent = 'เก็บของรางวัล';
+      btnCollect.dataset.action = 'collect-dispatch';
+      btnCollect.dataset.pet = key;
+      card.append(note, btnCollect);
+    } else if (owned.dispatchUntil) {
+      const msLeft = Math.max(0, owned.dispatchUntil - Date.now());
+      const h = Math.floor(msLeft / 3600000), m = Math.floor((msLeft % 3600000) / 60000);
+      note.textContent = `🐾 กำลังสำรวจ เหลือ ${h}ชม. ${m}นาที`;
+      card.append(note);
+    } else if (player.equippedPet !== key) {
+      const btnShort = document.createElement('button');
+      btnShort.className = 'btn btn--neutral';
+      btnShort.textContent = 'ส่งสำรวจ 4ชม.';
+      btnShort.dataset.action = 'dispatch-short';
+      btnShort.dataset.pet = key;
+      const btnLong = document.createElement('button');
+      btnLong.className = 'btn btn--neutral';
+      btnLong.textContent = 'ส่งสำรวจ 8ชม.';
+      btnLong.dataset.action = 'dispatch-long';
+      btnLong.dataset.pet = key;
+      card.append(btnShort, btnLong);
+    }
+
     grid.appendChild(card);
   });
 }
@@ -3061,6 +3556,48 @@ document.getElementById('btnCloseRaid').addEventListener('click', () => {
   document.getElementById('raidModal').style.display = 'none';
 });
 
+document.getElementById('btnOpenTower').addEventListener('click', () => {
+  if (towerSession) {
+    document.getElementById('towerIntro').style.display = 'none';
+    document.getElementById('towerResult').style.display = 'none';
+    document.getElementById('towerActive').style.display = 'block';
+    document.getElementById('btnCloseTower').style.display = 'none';
+    renderTowerActive();
+  } else {
+    document.getElementById('towerIntro').style.display = 'block';
+    document.getElementById('towerActive').style.display = 'none';
+    document.getElementById('towerResult').style.display = 'none';
+    document.getElementById('btnCloseTower').style.display = 'inline-block';
+    renderTowerModal();
+  }
+  document.getElementById('towerModal').style.display = 'flex';
+});
+document.getElementById('btnStartTower').addEventListener('click', () => startTowerRun());
+document.getElementById('btnTowerAttack').addEventListener('click', () => towerAttack());
+document.getElementById('btnTowerRetreat').addEventListener('click', () => retreatTower());
+document.getElementById('btnCloseTowerResult').addEventListener('click', () => {
+  document.getElementById('towerResult').style.display = 'none';
+  document.getElementById('towerModal').style.display = 'none';
+});
+document.getElementById('btnCloseTower').addEventListener('click', () => {
+  document.getElementById('towerModal').style.display = 'none';
+});
+
+document.getElementById('btnOpenDailyLogin').addEventListener('click', () => {
+  renderDailyLoginModal();
+  document.getElementById('dailyLoginModal').style.display = 'flex';
+});
+document.getElementById('btnClaimDailyLogin').addEventListener('click', () => {
+  claimDailyLogin();
+  renderDailyLoginModal();
+});
+document.getElementById('btnCloseDailyLogin').addEventListener('click', () => {
+  document.getElementById('dailyLoginModal').style.display = 'none';
+});
+
+document.getElementById('btnCraftElixir').addEventListener('click', () => craftElixir());
+document.getElementById('btnUseElixir').addEventListener('click', () => useElixir());
+
 document.querySelectorAll('.collapsible-header').forEach(header => {
   header.addEventListener('click', () => {
     const body = document.getElementById(header.dataset.target);
@@ -3116,6 +3653,12 @@ document.getElementById('petGrid').addEventListener('click', (e) => {
     levelUpPet(btn.dataset.pet);
   } else if (btn.dataset.action === 'feed') {
     feedPet(btn.dataset.pet);
+  } else if (btn.dataset.action === 'dispatch-short') {
+    dispatchPet(btn.dataset.pet, 'short');
+  } else if (btn.dataset.action === 'dispatch-long') {
+    dispatchPet(btn.dataset.pet, 'long');
+  } else if (btn.dataset.action === 'collect-dispatch') {
+    collectPetDispatch(btn.dataset.pet);
   }
 });
 
@@ -3149,6 +3692,10 @@ renderSettingsModal();
 setInterval(() => {
   if (!raidSession && document.getElementById('raidModal').style.display !== 'none') renderRaidModal();
 }, 1000);
+// อัปเดตนับถอยหลังการส่งสัตว์เลี้ยงสำรวจในคลังสัตว์เลี้ยงทุก 30 วินาที (ไม่ถี่เกินไปเพราะแค่แสดงชม./นาที)
+setInterval(() => {
+  if (document.getElementById('petBody') && !document.getElementById('petBody').classList.contains('collapsed')) renderPetGrid();
+}, 30000);
 
 if (pendingOfflineReport) {
   document.getElementById('welcomeBackText').innerHTML =
