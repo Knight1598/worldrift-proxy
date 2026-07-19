@@ -670,6 +670,22 @@
   /* หอคอยไร้ขีดจำกัด (Infinite Tower) */
   .tower-floor-label { font-size: 0.8rem; color: var(--accent-gold); margin-bottom: 6px; }
 
+  /* ปลุกพลังแฝง (Awakening) */
+  .awakening-box { font-size: 0.72rem; color: #cfc7ae; margin-top: 6px; }
+  .awakening-mult { color: var(--accent-gold); font-weight: bold; font-size: 0.85rem; }
+  .awakening-tiers { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  @keyframes awakeningPulse {
+    0%   { box-shadow: 0 0 6px 2px rgba(180, 120, 255, 0.5); }
+    50%  { box-shadow: 0 0 26px 10px rgba(180, 120, 255, 0.95); }
+    100% { box-shadow: 0 0 6px 2px rgba(180, 120, 255, 0.5); }
+  }
+  .panel--character.awakening-flash { animation: awakeningPulse 1.2s ease-out; }
+  @keyframes awakeningAura {
+    0%, 100% { box-shadow: 0 0 5px 1px rgba(180, 120, 255, 0.35); }
+    50%      { box-shadow: 0 0 12px 4px rgba(180, 120, 255, 0.65); }
+  }
+  .panel--character.awakened { animation: awakeningAura 3s ease-in-out infinite; }
+
   /* ฉากต่อสู้ */
   /* ===============================================
      🖼️ ใส่รูปภาพตรงนี้ (พื้นหลังฉากต่อสู้ เปลี่ยนตามช่วงด่าน)
@@ -1063,6 +1079,21 @@
         </div>
         <div class="collapsible-body collapsed" id="titleBody">
           <div class="enhance-list" id="titleList"></div>
+        </div>
+      </div>
+
+      <div class="relic-section">
+        <div class="collapsible-header collapsed" data-target="awakeningBody">
+          <span>✨ ปลุกพลังแฝง (<span id="awakeningLevelLabel">0</span>/<span id="awakeningTotalLabel">0</span>)</span>
+          <span class="collapse-arrow">▾</span>
+        </div>
+        <div class="collapsible-body collapsed" id="awakeningBody">
+          <div class="awakening-box">
+            ตัวคูณ CP ปัจจุบัน: <span class="awakening-mult" id="awakeningMultLabel">x1.0</span><br>
+            อัปเกรดสเตตัสสะสมตลอดชีพ: <span id="lifetimeUpgradesLabel">0</span> ครั้ง
+          </div>
+          <div class="quest-progress-bar-bg" style="margin-top:6px;"><div class="quest-progress-bar-fill" id="awakeningProgressFill" style="width:0%;"></div></div>
+          <div class="awakening-tiers" id="awakeningNextInfo"></div>
         </div>
       </div>
 
@@ -1678,6 +1709,10 @@ let player = {
   elixirs: 0, // ได้จากผสมโพชั่นแดง+ฟ้าอย่างละ 3 (ดู ALCHEMY_RECIPE)
   towerHighestFloor: 0, // ชั้นสูงสุดของหอคอยไร้ขีดจำกัดที่เคยไปถึง — ถาวร ไม่รีเซ็ตตอน Prestige
   towerClaimedFloors: [], // เลขชั้นที่เคยรับรางวัลแรกเข้าไปแล้ว (กันรับซ้ำถ้าไต่ผ่านชั้นเดิมอีกรอบ)
+  // จำนวนครั้งที่อัปเกรดสเตตัส "สะสมตลอดชีพ" (ต่างจาก stats.upgradesPurchased ซึ่งเป็นตัวนับภารกิจที่
+  // รีเซ็ตทุก Prestige) ใช้ปลดล็อกระดับปลุกพลังแฝง (ดู AWAKENING_TIERS) — ถาวร ไม่รีเซ็ตตอน Prestige
+  lifetimeUpgrades: 0,
+  awakeningLevel: 0, // ระดับปลุกพลังแฝงปัจจุบัน (0 = ยังไม่ปลุก) — ถาวร ไม่รีเซ็ตตอน Prestige
 };
 
 const AUTO_BATTLE_SPEED_DELAYS = { normal: 400, fast: 150, veryfast: 50 };
@@ -1844,6 +1879,51 @@ function useElixir() {
 }
 
 // ===============================================
+// ปลุกพลังแฝง (Awakening) — milestone ถาวรจากยอดอัปเกรดสเตตัสสะสมตลอดชีพ (lifetimeUpgrades)
+// จ่าย Gold+เพชรเพื่อปลดล็อกทีละระดับ ได้ตัวคูณ CP รวมถาวร (ไม่ทบต้นกับตัวเอง — ตัวคูณของแต่ละ tier
+// คือค่าตัวคูณ "รวม" ของระดับนั้นเลย ไม่ใช่คูณซ้อนจากระดับก่อนหน้า) จำกัดจำนวน tier ไว้ชัดเจนตามการ
+// ทำ Math Audit ก่อนหน้านี้ที่พบว่าตัวคูณสเตตัสที่ไม่มีเพดาน (ตอนนั้นคือเลเวลสัตว์เลี้ยง) เสี่ยงทำให้ตัวเลข
+// พุ่งจนเกมหมดความท้าทาย — Awakening จึงออกแบบให้ "แข็งแกร่งมากตอนปลุกครบ" แต่มีขอบเขตชัดเจนเสมอ
+const AWAKENING_TIERS = [
+  { requiredUpgrades: 100, cost: { gold: 5000,    gems: 20  }, mult: 1.5 },
+  { requiredUpgrades: 200, cost: { gold: 25000,   gems: 50  }, mult: 2.0 },
+  { requiredUpgrades: 300, cost: { gold: 100000,  gems: 100 }, mult: 2.5 },
+  { requiredUpgrades: 400, cost: { gold: 400000,  gems: 200 }, mult: 3.0 },
+  { requiredUpgrades: 500, cost: { gold: 1500000, gems: 400 }, mult: 3.5 },
+];
+function getAwakeningMultiplier(p) {
+  return p.awakeningLevel > 0 ? AWAKENING_TIERS[p.awakeningLevel - 1].mult : 1;
+}
+function getNextAwakeningTier(p) {
+  return AWAKENING_TIERS[p.awakeningLevel] || null;
+}
+function canAwaken(p) {
+  const tier = getNextAwakeningTier(p);
+  if (!tier) return false;
+  return p.lifetimeUpgrades >= tier.requiredUpgrades && p.gold >= tier.cost.gold && p.gems >= tier.cost.gems;
+}
+function doAwaken() {
+  if (!canAwaken(player)) return;
+  const tier = getNextAwakeningTier(player);
+  player.gold -= tier.cost.gold;
+  player.gems -= tier.cost.gems;
+  player.awakeningLevel += 1;
+  appendLog([`✨ ปลุกพลังแฝงสำเร็จ! ระดับ ${player.awakeningLevel} (CP x${tier.mult})`]);
+  showToast(`✨ ปลุกพลังแฝงระดับ ${player.awakeningLevel}!`);
+  triggerAwakeningAura();
+  saveGame();
+  renderAll();
+}
+function triggerAwakeningAura() {
+  const panel = document.querySelector('.panel--character');
+  if (!panel) return;
+  panel.classList.remove('awakening-flash');
+  void panel.offsetWidth; // บังคับ reflow ให้แอนิเมชันเริ่มใหม่ได้เสมอ
+  panel.classList.add('awakening-flash');
+  setTimeout(() => panel.classList.remove('awakening-flash'), 1200);
+}
+
+// ===============================================
 // PRESTIGE — รีเซ็ตด่านเพื่อแลกโบนัสถาวร
 // ===============================================
 const PRESTIGE_STAGE_REQUIREMENT = 10; // ต้องเคยไปถึงด่านนี้อย่างน้อย ถึงจะได้ Prestige Point 1 แต้ม
@@ -1858,7 +1938,7 @@ function getMaxHp(p) {
   const petMult = 1 + getPetBonusValue('hp');
   const setMult = 1 + getSetBonusTotals(p).hp;
   const titleMult = 1 + getTitleBonus(p, 'hp');
-  return Math.round(base * skillMult * petMult * setMult * titleMult * getPrestigeMultiplier(p));
+  return Math.round(base * skillMult * petMult * setMult * titleMult * getPrestigeMultiplier(p) * getAwakeningMultiplier(p));
 }
 function getAtk(p) {
   const base = p.baseStats.atk + p.upgradeLevels.atk * 2 + (p.equipment.weapon ? p.equipment.weapon.value : 0);
@@ -1868,7 +1948,7 @@ function getAtk(p) {
   const setMult = 1 + getSetBonusTotals(p).atk;
   const bestiaryMult = 1 + getBestiaryAtkBonus(p);
   const titleMult = 1 + getTitleBonus(p, 'atk');
-  return Math.round(base * skillMult * buffMult * petMult * setMult * bestiaryMult * titleMult * getPrestigeMultiplier(p));
+  return Math.round(base * skillMult * buffMult * petMult * setMult * bestiaryMult * titleMult * getPrestigeMultiplier(p) * getAwakeningMultiplier(p));
 }
 function getDef(p) {
   const base = p.baseStats.def + p.upgradeLevels.def * 1 + (p.equipment.armor ? p.equipment.armor.value : 0) + (p.equipment.helmet ? p.equipment.helmet.value : 0);
@@ -1876,7 +1956,7 @@ function getDef(p) {
   const buffMult = p.buffFightsLeft > 0 ? p.buffMultiplier : 1;
   const setMult = 1 + getSetBonusTotals(p).def;
   const titleMult = 1 + getTitleBonus(p, 'def');
-  return Math.round(base * skillMult * buffMult * setMult * titleMult * getPrestigeMultiplier(p));
+  return Math.round(base * skillMult * buffMult * setMult * titleMult * getPrestigeMultiplier(p) * getAwakeningMultiplier(p));
 }
 function getCP(p)    { return Math.round(getMaxHp(p) * 0.5 + getAtk(p) * 2 + getDef(p) * 1.5); }
 function getPlayerLevel(p) { return 1 + p.upgradeLevels.hp + p.upgradeLevels.atk + p.upgradeLevels.def; }
@@ -2595,6 +2675,8 @@ function saveGame() {
     elixirs: player.elixirs,
     towerHighestFloor: player.towerHighestFloor,
     towerClaimedFloors: player.towerClaimedFloors,
+    lifetimeUpgrades: player.lifetimeUpgrades,
+    awakeningLevel: player.awakeningLevel,
   };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน เช่น เปิดจากไฟล์โดยตรงในบางเบราว์เซอร์ */ }
 }
@@ -2638,6 +2720,8 @@ function loadGame() {
       elixirs: data.elixirs || 0,
       towerHighestFloor: data.towerHighestFloor || 0,
       towerClaimedFloors: data.towerClaimedFloors || [],
+      lifetimeUpgrades: data.lifetimeUpgrades || 0,
+      awakeningLevel: data.awakeningLevel || 0,
     });
     if (data.lastSeenAt) {
       pendingOfflineReport = computeOfflineEarnings(Date.now() - data.lastSeenAt);
@@ -3026,15 +3110,49 @@ function renderCharacterPanel() {
   renderEnhanceList();
   renderTitleList();
   renderAlchemyBox();
+  renderAwakeningBox();
 
   const dailyBtn = document.getElementById('btnOpenDailyLogin');
   dailyBtn.classList.toggle('daily-login-btn--ready', !isDailyLoginClaimedToday(player));
+
+  document.querySelector('.panel--character').classList.toggle('awakened', player.awakeningLevel > 0);
 }
 
 function renderAlchemyBox() {
   document.getElementById('elixirCount').textContent = player.elixirs;
   document.getElementById('btnCraftElixir').disabled = player.potions.red < ALCHEMY_RECIPE.red || player.potions.blue < ALCHEMY_RECIPE.blue;
   document.getElementById('btnUseElixir').disabled = player.elixirs <= 0 || player.animating || player.autoBattle;
+}
+
+function renderAwakeningBox() {
+  document.getElementById('awakeningLevelLabel').textContent = player.awakeningLevel;
+  document.getElementById('awakeningTotalLabel').textContent = AWAKENING_TIERS.length;
+  document.getElementById('awakeningMultLabel').textContent = `x${getAwakeningMultiplier(player).toFixed(1)}`;
+  document.getElementById('lifetimeUpgradesLabel').textContent = player.lifetimeUpgrades;
+
+  const tier = getNextAwakeningTier(player);
+  const info = document.getElementById('awakeningNextInfo');
+  const fill = document.getElementById('awakeningProgressFill');
+  if (!tier) {
+    fill.style.width = '100%';
+    info.innerHTML = `<div class="alchemy-row"><span class="alchemy-desc">ปลุกพลังครบทุกระดับแล้ว! (x${getAwakeningMultiplier(player).toFixed(1)} CP สูงสุด)</span></div>`;
+    return;
+  }
+  const progressPct = Math.min(100, (player.lifetimeUpgrades / tier.requiredUpgrades) * 100);
+  fill.style.width = progressPct + '%';
+  info.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'alchemy-row';
+  const desc = document.createElement('span');
+  desc.className = 'alchemy-desc';
+  desc.textContent = `ระดับถัดไป: ต้องอัปเกรดครบ ${tier.requiredUpgrades} ครั้ง, ${tier.cost.gold} Gold, ${tier.cost.gems} เพชร (x${tier.mult} CP)`;
+  const btn = document.createElement('button');
+  btn.className = 'btn btn--success';
+  btn.id = 'btnAwaken';
+  btn.textContent = 'ปลุกพลัง';
+  btn.disabled = !canAwaken(player);
+  row.append(desc, btn);
+  info.appendChild(row);
 }
 
 function renderQuestPanel() {
@@ -3448,6 +3566,7 @@ document.getElementById('btnUpgradeHp').addEventListener('click', () => {
   player.upgradeLevels.hp += 1;
   player.currentHp = getMaxHp(player);
   player.stats.upgradesPurchased += 1;
+  player.lifetimeUpgrades += 1;
   renderAll();
 });
 
@@ -3457,6 +3576,7 @@ document.getElementById('btnUpgradeAtk').addEventListener('click', () => {
   player.gold -= cost;
   player.upgradeLevels.atk += 1;
   player.stats.upgradesPurchased += 1;
+  player.lifetimeUpgrades += 1;
   renderAll();
 });
 
@@ -3466,6 +3586,7 @@ document.getElementById('btnUpgradeDef').addEventListener('click', () => {
   player.gold -= cost;
   player.upgradeLevels.def += 1;
   player.stats.upgradesPurchased += 1;
+  player.lifetimeUpgrades += 1;
   renderAll();
 });
 
@@ -3575,6 +3696,10 @@ document.getElementById('titleList').addEventListener('click', (e) => {
   if (!btn || btn.disabled || !btn.dataset.key) return;
   player.equippedTitle = player.equippedTitle === btn.dataset.key ? null : btn.dataset.key;
   renderAll();
+});
+
+document.getElementById('awakeningNextInfo').addEventListener('click', (e) => {
+  if (e.target.closest('#btnAwaken')) doAwaken();
 });
 
 document.getElementById('questList').addEventListener('click', (e) => {
