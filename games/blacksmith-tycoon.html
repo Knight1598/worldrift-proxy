@@ -166,9 +166,12 @@
 
   /* เคาน์เตอร์รับออเดอร์ — อยู่โซนล่างสุด (เหนือจุดเกิดลูกค้าเล็กน้อย) จัดกึ่งกลางแนวนอน ไม่ใช้แบบยาวจรดขอบจอ
      (ไม่มี asset เคาน์เตอร์แยกให้ วาดด้วย CSS) */
+  /* z-index อยู่สูงกว่า customer-lane (z:3) เสมอ — เคาน์เตอร์เป็นแท่ง CSS แบนๆ ไม่มีมุมมองเชิงลึกในตัวภาพ
+     (ต่างจาก Station ที่เป็นภาพโต๊ะจริงมีขาโต๊ะ/พื้นผิวให้ใช้เทคนิค front-lip แยกชั้นได้) เลยให้บังลูกค้าทั้งแท่งไปเลย
+     แล้วปรับตำแหน่งยืนของลูกค้าให้ขา (ส่วนล่างของสไปรต์) ไปตกอยู่ในช่วงความสูงของเคาน์เตอร์แทน (ดู queueSlotPos) */
   .shop-counter {
     position: absolute;
-    z-index: 2;
+    z-index: 4;
     left: 16%;
     right: 16%;
     top: 78%;
@@ -314,7 +317,7 @@
     position: absolute;
     left: 0; top: 0;
     width: 26px; height: 26px;
-    z-index: 4;
+    z-index: 5; /* สูงกว่า .shop-counter (z:4) เสมอ ให้เหรียญไม่โดนเคาน์เตอร์บัง */
     pointer-events: none;
   }
   .coin-drop img {
@@ -795,10 +798,15 @@ function counterLineY() {
 function idlePos(workerIndex) {
   return { x: scene.width * 0.5 + (workerIndex || 0) * 24 - 12, y: scene.height * ZONES.idleYPct };
 }
+// เดิมให้ลูกค้ายืน y=counterLineY() พอดี (จุด "บน"/หัวของสไปรต์) ทำให้ตัวลูกค้าเกือบทั้งตัวอยู่ใต้เส้นเคาน์เตอร์
+// เห็นแค่หัวไปชนขอบเคาน์เตอร์นิดเดียว ไม่ใช่ขา — ขยับขึ้น (ลด y) ให้ขา/เท้า (ส่วนล่างสุดของสไปรต์สูง 101px)
+// ไปตกอยู่ในช่วงความสูงจริงของเคาน์เตอร์ (26px) แทน ให้ .shop-counter (z-index สูงกว่า customer-lane) บังขาไว้จริงๆ
+const CUSTOMER_LEG_OVERLAP_PX = 75;
+
 // จุดที่ 1: คิวลูกค้าเรียงเป็นแถวแนวนอนหน้าเคาน์เตอร์ แต่จัดทั้งแถว "กึ่งกลางจอ" แทนการเริ่มจากขอบขวาแบบเดิม
 // ตำแหน่งคงที่ตาม maxSlots (ไม่ใช่จำนวนคิวปัจจุบัน) กันไม่ให้ลูกค้าที่ยืนอยู่แล้วขยับตำแหน่งเมื่อคิวอื่นเข้า/ออก
 function queueSlotPos(slotIndex) {
-  const y = counterLineY();
+  const y = counterLineY() - CUSTOMER_LEG_OVERLAP_PX;
   const maxSlots = Math.max(1, getMaxQueueSize());
   const usableWidth = Math.max(60, scene.width - 40);
   const spacing = Math.min(56, usableWidth / maxSlots);
@@ -972,7 +980,9 @@ function spawnCoin(x, y, value, tip) {
   el.className = 'coin-drop';
   el.innerHTML = '<img src="assets/blacksmith/coin.png" alt="">';
   el.style.transform = `translate(${x}px, ${y}px)`;
-  document.getElementById('customerLane').appendChild(el);
+  // ต่อเข้า standStageView โดยตรง (ไม่ใช่ customerLane) เพราะ customerLane เป็น stacking context ของตัวเอง
+  // (z-index:3) ถ้าเหรียญอยู่ในนั้น z-index:4 ของมันจะมีผลแค่ภายใน ไม่สามารถชนะ .shop-counter (z-index:4 ระดับบนสุด) ได้จริง
+  document.getElementById('standStageView').appendChild(el);
   const coin = { id, x, y, value, tip, el };
   coins.push(coin);
   return coin;
@@ -983,7 +993,7 @@ function spawnFloatText(x, y, text, variant) {
   el.textContent = text;
   el.style.left = x + 'px';
   el.style.top = y + 'px';
-  document.getElementById('customerLane').appendChild(el);
+  document.getElementById('standStageView').appendChild(el);
   setTimeout(() => el.remove(), 1000);
 }
 
