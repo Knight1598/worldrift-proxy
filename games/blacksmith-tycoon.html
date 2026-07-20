@@ -73,7 +73,7 @@
     padding: 0 12px 24px;
   }
 
-  /* ===== Stage stand view ===== */
+  /* ===== Stage stand view (โซนพื้น: Station ซ้าย / เคาน์เตอร์-คิว ขวา) ===== */
   .stand-panel {
     background: var(--panel-bg);
     border: 3px solid var(--panel-border);
@@ -96,12 +96,9 @@
   }
   .stand-stage-view {
     position: relative;
-    height: 170px;
+    height: 190px;
     border-radius: 12px;
     overflow: hidden;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
     image-rendering: pixelated;
     background-image: url('assets/blacksmith/tile_wood_wall.png'), url('assets/blacksmith/tile_stone_floor.png');
     background-repeat: repeat-x, repeat-x;
@@ -118,10 +115,13 @@
     transition: background 0.6s ease;
   }
   .stand-booth {
-    position: relative;
+    position: absolute;
     z-index: 2;
-    max-width: 220px;
-    max-height: 140px;
+    left: 4%;
+    bottom: 4px;
+    width: 28%;
+    max-width: 120px;
+    height: auto;
     image-rendering: pixelated;
     cursor: pointer;
     user-select: none;
@@ -131,6 +131,47 @@
   .stand-booth:active { transform: scale(0.96); }
   .stand-booth.tap-bump { animation: tapBump 0.18s ease; }
   @keyframes tapBump { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+  /* เคาน์เตอร์รับออเดอร์ — วาดด้วย CSS ล้วน (ไม่มี asset เคาน์เตอร์แยกให้ ใช้เป็นของตกแต่งฉากเสริมจาก sprite จริง) */
+  .shop-counter {
+    position: absolute;
+    z-index: 2;
+    left: 60%;
+    bottom: 2px;
+    transform: translateX(-50%);
+    width: 46px; height: 30px;
+    border-radius: 6px 6px 3px 3px;
+    background: linear-gradient(180deg, #c98a45, #a8672c);
+    border: 2px solid #7a4a1e;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.25);
+  }
+
+  /* ===== Worker (ผู้เล่น/พนักงาน) — เดินไปทำของที่ Station แล้วเดินมาส่ง/เก็บเหรียญที่เคาน์เตอร์ ===== */
+  .worker-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .worker {
+    position: absolute;
+    left: 0; top: 0;
+    width: 38px; height: 46px;
+    will-change: transform;
+  }
+  .worker-body { width: 100%; height: 100%; }
+  .worker.moving .worker-body { animation: walkBob 0.3s ease-in-out infinite alternate; }
+  .worker-body img {
+    width: 100%; height: 100%; object-fit: contain;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 3px 2px rgba(0,0,0,0.3));
+  }
+  .worker.facing-left .worker-body img { transform: scaleX(-1); }
+  .worker.staff .worker-body img { filter: drop-shadow(0 3px 2px rgba(0,0,0,0.3)) hue-rotate(150deg) saturate(1.3); }
+  .worker-craft-bar-bg {
+    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
+    width: 32px; height: 6px;
+    background: rgba(0,0,0,0.25); border-radius: 4px; overflow: hidden;
+    opacity: 0; transition: opacity 0.15s ease;
+  }
+  .worker-craft-bar-bg.show { opacity: 1; }
+  .worker-craft-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ffd76a, #ff9f45); }
+  @keyframes walkBob { 0% { transform: translateY(0); } 100% { transform: translateY(-3px); } }
 
   /* ป้ายสินค้าแตะเพื่อเลเวลอัพแยก (ตามแพทเทิร์นเกมต้นแบบที่แยก "อัปเกรดสินค้า" ออกจากลิสต์อัปเกรดทั่วไป) */
   .product-badge {
@@ -187,23 +228,27 @@
     100% { transform: translateY(110vh) rotate(540deg); opacity: 0.9; }
   }
 
+  /* ===== ลูกค้า: เข้าคิว / รอออเดอร์ / จ่ายเงินแล้วเดินออก ===== */
   .customer-lane {
     position: absolute;
     inset: 0;
+    z-index: 3;
     pointer-events: none;
   }
   .customer {
     position: absolute;
-    bottom: 8px;
-    width: 44px;
-    height: 48px;
-    transition: left 1.1s linear, opacity 0.4s ease;
-    z-index: 3;
+    left: 0; top: 0;
+    width: 40px;
+    height: 46px;
+    will-change: transform;
   }
+  .customer-body { width: 100%; height: 100%; }
+  .customer.moving .customer-body { animation: walkBob 0.32s ease-in-out infinite alternate; }
   .customer-img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
+  .customer.facing-left .customer-img { transform: scaleX(-1); }
   .customer-bubble {
     position: absolute;
-    top: -18px;
+    top: -20px;
     left: 50%;
     transform: translateX(-50%);
     width: 22px; height: 22px;
@@ -211,29 +256,46 @@
     transition: opacity 0.2s ease, top 0.2s ease;
   }
   .customer-bubble img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
-  .customer-bubble.show { opacity: 1; top: -26px; }
+  .customer-bubble.show { opacity: 1; top: -28px; }
+  .customer-patience-bg {
+    position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
+    width: 30px; height: 5px;
+    background: rgba(0,0,0,0.25); border-radius: 3px; overflow: hidden;
+    opacity: 0; transition: opacity 0.15s ease;
+  }
+  .customer-patience-bg.show { opacity: 1; }
+  .customer-patience-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #6bbf6b, #ffd76a); }
 
-  .coin-fly {
+  /* เหรียญที่ลูกค้าทิ้งไว้รอ worker มาเก็บ */
+  .coin-drop {
     position: absolute;
+    left: 0; top: 0;
     width: 20px; height: 20px;
+    z-index: 4;
     pointer-events: none;
-    z-index: 5;
-    transition: left 0.7s cubic-bezier(.2,.7,.3,1), top 0.7s cubic-bezier(.2,.7,.3,1), opacity 0.7s ease;
   }
-  .coin-fly img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
-  .tip-float {
+  .coin-drop img {
+    width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated;
+    animation: coinBob 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes coinBob { 0% { transform: translateY(0); } 100% { transform: translateY(-4px); } }
+
+  /* ตัวเลขลอยตอนเก็บเหรียญ */
+  .float-text {
     position: absolute;
-    font-size: 0.85rem;
     font-weight: bold;
-    color: var(--success);
+    font-size: 0.8rem;
     pointer-events: none;
-    z-index: 5;
-    animation: tipFloat 1s ease forwards;
+    z-index: 6;
+    white-space: nowrap;
+    animation: floatTextUp 1s ease forwards;
   }
-  @keyframes tipFloat {
-    0% { opacity: 0; transform: translateY(0); }
-    15% { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-40px); }
+  .float-text--gold { color: var(--accent-gold); }
+  .float-text--tip { color: var(--success); }
+  @keyframes floatTextUp {
+    0%   { opacity: 0; transform: translateY(0); }
+    15%  { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-42px); }
   }
 
   /* ===== Stage checklist ===== */
@@ -383,7 +445,9 @@
     <div class="stand-product" id="stageProduct">ขาย ของกินของใช้ทั่วไป</div>
     <div class="stand-stage-view" id="standStageView">
       <div class="stand-tint-overlay" id="standTintOverlay"></div>
+      <div class="shop-counter"></div>
       <div class="customer-lane" id="customerLane"></div>
+      <div class="worker-layer" id="workerLayer"></div>
       <img class="stand-booth" id="standBooth" src="assets/blacksmith/station_stall.png" alt="">
       <button class="product-badge" id="productBadge" title="อัปเกรดสินค้า">
         <img id="productBadgeIcon" src="" alt="">
@@ -490,21 +554,36 @@ function getProductIcon() {
 }
 
 const UPGRADE_TYPES = [
-  { key: 'speed',   name: 'ความเร็วในการขาย', icon: '⚡', desc: 'ลูกค้ามาถี่ขึ้น',        maxLevel: 5, baseCostMult: 8  },
+  { key: 'speed',   name: 'ความเร็วในการทำงาน', icon: '⚡', desc: 'พนักงานเดินไวขึ้นและทำของเสร็จเร็วขึ้น', maxLevel: 5, baseCostMult: 8  },
   // "คุณภาพสินค้า" ไม่โชว์ในลิสต์ทั่วไป — ย้ายไปเป็นป๊อปอัพแยกที่แตะตัวสินค้าโดยตรงแทน (ตามแพทเทิร์นเกมต้นแบบ
   // ที่ผู้ใช้ส่งวิดีโอมา ซึ่งแยก "อัปเกรดร้านทั่วไป" กับ "เลเวลอัปสินค้า" ออกจากกันเป็นคนละกลไก)
   { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 5, baseCostMult: 10, hiddenFromList: true },
-  { key: 'signage', name: 'ป้ายร้าน',         icon: '📣', desc: 'มีโอกาสลูกค้ามาเป็นคู่',  maxLevel: 5, baseCostMult: 12 },
+  { key: 'signage', name: 'ป้ายร้าน',         icon: '📣', desc: 'ลูกค้ามาบ่อยขึ้น และรับคิวรอได้มากขึ้น',  maxLevel: 5, baseCostMult: 12 },
   { key: 'decor',   name: 'ตกแต่งร้าน',        icon: '✨', desc: 'ลูกค้ามีโอกาสให้ทิป',     maxLevel: 5, baseCostMult: 14 },
 ];
 
-const BASE_SPAWN_INTERVAL_MS = 4000;
-const MIN_SPAWN_INTERVAL_MS = 1500;
-const SPEED_LEVEL_MS_REDUCTION = 500;
-const PORTION_LEVEL_BONUS = 0.25;
-const SIGNAGE_LEVEL_BONUS_CUSTOMER_CHANCE = 0.1;
-const DECOR_LEVEL_TIP_CHANCE = 0.08;
 const UPGRADE_COST_GROWTH = 1.6;
+const PORTION_LEVEL_BONUS = 0.25;
+const DECOR_LEVEL_TIP_CHANCE = 0.08;
+
+// ผู้เล่น/พนักงานเดิน+ทำของ — ควบคุมโดยอัปเกรด "ความเร็วในการทำงาน"
+const BASE_CRAFT_MS = 3200;
+const MIN_CRAFT_MS = 900;
+const SPEED_CRAFT_MS_REDUCTION = 460; // เต็มขั้น (เลเวล 5) พอดีแตะพื้น MIN_CRAFT_MS
+const BASE_MOVE_SPEED_PX = 90;   // px/วินาที
+const SPEED_MOVE_BONUS_PX = 22;  // px/วินาที ต่อเลเวล
+
+// อัตราการเกิดลูกค้า + ความจุคิว — ควบคุมโดยอัปเกรด "ป้ายร้าน"
+const BASE_SPAWN_INTERVAL_MS = 3400;
+const MIN_SPAWN_INTERVAL_MS = 1100;
+const SIGNAGE_SPAWN_MS_REDUCTION = 460; // เต็มขั้นพอดีแตะพื้น MIN_SPAWN_INTERVAL_MS
+const BASE_MAX_QUEUE = 3;
+const SIGNAGE_QUEUE_BONUS = 1;
+
+const CUSTOMER_WALK_SPEED_PX = 70; // ความเร็วเดินของลูกค้า คงที่ ไม่ผูกกับอัปเกรด (สเปกระบุให้อัปเกรดความเร็วมีผลแค่ผู้เล่น/พนักงาน)
+const PATIENCE_DURATION_MS = 9000; // หลอดความอดทนเชิงภาพล้วนๆ ไม่มีผลลงโทษถ้าหมด (ไม่ได้ระบุ fail-state ไว้ในสเปก)
+const APPROX_ORDER_TRAVEL_PX = 320; // ระยะทางเดินโดยประมาณต่อ 1 ออเดอร์ (ไป station + ไปส่งที่คิว + ไปเก็บเหรียญ) ใช้คำนวณ throughput แบบไม่พึ่ง DOM เพื่อให้ deterministic
+
 const OFFLINE_MAX_HOURS = 8;
 const OFFLINE_EFFICIENCY = 0.5; // รายได้ตอนไม่อยู่หน้าจอ = ครึ่งหนึ่งของอัตราปกติ (มาตรฐานเกม idle ทั่วไป)
 
@@ -523,7 +602,6 @@ let player = {
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
 };
 
-let spawnTimerId = null;
 let audioCtx = null;
 
 /* =====================================================================
@@ -542,12 +620,20 @@ function getRevenuePerSale() {
   return getStage().baseRevenue * (1 + PORTION_LEVEL_BONUS * player.upgradeLevels.portion);
 }
 
-function getSpawnIntervalMs() {
-  return Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - player.upgradeLevels.speed * SPEED_LEVEL_MS_REDUCTION);
+function getCraftDurationMs() {
+  return Math.max(MIN_CRAFT_MS, BASE_CRAFT_MS - player.upgradeLevels.speed * SPEED_CRAFT_MS_REDUCTION);
 }
 
-function getBonusCustomerChance() {
-  return player.upgradeLevels.signage * SIGNAGE_LEVEL_BONUS_CUSTOMER_CHANCE;
+function getMoveSpeedPxPerSec() {
+  return BASE_MOVE_SPEED_PX + player.upgradeLevels.speed * SPEED_MOVE_BONUS_PX;
+}
+
+function getSpawnIntervalMs() {
+  return Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - player.upgradeLevels.signage * SIGNAGE_SPAWN_MS_REDUCTION);
+}
+
+function getMaxQueueSize() {
+  return BASE_MAX_QUEUE + player.upgradeLevels.signage * SIGNAGE_QUEUE_BONUS;
 }
 
 function getTipChance() {
@@ -560,6 +646,20 @@ function isStageMaxed() {
 
 function getStageProgressCount() {
   return UPGRADE_TYPES.filter(u => player.upgradeLevels[u.key] >= u.maxLevel).length;
+}
+
+function getWorkerCount() { return player.staffHired ? 2 : 1; }
+
+// เวลาเฉลี่ยที่ worker คนหนึ่งใช้ต่อ 1 ออเดอร์ (คราฟท์ + เดินไปมา) — ไม่พึ่งขนาดจอจริงเพื่อให้คำนวณ Offline Earnings ได้แน่นอน
+function getOrderCycleMs() {
+  return getCraftDurationMs() + (APPROX_ORDER_TRAVEL_PX / getMoveSpeedPxPerSec()) * 1000;
+}
+
+// อัตราออเดอร์/มิลลิวินาที ถูก bound ด้วยตัวที่ช้ากว่าระหว่าง "ลูกค้ามาไหว" กับ "worker ทำไหว"
+function getThroughputPerMs() {
+  const workerThroughputPerMs = getWorkerCount() / getOrderCycleMs();
+  const spawnThroughputPerMs = 1 / getSpawnIntervalMs();
+  return Math.min(workerThroughputPerMs, spawnThroughputPerMs);
 }
 
 /* =====================================================================
@@ -594,104 +694,324 @@ function playSfxStageComplete() { [523, 659, 784, 1047, 1319].forEach((f, i) => 
 function playSfxTap() { playTone(700, 0.03, 'square', 0.05); }
 
 /* =====================================================================
-   Customer spawn / walk / pay loop
+   Scene zones — คำนวณจากขนาดจริงของ .stand-stage-view เพื่อรองรับ resize/responsive
    ===================================================================== */
+const scene = { width: 300, height: 190 };
+const ZONES = { stationXPct: 0.18, counterXPct: 0.60, idleXPct: 0.40 };
+
+function updateSceneMetrics() {
+  const view = document.getElementById('standStageView');
+  if (!view) return;
+  scene.width = view.clientWidth || scene.width;
+  scene.height = view.clientHeight || scene.height;
+}
+function stationPos(workerIndex) {
+  return { x: scene.width * ZONES.stationXPct + (workerIndex || 0) * 24, y: scene.height - 46 + (workerIndex || 0) * 8 };
+}
+function counterPos() {
+  return { x: scene.width * ZONES.counterXPct, y: scene.height - 42 };
+}
+function idlePos(workerIndex) {
+  return { x: scene.width * ZONES.idleXPct + (workerIndex || 0) * 20, y: scene.height - 44 + (workerIndex || 0) * 8 };
+}
+function queueSlotPos(slotIndex) {
+  const c = counterPos();
+  const maxSlots = Math.max(1, getMaxQueueSize());
+  const available = Math.max(20, scene.width - c.x - 30);
+  const spacing = Math.min(42, available / maxSlots);
+  const x = Math.min(scene.width - 22, c.x + 34 + slotIndex * spacing);
+  return { x, y: scene.height - 40 };
+}
+
+function moveToward(entity, target, speedPxPerSec, dt) {
+  const dx = target.x - entity.x;
+  const dy = target.y - entity.y;
+  const dist = Math.hypot(dx, dy);
+  const step = speedPxPerSec * (dt / 1000);
+  if (dist <= step || dist < 0.5) {
+    entity.x = target.x;
+    entity.y = target.y;
+    return true;
+  }
+  entity.x += (dx / dist) * step;
+  entity.y += (dy / dist) * step;
+  if (Math.abs(dx) > 0.5) entity.facing = dx < 0 ? -1 : 1;
+  return false;
+}
+
+/* =====================================================================
+   Worker (ผู้เล่น + พนักงาน) — State Machine: IDLE -> WALK_TO_STATION -> CRAFTING -> DELIVER -> COLLECT -> IDLE
+   ===================================================================== */
+let workers = [];
+let nextEntityId = 1;
+
+function addWorker(kind) {
+  const idx = workers.length;
+  const el = document.createElement('div');
+  el.className = 'worker' + (kind === 'staff' ? ' staff' : '');
+  el.innerHTML =
+    '<div class="worker-craft-bar-bg"><div class="worker-craft-bar-fill"></div></div>' +
+    '<div class="worker-body"><img src="assets/blacksmith/blacksmith.png" alt=""></div>';
+  document.getElementById('workerLayer').appendChild(el);
+  const pos = idlePos(idx);
+  const w = {
+    id: kind + '_' + idx, kind, el, workerIndex: idx,
+    x: pos.x, y: pos.y, facing: 1,
+    state: 'IDLE', orderId: null, pendingCoinId: null, craftElapsed: 0,
+  };
+  workers.push(w);
+  renderWorkerTransform(w, false);
+}
+
+function initWorkers() {
+  document.getElementById('workerLayer').innerHTML = '';
+  workers = [];
+  addWorker('player');
+  if (player.staffHired) addWorker('staff');
+}
+
+function renderWorkerTransform(w, moving) {
+  w.el.style.transform = `translate(${w.x}px, ${w.y}px)`;
+  w.el.classList.toggle('facing-left', w.facing === -1);
+  w.el.classList.toggle('moving', !!moving);
+}
+function showCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.add('show'); }
+function hideCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.remove('show'); }
+function updateCraftBar(w, pct) { w.el.querySelector('.worker-craft-bar-fill').style.width = (pct * 100) + '%'; }
+
+/* =====================================================================
+   Customer — เดินเข้าคิว / รอออเดอร์ / รับของ+จ่ายเงิน / เดินออก
+   ===================================================================== */
+let customers = [];
+let coins = [];
+
+function getQueueCustomers() {
+  return customers.filter(c => c.state !== 'PAID_LEAVING').sort((a, b) => a.slotIndex - b.slotIndex);
+}
+function reindexQueue() {
+  getQueueCustomers().forEach((c, i) => { c.slotIndex = i; });
+}
+function getCustomerById(id) { return customers.find(c => c.id === id); }
+function getCoinById(id) { return coins.find(c => c.id === id); }
+
+function spawnCustomerEntity() {
+  const slotIndex = getQueueCustomers().length;
+  const id = 'cust' + (nextEntityId++);
+  const el = document.createElement('div');
+  el.className = 'customer';
+  el.innerHTML =
+    '<div class="customer-patience-bg"><div class="customer-patience-fill"></div></div>' +
+    '<div class="customer-bubble"><img alt=""></div>' +
+    '<div class="customer-body"><img class="customer-img" alt=""></div>';
+  el.querySelector('.customer-img').src = getRandomCustomerImg();
+  document.getElementById('customerLane').appendChild(el);
+  const cust = {
+    id, el, slotIndex, state: 'QUEUED', facing: -1,
+    x: scene.width + 26, y: scene.height - 40,
+    orderIcon: null, orderRevenue: 0, orderTip: 0, patienceStartAt: 0,
+  };
+  customers.push(cust);
+  renderCustomerTransform(cust, true);
+  return cust;
+}
+
+function renderCustomerTransform(cust, moving) {
+  cust.el.style.transform = `translate(${cust.x}px, ${cust.y}px)`;
+  cust.el.classList.toggle('facing-left', cust.facing === -1);
+  cust.el.classList.toggle('moving', !!moving);
+}
+function showOrderBubble(cust) {
+  const bubble = cust.el.querySelector('.customer-bubble');
+  bubble.querySelector('img').src = cust.orderIcon;
+  bubble.classList.add('show');
+  cust.el.querySelector('.customer-patience-bg').classList.add('show');
+}
+function hideOrderBubble(cust) {
+  cust.el.querySelector('.customer-bubble').classList.remove('show');
+  cust.el.querySelector('.customer-patience-bg').classList.remove('show');
+}
+function updatePatienceBar(cust) {
+  const elapsed = performance.now() - cust.patienceStartAt;
+  const pct = Math.max(0, 1 - elapsed / PATIENCE_DURATION_MS);
+  const fill = cust.el.querySelector('.customer-patience-fill');
+  if (fill) fill.style.width = (pct * 100) + '%';
+}
+function removeCustomerEl(cust) {
+  cust.el.remove();
+  cust.state = 'REMOVED';
+}
+
+function spawnCoin(x, y, value, tip) {
+  const id = 'coin' + (nextEntityId++);
+  const el = document.createElement('div');
+  el.className = 'coin-drop';
+  el.innerHTML = '<img src="assets/blacksmith/coin.png" alt="">';
+  el.style.transform = `translate(${x}px, ${y}px)`;
+  document.getElementById('customerLane').appendChild(el);
+  const coin = { id, x, y, value, tip, el };
+  coins.push(coin);
+  return coin;
+}
+function spawnFloatText(x, y, text, variant) {
+  const el = document.createElement('div');
+  el.className = 'float-text float-text--' + variant;
+  el.textContent = text;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  document.getElementById('customerLane').appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+function deliverOrder(cust, worker) {
+  hideOrderBubble(cust);
+  cust.state = 'PAID_LEAVING';
+  reindexQueue();
+  const coin = spawnCoin(cust.x, cust.y - 6, cust.orderRevenue, cust.orderTip);
+  worker.pendingCoinId = coin.id;
+}
+
+function collectCoin(coin, worker) {
+  const total = coin.value + coin.tip;
+  player.gold += total;
+  player.stats.totalGoldEarned += total;
+  player.stats.totalCustomersServed += 1;
+  playSfxCashRegister();
+  spawnFloatText(
+    coin.x, coin.y,
+    coin.tip > 0 ? `+${Math.round(coin.value)} (+${coin.tip} ทิป!)` : `+${Math.round(coin.value)}`,
+    coin.tip > 0 ? 'tip' : 'gold'
+  );
+  coin.el.remove();
+  coins = coins.filter(c => c.id !== coin.id);
+  renderGold();
+  renderUpgradeList();
+  renderProductBadge();
+  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+}
+
+function clearAllCustomers() {
+  customers.forEach(c => c.el.remove());
+  customers = [];
+  coins.forEach(c => c.el.remove());
+  coins = [];
+}
+
+/* =====================================================================
+   Game loop — worker/customer state machines อัปเดตทุกเฟรมผ่าน requestAnimationFrame
+   ===================================================================== */
+function findAssignableCustomer() {
+  const activeSlots = workers.length; // จำนวนออเดอร์ที่รับพร้อมกันได้ = จำนวน worker (มีพนักงานช่วยแบ่งงานคิวจริง)
+  const queue = getQueueCustomers();
+  for (const c of queue) {
+    if (c.slotIndex >= activeSlots) break;
+    if (c.state === 'QUEUED') return c;
+  }
+  return null;
+}
+
+function tickWorkers(dt) {
+  const speed = getMoveSpeedPxPerSec();
+  workers.forEach(w => {
+    if (w.state === 'IDLE') {
+      const cust = findAssignableCustomer();
+      if (cust) {
+        cust.state = 'ORDER_ACTIVE';
+        cust.orderIcon = getProductIcon();
+        cust.orderRevenue = getRevenuePerSale();
+        cust.orderTip = Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0;
+        cust.patienceStartAt = performance.now();
+        showOrderBubble(cust);
+        w.orderId = cust.id;
+        w.state = 'WALK_TO_STATION';
+        return;
+      }
+      const arrived = moveToward(w, idlePos(w.workerIndex), speed, dt);
+      renderWorkerTransform(w, !arrived);
+      return;
+    }
+    if (w.state === 'WALK_TO_STATION') {
+      const arrived = moveToward(w, stationPos(w.workerIndex), speed, dt);
+      renderWorkerTransform(w, !arrived);
+      if (arrived) {
+        w.state = 'CRAFTING';
+        w.craftElapsed = 0;
+        showCraftBar(w);
+      }
+      return;
+    }
+    if (w.state === 'CRAFTING') {
+      w.craftElapsed += dt;
+      const dur = getCraftDurationMs();
+      updateCraftBar(w, Math.min(1, w.craftElapsed / dur));
+      if (w.craftElapsed >= dur) {
+        hideCraftBar(w);
+        w.state = 'DELIVER';
+      }
+      return;
+    }
+    if (w.state === 'DELIVER') {
+      const cust = getCustomerById(w.orderId);
+      if (!cust) { w.state = 'IDLE'; w.orderId = null; return; }
+      const arrived = moveToward(w, queueSlotPos(cust.slotIndex), speed, dt);
+      renderWorkerTransform(w, !arrived);
+      if (arrived) {
+        deliverOrder(cust, w);
+        w.state = 'COLLECT';
+      }
+      return;
+    }
+    if (w.state === 'COLLECT') {
+      const coin = getCoinById(w.pendingCoinId);
+      if (!coin) { w.state = 'IDLE'; w.orderId = null; w.pendingCoinId = null; return; }
+      const arrived = moveToward(w, { x: coin.x, y: coin.y }, speed, dt);
+      renderWorkerTransform(w, !arrived);
+      if (arrived) {
+        collectCoin(coin, w);
+        w.state = 'IDLE';
+        w.orderId = null;
+        w.pendingCoinId = null;
+      }
+      return;
+    }
+  });
+}
+
+function tickCustomers(dt) {
+  customers.forEach(cust => {
+    if (cust.state === 'PAID_LEAVING') {
+      const target = { x: scene.width + 26, y: cust.y };
+      const arrived = moveToward(cust, target, CUSTOMER_WALK_SPEED_PX * 1.3, dt);
+      renderCustomerTransform(cust, !arrived);
+      if (arrived) removeCustomerEl(cust);
+      return;
+    }
+    const target = queueSlotPos(cust.slotIndex);
+    const arrived = moveToward(cust, target, CUSTOMER_WALK_SPEED_PX, dt);
+    renderCustomerTransform(cust, !arrived);
+    if (cust.state === 'ORDER_ACTIVE') updatePatienceBar(cust);
+  });
+  customers = customers.filter(c => c.state !== 'REMOVED');
+}
+
+let rafId = null;
+let lastTickTime = null;
+function gameTick(ts) {
+  if (lastTickTime == null) lastTickTime = ts;
+  let dt = ts - lastTickTime;
+  lastTickTime = ts;
+  dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
+  tickWorkers(dt);
+  tickCustomers(dt);
+  rafId = requestAnimationFrame(gameTick);
+}
+
+let spawnTimerId = null;
 function scheduleNextCustomer() {
   if (spawnTimerId) clearTimeout(spawnTimerId);
   spawnTimerId = setTimeout(() => {
-    spawnCustomer();
-    if (Math.random() < getBonusCustomerChance()) {
-      setTimeout(() => spawnCustomer(), 250);
-    }
+    if (getQueueCustomers().length < getMaxQueueSize()) spawnCustomerEntity();
     scheduleNextCustomer();
   }, getSpawnIntervalMs());
-}
-
-function spawnCustomer() {
-  const lane = document.getElementById('customerLane');
-  const laneWidth = lane.clientWidth || 300;
-  const el = document.createElement('div');
-  el.className = 'customer';
-  const img = document.createElement('img');
-  img.className = 'customer-img';
-  img.src = getRandomCustomerImg();
-  img.alt = '';
-  el.appendChild(img);
-  el.style.left = (laneWidth - 20) + 'px';
-  const bubble = document.createElement('div');
-  bubble.className = 'customer-bubble';
-  const bubbleImg = document.createElement('img');
-  bubbleImg.src = getProductIcon();
-  bubbleImg.alt = '';
-  bubble.appendChild(bubbleImg);
-  el.appendChild(bubble);
-  lane.appendChild(el);
-
-  const standX = laneWidth / 2 + 55; // หยุดข้างแผง ไม่ใช่ตรงกลางแผง กันไม่ให้ตัวลูกค้าถูกบังโดยแผง
-  requestAnimationFrame(() => {
-    el.style.left = standX + 'px';
-  });
-
-  setTimeout(() => {
-    bubble.classList.add('show');
-    completeSale(el);
-  }, 1150);
-}
-
-function completeSale(customerEl) {
-  const revenue = getRevenuePerSale();
-  player.gold += revenue;
-  player.stats.totalGoldEarned += revenue;
-  player.stats.totalCustomersServed += 1;
-  playSfxCashRegister();
-  spawnCoinFly(customerEl);
-
-  if (Math.random() < getTipChance()) {
-    const tip = Math.round(revenue * (0.5 + Math.random()));
-    player.gold += tip;
-    player.stats.totalGoldEarned += tip;
-    spawnTipFloat(customerEl, tip);
-  }
-
-  renderGold();
-  renderUpgradeList();
-
-  setTimeout(() => {
-    customerEl.style.left = (customerEl.parentElement.clientWidth + 20) + 'px';
-    customerEl.style.opacity = '0';
-    setTimeout(() => customerEl.remove(), 1200);
-  }, 500);
-}
-
-function spawnCoinFly(customerEl) {
-  const lane = document.getElementById('customerLane');
-  const coin = document.createElement('div');
-  coin.className = 'coin-fly';
-  const coinImg = document.createElement('img');
-  coinImg.src = 'assets/blacksmith/coin.png';
-  coinImg.alt = '';
-  coin.appendChild(coinImg);
-  const cx = parseFloat(customerEl.style.left) || 0;
-  coin.style.left = cx + 'px';
-  coin.style.top = '10px';
-  lane.appendChild(coin);
-  requestAnimationFrame(() => {
-    coin.style.left = '-10px';
-    coin.style.top = '-30px';
-    coin.style.opacity = '0';
-  });
-  setTimeout(() => coin.remove(), 750);
-}
-
-function spawnTipFloat(customerEl, amount) {
-  const lane = document.getElementById('customerLane');
-  const el = document.createElement('div');
-  el.className = 'tip-float';
-  el.textContent = `+${amount} ทิป!`;
-  el.style.left = (parseFloat(customerEl.style.left) || 0) + 'px';
-  el.style.top = '30px';
-  lane.appendChild(el);
-  setTimeout(() => el.remove(), 1050);
 }
 
 /* =====================================================================
@@ -757,22 +1077,23 @@ function advanceStage() {
   player.stageIndex += 1;
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
   if (wasFirstStage) {
-    player.staffHired = true; // ปลดล็อกรายได้ตอนไม่อยู่หน้าจอ หลังผ่านร้านแรกสำเร็จ
+    player.staffHired = true; // ปลดล็อกพนักงานคนที่สอง + รายได้ตอนไม่อยู่หน้าจอ หลังผ่านร้านแรกสำเร็จ
   }
+  clearAllCustomers();
+  initWorkers();
   renderAll();
   scheduleNextCustomer();
   saveGame();
 }
 
 /* =====================================================================
-   Offline Earnings (ปลดล็อกหลังจ้างพนักงานร้านแรกสำเร็จ)
+   Offline Earnings (ปลดล็อกหลังจ้างพนักงานร้านแรกสำเร็จ) — อิงตามรอบการผลิตจริงของ worker คูณเวลาที่ออฟไลน์
    ===================================================================== */
 function applyOfflineEarnings() {
   if (!player.staffHired) return;
   const elapsedMs = Math.min(Date.now() - player.lastSeenAt, OFFLINE_MAX_HOURS * 3600 * 1000);
   if (elapsedMs < 30000) return; // น้อยกว่า 30 วินาทีไม่ต้องโชว์ ป้องกันรีเฟรชถี่ๆ แล้วเจอ modal ทุกครั้ง
-  const customersPerMs = 1 / getSpawnIntervalMs();
-  const earned = Math.floor(elapsedMs * customersPerMs * getRevenuePerSale() * OFFLINE_EFFICIENCY);
+  const earned = Math.floor(elapsedMs * getThroughputPerMs() * getRevenuePerSale() * OFFLINE_EFFICIENCY);
   if (earned <= 0) return;
   player.gold += earned;
   player.stats.totalGoldEarned += earned;
@@ -910,7 +1231,7 @@ function renderAll() {
 }
 
 /* =====================================================================
-   Save / Load
+   Save / Load — คงโครงสร้างเดิมทุกฟิลด์ (SAVE_KEY เดิม) ตัว worker/customer เป็น transient state ไม่ persist
    ===================================================================== */
 function saveGame() {
   const data = {
@@ -989,11 +1310,15 @@ document.getElementById('btnResetGame').addEventListener('click', () => {
    ===================================================================== */
 setInterval(saveGame, 10000);
 window.addEventListener('beforeunload', saveGame);
+window.addEventListener('resize', updateSceneMetrics);
 
 loadGame();
+updateSceneMetrics();
 applyOfflineEarnings();
 renderAll();
+initWorkers();
 scheduleNextCustomer();
+rafId = requestAnimationFrame(gameTick);
 </script>
 </body>
 </html>
