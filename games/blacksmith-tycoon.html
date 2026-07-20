@@ -154,6 +154,15 @@
     50%  { transform: translateX(-50%) scale(1.08); }
     100% { transform: translateX(-50%) scale(1); }
   }
+  /* สำเนาโต๊ะ Station เฉพาะ "ขอบหน้าโต๊ะ" (แถบล่างสุดของภาพ) วางซ้อนอยู่ "หน้า" worker (z-index สูงกว่า worker-layer)
+     ส่วนภาพเต็มของ Station (#standBooth) อยู่ z-index:2 คือ "หลัง" worker (z-index:3) เหมือนเดิม
+     รวมกันแล้วได้ภาพลวงตาแบบ 2.5D: worker เดินไป "หลัง" โต๊ะ แต่ขอบโต๊ะด้านหน้ายังบังขาอยู่นิดหน่อย */
+  .stand-booth-front {
+    z-index: 4;
+    pointer-events: none;
+    cursor: default;
+    clip-path: inset(82% 0 0 0);
+  }
 
   /* เคาน์เตอร์รับออเดอร์ — อยู่โซนล่างสุด (เหนือจุดเกิดลูกค้าเล็กน้อย) จัดกึ่งกลางแนวนอน ไม่ใช้แบบยาวจรดขอบจอ
      (ไม่มี asset เคาน์เตอร์แยกให้ วาดด้วย CSS) */
@@ -179,7 +188,12 @@
     width: 82px; height: 101px;
     will-change: transform;
   }
-  .worker-body { width: 100%; height: 100%; }
+  /* overflow:hidden อยู่ที่ worker-body (ห่อเฉพาะตัว sprite) ไม่ใช่ .worker เอง
+     เพราะ craft-bar เป็น sibling ที่ตั้งใจให้ล้นขึ้นไปเหนือหัวตัวละคร (top:-14px) ถ้า hidden ที่ .worker จะบัง craft-bar ไปด้วย */
+  .worker-body {
+    width: 100%; height: 100%;
+    overflow: hidden; /* กันไม่ให้พื้นหลัง sprite-sheet ล้นออกนอกกรอบ 1 เฟรมไม่ว่ากรณีใด */
+  }
   /* ตัวละคร worker ใช้ CSS sprite-sheet frame animation จริง (background-position สลับเฟรม) แทนภาพนิ่ง
      เลยไม่ต้องใช้ walkBob มาช่วยหลอกสายตาแบบตัวละครอื่นที่ไม่มีเฟรมเดินจริง */
   .worker-sprite {
@@ -500,6 +514,7 @@
   <div class="customer-lane" id="customerLane"></div>
   <div class="worker-layer" id="workerLayer"></div>
   <img class="stand-booth" id="standBooth" src="assets/blacksmith/station_stall.png" alt="">
+  <img class="stand-booth stand-booth-front" id="standBoothFront" src="assets/blacksmith/station_stall.png" alt="" aria-hidden="true">
   <button class="product-badge" id="productBadge" title="อัปเกรดสินค้า">
     <img id="productBadgeIcon" src="" alt="">
     <span class="product-badge-level pixel-num" id="productBadgeLevel">0</span>
@@ -761,7 +776,9 @@ function playSfxTap() { playTone(700, 0.03, 'square', 0.05); }
 const scene = { width: 300, height: 400 };
 // จุดที่ 4 สถานีผลิต (บน) -> จุดที่ 3 พื้นที่ว่างให้เดินขึ้นลง (กลาง) -> จุดที่ 2 เคาน์เตอร์ (ล่าง ใกล้จุดเกิดลูกค้า)
 // ทุกจุด center แนวนอนที่ 0.5 ของความกว้างเหมือนกันหมด ตามที่ระบุ
-const ZONES = { stationXPct: 0.5, stationYPct: 0.22, counterYPct: 0.80, idleYPct: 0.52 };
+// stationYPct ขยับขึ้นจาก 0.22 -> 0.13 ให้เท้าตัวละครไปชนขอบล่างภาพ Station พอดี (แต่เดิมมีช่องว่างเยอะ
+// ทำให้ขอบหน้าโต๊ะ (stand-booth-front) ไม่ได้ซ้อนทับขาตัวละครเลยตามที่ตั้งใจ)
+const ZONES = { stationXPct: 0.5, stationYPct: 0.13, counterYPct: 0.80, idleYPct: 0.52 };
 
 function updateSceneMetrics() {
   const view = document.getElementById('standStageView');
@@ -1235,6 +1252,7 @@ function renderStageView() {
   document.getElementById('stageProduct').textContent = `ขาย ${stage.product}`;
   document.getElementById('standTintOverlay').style.background = stage.color;
   document.getElementById('standBooth').src = stage.stationImg;
+  document.getElementById('standBoothFront').src = stage.stationImg;
 }
 
 function renderStageProgress() {
