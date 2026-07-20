@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blacksmith Tycoon</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+
+<div class="game-area" id="standStageView">
+  <div class="scene-bg scene-bg--wall"></div>
+  <div class="scene-bg scene-bg--floor"></div>
+  <div class="stand-tint-overlay" id="standTintOverlay"></div>
+  <div class="shop-counter"></div>
+  <div class="customer-lane" id="customerLane"></div>
+  <div class="worker-layer" id="workerLayer"></div>
+  <img class="stand-booth" id="standBooth" src="../assets/blacksmith/station_stall.png" alt="">
+  <img class="stand-booth stand-booth-front" id="standBoothFront" src="../assets/blacksmith/station_stall.png" alt="" aria-hidden="true">
+  <button class="product-badge" id="productBadge" title="อัปเกรดสินค้า">
+    <img id="productBadgeIcon" src="" alt="">
+    <span class="product-badge-level pixel-num" id="productBadgeLevel">0</span>
+  </button>
+
+  <div class="hud-bar">
+    <div class="gold-counter"><img class="coin-icon" src="../assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
+    <div class="hud-title">⚒️ Blacksmith Tycoon</div>
+    <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
+  </div>
+  <div class="fever-bar-wrap" id="feverBarWrap" title="สะสมคอมโบจากการส่งออเดอร์สำเร็จ เต็มแล้วแตะเพื่อเข้าสู่ Fever Mode">
+    <div class="fever-bar-bg"><div class="fever-bar-fill" id="feverBarFill"></div></div>
+    <span class="fever-bar-label" id="feverBarLabel">FEVER</span>
+  </div>
+</div>
+
+<div class="ui-area" id="uiArea">
+  <div class="stage-status-bar">
+    <div class="stage-status-text"><b id="stageName">แผงขายของริมทาง</b><span class="stage-status-sep">•</span><span id="stageProduct">ขาย ของกินของใช้ทั่วไป</span></div>
+    <div class="stage-status-progress">
+      <span class="pixel-num"><span id="stageProgressCount">0</span>/<span id="stageProgressTotal">4</span></span>
+      <div class="stage-progress-dots" id="stageProgressDots"></div>
+    </div>
+  </div>
+
+  <div class="upgrade-list" id="upgradeList"></div>
+
+  <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
+  <div class="upgrade-list" id="permUpgradeList"></div>
+
+  <div class="stats-footer" id="statsFooter"></div>
+</div>
+
+<div class="modal-overlay" id="productLevelModal">
+  <div class="modal-box product-level-box">
+    <button class="modal-close-x" id="btnCloseProductLevel">✕</button>
+    <h2 id="productLevelTitle">ระดับ 0 — สินค้า</h2>
+    <img class="product-level-icon" id="productLevelIcon" src="" alt="">
+    <div class="product-level-stars" id="productLevelStars"></div>
+    <div class="product-level-progress-bg"><div class="product-level-progress-fill" id="productLevelProgressFill"></div></div>
+    <button class="btn-cta-mega" id="btnBuyProductLevel">อัปเกรด</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="stageCompleteModal">
+  <div class="modal-box">
+    <div class="modal-emoji-big">🎉</div>
+    <h2 id="stageCompleteTitle">ร้านเต็มขั้นแล้ว!</h2>
+    <p id="stageCompleteText"></p>
+    <button class="btn-cta-mega" id="btnAdvanceStage">ไปกันเลย!</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="welcomeBackModal">
+  <div class="modal-box">
+    <div class="modal-emoji-big">👋</div>
+    <h2>ยินดีต้อนรับกลับ!</h2>
+    <p id="welcomeBackText"></p>
+    <button class="btn-cta-mega" id="btnCloseWelcomeBack">รับเลย!</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box">
+    <h2>⚙️ ตั้งค่า</h2>
+    <div class="settings-row">
+      <span>เสียง</span>
+      <button id="btnToggleSound">เปิดอยู่</button>
+    </div>
+    <div class="settings-row">
+      <span>รีเซ็ตเกม</span>
+      <button id="btnResetGame">รีเซ็ต</button>
+    </div>
+    <button class="btn-secondary-modal" id="btnCloseSettings">ปิด</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="gameCompleteModal">
+  <div class="modal-box">
+    <div class="modal-emoji-big">👑</div>
+    <h2>สร้างอาณาจักรช่างตีเหล็กสำเร็จ!</h2>
+    <p>คุณอัปเกรดร้านจนสุดทางแล้วในเวอร์ชันนี้ ขอบคุณที่เล่นจนจบ — ระบบใหม่กำลังจะตามมาเร็วๆ นี้!</p>
+    <button class="btn-cta-mega" id="btnCloseGameComplete">เยี่ยมไปเลย!</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/state.js"></script>
+<script src="js/formulas.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/entities/worker.js"></script>
+<script src="js/entities/customer.js"></script>
+<script src="js/entities/economy.js"></script>
+<script src="js/features/fever.js"></script>
+<script src="js/features/goblin.js"></script>
+<script src="js/progression.js"></script>
+<script src="js/render.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
