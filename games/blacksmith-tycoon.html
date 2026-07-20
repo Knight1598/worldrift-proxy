@@ -42,10 +42,33 @@
     flex: 6;
     overflow: hidden;
     image-rendering: pixelated;
-    background-image: url('assets/blacksmith/tile_wood_wall.png'), url('assets/blacksmith/tile_stone_floor.png');
-    background-repeat: repeat-x, repeat-x;
-    background-position: top left, bottom left;
-    background-size: auto 55%, auto 55%;
+    background: #8a6b3f; /* กันโหว่ขาว ถ้ามีช่องว่างเล็กน้อยระหว่างเลเยอร์พื้นหลังก็จะกลืนเป็นสีไม้แทน ไม่โผล่ขาว */
+  }
+  /* พื้นหลังฉาก แยกเป็น 2 เลเยอร์ div ต่างหาก (ไม่ใช้ multi background-image บน element เดียวแบบเดิม)
+     เดิมใช้ background-size เป็น % ของความสูง container ที่เป็นเลขทศนิยม (เช่น 489.59375px) ทำให้ pattern
+     ไม่ลงตัวพอดีพิกเซล เกิดเป็นเส้นตะเข็บสีอ่อนพาดกลางจอทั้งแนวตั้ง (รอยต่อระหว่างการ repeat) และแนวนอน
+     (รอยต่อระหว่างเลเยอร์ผนัง/พื้น) — แก้โดยกำหนด background-size เป็นพิกเซลตายตัว (เลขเต็ม) + repeat เต็มรูปแบบ
+     บนเลเยอร์แยกที่ตำแหน่ง top/bottom ชนกันพอดีเป๊ะ ไม่มีช่องว่างให้เห็นสีขาวโผล่ */
+  .scene-bg {
+    position: absolute;
+    left: 0; right: 0;
+    z-index: 0;
+    image-rendering: pixelated;
+    background-repeat: repeat;
+  }
+  .scene-bg--wall {
+    top: 0;
+    height: 46%;
+    background-image: url('assets/blacksmith/tile_wood_wall.png');
+    background-size: 128px 128px;
+    background-position: top left;
+  }
+  .scene-bg--floor {
+    top: 46%;
+    bottom: 0;
+    background-image: url('assets/blacksmith/tile_stone_floor.png');
+    background-size: 128px 128px;
+    background-position: top left;
   }
   .stand-tint-overlay {
     position: absolute;
@@ -107,15 +130,16 @@
   }
   .btn-tertiary:active { transform: translate(2px, 2px); box-shadow: none; }
 
-  /* ===== Room layout: Station อยู่บน (หลังร้าน) / เคาน์เตอร์+คิวอยู่ล่าง (หน้าร้าน) ===== */
+  /* ===== Room layout (มุมมองแบบ Eatventure, ล่างขึ้นบน, ทุกอย่าง center แนวนอน) =====
+     บน = สถานีผลิต (หลังร้าน) / กลาง = พื้นที่ว่างให้ Blacksmith วิ่งขึ้นลง / ล่าง = เคาน์เตอร์รับออเดอร์ (หน้าร้าน) */
   .stand-booth {
     position: absolute;
     z-index: 2;
-    top: 6%;
+    top: 4%;
     left: 50%;
     transform: translateX(-50%);
-    width: 38%;
-    max-width: 150px;
+    width: 42%;
+    max-width: 190px;
     height: auto;
     image-rendering: pixelated;
     cursor: pointer;
@@ -131,26 +155,28 @@
     100% { transform: translateX(-50%) scale(1); }
   }
 
-  /* เคาน์เตอร์รับออเดอร์ — แถบยาวขวางด้านล่างของฉาก (ไม่มี asset เคาน์เตอร์แยกให้ วาดด้วย CSS) */
+  /* เคาน์เตอร์รับออเดอร์ — อยู่โซนล่างสุด (เหนือจุดเกิดลูกค้าเล็กน้อย) จัดกึ่งกลางแนวนอน ไม่ใช้แบบยาวจรดขอบจอ
+     (ไม่มี asset เคาน์เตอร์แยกให้ วาดด้วย CSS) */
   .shop-counter {
     position: absolute;
     z-index: 2;
-    left: 4%;
-    right: 4%;
-    top: 76%;
-    height: 20px;
-    border-radius: 3px;
+    left: 16%;
+    right: 16%;
+    top: 78%;
+    height: 26px;
+    border-radius: 4px;
     background: linear-gradient(180deg, #c98a45, #8a5a2c);
     border: 3px solid #2c1c0c;
     box-shadow: 0 4px 0 rgba(0,0,0,0.4);
   }
 
-  /* ===== Worker (ผู้เล่น/พนักงาน) — เดินขึ้นไปทำของที่ Station แล้วเดินลงมาส่ง/เก็บเหรียญที่เคาน์เตอร์ ===== */
+  /* ===== Worker (ผู้เล่น/พนักงาน) — เดินขึ้นไปทำของที่ Station แล้วเดินลงมาส่ง/เก็บเหรียญที่เคาน์เตอร์
+     ขยายขนาดตัวละครขึ้น ~2.4 เท่าจากเดิม ให้สมดุลกับขนาดโต๊ะ/เคาน์เตอร์ ===== */
   .worker-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
   .worker {
     position: absolute;
     left: 0; top: 0;
-    width: 34px; height: 42px;
+    width: 82px; height: 101px;
     will-change: transform;
   }
   .worker-body { width: 100%; height: 100%; }
@@ -163,9 +189,9 @@
   .worker.facing-left .worker-body img { transform: scaleX(-1); }
   .worker.staff .worker-body img { filter: drop-shadow(0 3px 2px rgba(0,0,0,0.3)) hue-rotate(150deg) saturate(1.3); }
   .worker-craft-bar-bg {
-    position: absolute; top: -10px; left: 50%; transform: translateX(-50%);
-    width: 30px; height: 5px;
-    background: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden;
+    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    width: 62px; height: 8px;
+    background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden;
     opacity: 0; transition: opacity 0.15s ease;
   }
   .worker-craft-bar-bg.show { opacity: 1; }
@@ -237,8 +263,8 @@
   .customer {
     position: absolute;
     left: 0; top: 0;
-    width: 36px;
-    height: 42px;
+    width: 86px;
+    height: 101px;
     will-change: transform;
   }
   .customer-body { width: 100%; height: 100%; }
@@ -247,19 +273,19 @@
   .customer.facing-left .customer-img { transform: scaleX(-1); }
   .customer-bubble {
     position: absolute;
-    top: -20px;
+    top: -40px;
     left: 50%;
     transform: translateX(-50%);
-    width: 20px; height: 20px;
+    width: 34px; height: 34px;
     opacity: 0;
     transition: opacity 0.2s ease, top 0.2s ease;
   }
   .customer-bubble img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
-  .customer-bubble.show { opacity: 1; top: -26px; }
+  .customer-bubble.show { opacity: 1; top: -48px; }
   .customer-patience-bg {
-    position: absolute; top: -9px; left: 50%; transform: translateX(-50%);
-    width: 28px; height: 5px;
-    background: rgba(0,0,0,0.3); border-radius: 3px; overflow: hidden;
+    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+    width: 58px; height: 8px;
+    background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden;
     opacity: 0; transition: opacity 0.15s ease;
   }
   .customer-patience-bg.show { opacity: 1; }
@@ -269,7 +295,7 @@
   .coin-drop {
     position: absolute;
     left: 0; top: 0;
-    width: 18px; height: 18px;
+    width: 26px; height: 26px;
     z-index: 4;
     pointer-events: none;
   }
@@ -457,6 +483,8 @@
 <body>
 
 <div class="game-area" id="standStageView">
+  <div class="scene-bg scene-bg--wall"></div>
+  <div class="scene-bg scene-bg--floor"></div>
   <div class="stand-tint-overlay" id="standTintOverlay"></div>
   <div class="shop-counter"></div>
   <div class="customer-lane" id="customerLane"></div>
@@ -721,7 +749,9 @@ function playSfxTap() { playTone(700, 0.03, 'square', 0.05); }
    คำนวณจากขนาดจริงของ .game-area เพื่อรองรับ resize/responsive
    ===================================================================== */
 const scene = { width: 300, height: 400 };
-const ZONES = { stationXPct: 0.5, stationYPct: 0.30, counterYPct: 0.80, idleYPct: 0.60 };
+// จุดที่ 4 สถานีผลิต (บน) -> จุดที่ 3 พื้นที่ว่างให้เดินขึ้นลง (กลาง) -> จุดที่ 2 เคาน์เตอร์ (ล่าง ใกล้จุดเกิดลูกค้า)
+// ทุกจุด center แนวนอนที่ 0.5 ของความกว้างเหมือนกันหมด ตามที่ระบุ
+const ZONES = { stationXPct: 0.5, stationYPct: 0.22, counterYPct: 0.80, idleYPct: 0.52 };
 
 function updateSceneMetrics() {
   const view = document.getElementById('standStageView');
@@ -730,21 +760,24 @@ function updateSceneMetrics() {
   scene.height = view.clientHeight || scene.height;
 }
 function stationPos(workerIndex) {
-  return { x: scene.width * ZONES.stationXPct + (workerIndex || 0) * 26 - 13, y: scene.height * ZONES.stationYPct };
+  return { x: scene.width * ZONES.stationXPct + (workerIndex || 0) * 30 - 15, y: scene.height * ZONES.stationYPct };
 }
 function counterLineY() {
   return scene.height * ZONES.counterYPct;
 }
 function idlePos(workerIndex) {
-  return { x: scene.width * 0.5 + (workerIndex || 0) * 20 - 10, y: scene.height * ZONES.idleYPct };
+  return { x: scene.width * 0.5 + (workerIndex || 0) * 24 - 12, y: scene.height * ZONES.idleYPct };
 }
+// จุดที่ 1: คิวลูกค้าเรียงเป็นแถวแนวนอนหน้าเคาน์เตอร์ แต่จัดทั้งแถว "กึ่งกลางจอ" แทนการเริ่มจากขอบขวาแบบเดิม
+// ตำแหน่งคงที่ตาม maxSlots (ไม่ใช่จำนวนคิวปัจจุบัน) กันไม่ให้ลูกค้าที่ยืนอยู่แล้วขยับตำแหน่งเมื่อคิวอื่นเข้า/ออก
 function queueSlotPos(slotIndex) {
   const y = counterLineY();
   const maxSlots = Math.max(1, getMaxQueueSize());
   const usableWidth = Math.max(60, scene.width - 40);
-  const spacing = Math.min(44, usableWidth / maxSlots);
-  const startX = scene.width - 26;
-  const x = Math.max(18, startX - slotIndex * spacing);
+  const spacing = Math.min(56, usableWidth / maxSlots);
+  const totalWidth = spacing * maxSlots;
+  const startX = (scene.width - totalWidth) / 2 + spacing / 2;
+  const x = Math.max(20, Math.min(scene.width - 20, startX + slotIndex * spacing));
   return { x, y };
 }
 
@@ -830,9 +863,12 @@ function spawnCustomerEntity() {
     '<div class="customer-body"><img class="customer-img" alt=""></div>';
   el.querySelector('.customer-img').src = getRandomCustomerImg();
   document.getElementById('customerLane').appendChild(el);
+  // จุดที่ 1: เกิดจากขอบล่างสุดของ Game Area (นอกจอ) แล้วเดินขึ้น — spawn ตรง X ของคิวที่จะไปยืนไว้เลย
+  // เพื่อให้การเดินเข้าคิวเป็นแนวดิ่งตรงๆ ขึ้นมาหาเคาน์เตอร์ ไม่ใช่เดินเฉียงจากขอบขวาแบบเดิม
+  const spawnX = queueSlotPos(slotIndex).x;
   const cust = {
-    id, el, slotIndex, state: 'QUEUED', facing: -1,
-    x: scene.width + 24, y: counterLineY(),
+    id, el, slotIndex, state: 'QUEUED', facing: 1,
+    x: spawnX, y: scene.height + 40,
     orderIcon: null, orderRevenue: 0, orderTip: 0, patienceStartAt: 0,
   };
   customers.push(cust);
@@ -1004,7 +1040,8 @@ function tickWorkers(dt) {
 function tickCustomers(dt) {
   customers.forEach(cust => {
     if (cust.state === 'PAID_LEAVING') {
-      const target = { x: scene.width + 24, y: cust.y };
+      // เดินกลับลงขอบล่างสุด (จุดเดียวกับที่เกิดขึ้นมา) แทนการเดินออกขอบขวาแบบเดิม
+      const target = { x: cust.x, y: scene.height + 40 };
       const arrived = moveToward(cust, target, CUSTOMER_WALK_SPEED_PX * 1.3, dt);
       renderCustomerTransform(cust, !arrived);
       if (arrived) removeCustomerEl(cust);
