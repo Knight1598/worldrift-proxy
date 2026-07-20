@@ -116,6 +116,13 @@
     flex-shrink: 0;
   }
   .gold-counter .coin-icon { width: 18px; height: 18px; image-rendering: pixelated; }
+  /* เด้งรับตอนเหรียญบินมาถึง (ดู finishCoinFlight) */
+  .gold-counter.bump { animation: goldBump 0.25s ease; }
+  @keyframes goldBump {
+    0%   { transform: scale(1); }
+    40%  { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
 
   .btn-tertiary {
     width: 30px; height: 30px;
@@ -193,6 +200,19 @@
   }
   /* overflow:hidden อยู่ที่ worker-body (ห่อเฉพาะตัว sprite) ไม่ใช่ .worker เอง
      เพราะ craft-bar เป็น sibling ที่ตั้งใจให้ล้นขึ้นไปเหนือหัวตัวละคร (top:-14px) ถ้า hidden ที่ .worker จะบัง craft-bar ไปด้วย */
+  /* worker-swing เป็นเลเยอร์แยกสำหรับแอนิเมชันท่าตีค้อนตอน Crafting (rotate/squash) โดยเฉพาะ
+     ต้องแยกจาก .worker เพราะ .worker เองมี transform:translate(x,y) ที่ JS เซ็ตทุกเฟรมสำหรับตำแหน่ง
+     ถ้าใส่ CSS animation ที่ขยับ transform บนตัวเดียวกัน จะชนกัน (inline style ทับ CSS animation ทุกเฟรม) */
+  .worker-swing { width: 100%; height: 100%; }
+  .worker.crafting .worker-swing {
+    animation: craftSwing 0.42s ease-in-out infinite;
+    transform-origin: 50% 100%;
+  }
+  @keyframes craftSwing {
+    0%, 100% { transform: rotate(0deg) scaleY(1); }
+    35%      { transform: rotate(-9deg) scaleY(0.95); }
+    62%      { transform: rotate(7deg) scaleY(1.05); }
+  }
   .worker-body {
     width: 100%; height: 100%;
     overflow: hidden; /* กันไม่ให้พื้นหลัง sprite-sheet ล้นออกนอกกรอบ 1 เฟรมไม่ว่ากรณีใด */
@@ -331,6 +351,28 @@
     100% { transform: scale(1); }
   }
   @keyframes coinBob { 0% { transform: translateY(0); } 100% { transform: translateY(-4px); } }
+  /* ตอนบินเข้าหา UI Gold (ดู tickFlyingCoins) — ปิดลูป bob เพราะคุม transform เองผ่าน JS ล้วนแล้ว
+     ยกขึ้นเหนือทุกอย่างรวมถึง HUD bar (z:10) ให้เห็นเหรียญบินชัดๆ จนกระทบ UI ไม่มีอะไรมาบังกลางทาง */
+  .coin-drop.coin-flying { z-index: 11; }
+  .coin-drop.coin-flying img { animation: none; }
+
+  /* ประกายไฟตอน Crafting — DOM particle เล็กๆ ที่ถูกลบทิ้งทันทีหลังแอนิเมชันจบ (setTimeout คู่กับ 0.48s) กัน memory leak */
+  .spark-particle {
+    position: absolute;
+    left: 0; top: 0;
+    width: 3px; height: 3px;
+    background: #ffd76a;
+    border-radius: 1px;
+    box-shadow: 0 0 4px 1px rgba(255,170,40,0.9), 0 0 2px #fff;
+    pointer-events: none;
+    z-index: 5;
+    animation: sparkFly 0.48s ease-out forwards;
+  }
+  @keyframes sparkFly {
+    0%   { transform: translate(0, 0) scale(1); opacity: 1; }
+    45%  { transform: translate(var(--smx), var(--smy)) scale(1); opacity: 1; }
+    100% { transform: translate(var(--sx), var(--sy)) scale(0.3); opacity: 0; }
+  }
 
   /* ตัวเลขลอยตอนเก็บเหรียญ */
   .float-text {
@@ -850,6 +892,27 @@ const WALK_SPRITE_URL = {
 const IDLE_SPRITE_URL = 'assets/blacksmith/farmer_idle.png';
 const WALK_FRAME_MS_AT_BASE_SPEED = 140; // ระยะเวลาต่อเฟรมตอนไม่มีอัปเกรด speed — เดินเร็วขึ้นแล้วขาก็สลับเฟรมไวขึ้นตาม
 
+// ===== Sparks (ตอน Crafting) =====
+const SPARK_INTERVAL_MS = 220; // ยิงประกายไฟทุกๆ ช่วงนี้ระหว่าง craft (จังหวะใกล้เคียงกับ craftSwing 0.42s ต่อรอบ)
+function spawnSpark(x, y) {
+  const el = document.createElement('div');
+  el.className = 'spark-particle';
+  const angle = (Math.random() - 0.5) * 2.6; // เรเดียน กระจายเฉียงซ้าย-ขวาแบบสุ่ม
+  const dist = 12 + Math.random() * 16;
+  const smx = Math.sin(angle) * dist * 0.6;
+  const smy = -(8 + Math.random() * 8); // พุ่งขึ้นก่อนช่วงแรก (จำลองแรงกระเด็นจากค้อนกระทบ)
+  const sx = Math.sin(angle) * dist;
+  const sy = 8 + Math.random() * 10; // แล้วตกลงมาตาม gravity เสมือนช่วงหลัง
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.setProperty('--smx', smx.toFixed(1) + 'px');
+  el.style.setProperty('--smy', smy.toFixed(1) + 'px');
+  el.style.setProperty('--sx', sx.toFixed(1) + 'px');
+  el.style.setProperty('--sy', sy.toFixed(1) + 'px');
+  document.getElementById('standStageView').appendChild(el);
+  setTimeout(() => el.remove(), 480); // ลบทิ้งหลังแอนิเมชันจบพอดี กัน DOM ค้าง/กิน memory
+}
+
 // เลือกทิศเดิน (หน้า/หลัง/ซ้าย/ขวา) จากทิศทางรวมของการเดินทั้งช่วง (ไม่คำนวณใหม่ทุกเฟรม กันภาพสั่นตอน dx/dy ใกล้เคียงกัน)
 function pickWalkDirection(from, to) {
   const dx = to.x - from.x, dy = to.y - from.y;
@@ -863,13 +926,13 @@ function addWorker(kind) {
   el.className = 'worker' + (kind === 'staff' ? ' staff' : '');
   el.innerHTML =
     '<div class="worker-craft-bar-bg"><div class="worker-craft-bar-fill"></div></div>' +
-    '<div class="worker-body"><div class="worker-sprite"></div></div>';
+    '<div class="worker-swing"><div class="worker-body"><div class="worker-sprite"></div></div></div>';
   document.getElementById('workerLayer').appendChild(el);
   const pos = idlePos(idx);
   const w = {
     id: kind + '_' + idx, kind, el, workerIndex: idx,
     x: pos.x, y: pos.y, facing: 1,
-    state: 'IDLE', orderId: null, pendingCoinId: null, craftElapsed: 0,
+    state: 'IDLE', orderId: null, pendingCoinId: null, craftElapsed: 0, sparkElapsed: 0,
     walkDir: 'front', animFrame: 0, animElapsed: 0,
     spriteEl: el.querySelector('.worker-sprite'),
   };
@@ -1005,20 +1068,67 @@ function deliverOrder(cust, worker) {
   worker.pendingCoinId = coin.id;
 }
 
-function collectCoin(coin, worker) {
-  const total = coin.value + coin.tip;
-  player.gold += total;
-  player.stats.totalGoldEarned += total;
-  player.stats.totalCustomersServed += 1;
+// ===== Coin Arc Physics =====
+// worker แตะเหรียญ (pickupCoin) ไม่ได้เข้า Gold ทันที — เหรียญจะบินเป็นวิถีโค้งไปหา UI กล่อง Gold ก่อน
+// แล้วค่อยบวกเข้า player.gold ตอนบินไปถึงจริงๆ เท่านั้น (finishCoinFlight) ตามที่ระบุ
+const COIN_FLIGHT_DURATION_MS = 550;
+const COIN_ARC_HEIGHT_PX = 46;
+
+function pickupCoin(coin, worker) {
   playSfxCashRegister();
   spawnFloatText(
     coin.x, coin.y,
     coin.tip > 0 ? `+${Math.round(coin.value)} 🪙 (+${coin.tip} ทิป!)` : `+${Math.round(coin.value)} 🪙`,
     coin.tip > 0 ? 'tip' : 'gold'
   );
+  player.stats.totalCustomersServed += 1;
+  startCoinFlight(coin);
+}
+
+function startCoinFlight(coin) {
+  const goldEl = document.getElementById('goldValue');
+  const stageEl = document.getElementById('standStageView');
+  const goldRect = goldEl.getBoundingClientRect();
+  const stageRect = stageEl.getBoundingClientRect();
+  coin.flying = true;
+  coin.flightElapsed = 0;
+  coin.startX = coin.x;
+  coin.startY = coin.y;
+  // แปลงตำแหน่ง UI กล่อง Gold (fixed ใน viewport) ให้เป็นพิกัดเดียวกับที่ใช้ตำแหน่งเหรียญ (สัมพัทธ์กับ standStageView)
+  coin.targetX = goldRect.left - stageRect.left + goldRect.width / 2 - 13;
+  coin.targetY = goldRect.top - stageRect.top + goldRect.height / 2 - 13;
+  coin.el.classList.add('coin-flying');
+}
+
+function tickFlyingCoins(dt) {
+  coins.forEach(coin => {
+    if (!coin.flying) return;
+    coin.flightElapsed += dt;
+    const p = Math.min(1, coin.flightElapsed / COIN_FLIGHT_DURATION_MS);
+    const x = coin.startX + (coin.targetX - coin.startX) * p; // แกน X วิ่งแบบ linear ตามที่ระบุ
+    const easeY = 1 - Math.pow(1 - p, 3); // easeOutCubic แกน Y ให้ชะลอตอนใกล้ถึงเป้า ดูมีน้ำหนักโค้ง
+    const arc = Math.sin(p * Math.PI) * COIN_ARC_HEIGHT_PX; // โป่งขึ้นกลางทางจำลองวิถีโค้ง (parabola)
+    const y = coin.startY + (coin.targetY - coin.startY) * easeY - arc;
+    coin.el.style.transform = `translate(${x}px, ${y}px) scale(${1 - p * 0.45})`;
+    if (p >= 1) finishCoinFlight(coin);
+  });
+}
+
+function bumpGoldCounter() {
+  const el = document.querySelector('.gold-counter');
+  el.classList.remove('bump');
+  void el.offsetWidth; // force reflow กัน class เดิมค้าง เล่นแอนิเมชันซ้ำไม่ได้ถ้ากดรัวๆ
+  el.classList.add('bump');
+}
+
+function finishCoinFlight(coin) {
+  const total = coin.value + coin.tip;
+  player.gold += total;
+  player.stats.totalGoldEarned += total;
   coin.el.remove();
   coins = coins.filter(c => c.id !== coin.id);
   renderGold();
+  bumpGoldCounter();
   renderUpgradeList();
   renderProductBadge();
   if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
@@ -1075,7 +1185,9 @@ function tickWorkers(dt) {
       if (arrived) {
         w.state = 'CRAFTING';
         w.craftElapsed = 0;
+        w.sparkElapsed = 0;
         showCraftBar(w);
+        w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
       }
       return;
     }
@@ -1083,9 +1195,17 @@ function tickWorkers(dt) {
       w.craftElapsed += dt;
       const dur = getCraftDurationMs();
       updateCraftBar(w, Math.min(1, w.craftElapsed / dur));
-      renderWorkerTransform(w, false, dt); // ยืนนิ่งตอน craft — โชว์เฟรม idle พร้อม progress bar เขียว/ฟ้าด้านบน
+      renderWorkerTransform(w, false, dt); // ยืนนิ่งตอน craft — โชว์เฟรม idle พร้อม progress bar เขียว/ฟ้าด้านบน (ท่าตีค้อนคุมแยกผ่าน .crafting class)
+      w.sparkElapsed += dt;
+      if (w.sparkElapsed >= SPARK_INTERVAL_MS) {
+        w.sparkElapsed = 0;
+        // ยิงประกายไฟจากประมาณตำแหน่งมือ/ค้อนของตัวละคร (กลาง-บนของสไปรต์)
+        spawnSpark(w.x + 41, w.y + 32);
+        if (Math.random() < 0.5) spawnSpark(w.x + 41 + (Math.random() * 12 - 6), w.y + 30);
+      }
       if (w.craftElapsed >= dur) {
         hideCraftBar(w);
+        w.el.classList.remove('crafting');
         w.state = 'DELIVER';
       }
       return;
@@ -1112,7 +1232,7 @@ function tickWorkers(dt) {
       const arrived = moveToward(w, coinTarget, speed, dt);
       renderWorkerTransform(w, !arrived, dt);
       if (arrived) {
-        collectCoin(coin, w);
+        pickupCoin(coin, w);
         w.state = 'IDLE';
         w.orderId = null;
         w.pendingCoinId = null;
@@ -1149,6 +1269,7 @@ function gameTick(ts) {
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
   tickWorkers(dt);
   tickCustomers(dt);
+  tickFlyingCoins(dt);
   rafId = requestAnimationFrame(gameTick);
 }
 
