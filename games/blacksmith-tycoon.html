@@ -774,6 +774,49 @@
 
 <script>
 /* =====================================================================
+   Event Bus — pub/sub กลาง กัน tight coupling ระหว่างไฟล์ (เช่น เดิม economy.js
+   ต้องเรียก addFeverProgress()/render*() ข้ามไฟล์ตรงๆ ทุกจุดที่มีผลกระทบใหม่)
+   ต้องโหลดก่อนไฟล์อื่นทั้งหมด (ดูลำดับ <script> ใน index.html) เพราะไฟล์อื่นๆ
+   หลายไฟล์ subscribe ผ่าน GameEvents.on(...) ที่ระดับบนสุดของไฟล์ (ทำงานทันทีตอนโหลด)
+
+   ใช้เฉพาะเหตุการณ์ที่เป็น "จุดๆ" ที่ระบบอื่นอยากรู้ (ซื้ออัปเกรด, ส่งออเดอร์สำเร็จ, ฯลฯ)
+   ไม่ใช้แทน game loop ต่อเฟรม (tickWorkers/tickCustomers ยังเรียกตรงๆ เหมือนเดิม)
+   ===================================================================== */
+const GameEvents = (() => {
+  const listeners = {};
+  function on(event, handler) {
+    (listeners[event] ||= []).push(handler);
+    return () => off(event, handler); // คืนฟังก์ชัน unsubscribe ให้เผื่ออนาคตต้องใช้
+  }
+  function off(event, handler) {
+    if (listeners[event]) listeners[event] = listeners[event].filter(h => h !== handler);
+  }
+  function emit(event, payload) {
+    (listeners[event] || []).slice().forEach(h => h(payload));
+  }
+  return { on, off, emit };
+})();
+</script>
+<script>
+/* =====================================================================
+   Event Type registry — ชื่อ event ทั้งหมดที่ใช้ผ่าน GameEvents รวมไว้จุดเดียว
+   กันพิมพ์ผิด/สะกดต่างกันระหว่างไฟล์ที่ emit กับไฟล์ที่ subscribe
+   ===================================================================== */
+const EVENTS = {
+  ORDER_DELIVERED:   'order:delivered',    // deliverOrder() — { cust, worker }
+  COIN_COLLECTED:    'coin:collected',     // finishCoinFlight() — { amount }
+  UPGRADE_PURCHASED: 'upgrade:purchased',  // buyUpgrade() — { key, level }
+  MILESTONE_REACHED: 'upgrade:milestone',  // checkMilestone() — { key, level, mult, displayName }
+  STAGE_ADVANCED:    'stage:advanced',     // advanceStage()
+  STAFF_HIRED:       'staff:hired',        // hireHelper() — { staffCount }
+  VAULT_UPGRADED:    'vault:upgraded',     // buyVaultLevel() — { vaultLevel }
+  GOBLIN_CAUGHT:     'goblin:caught',      // catchGoblin() — { reward }
+  FEVER_ACTIVATED:   'fever:activated',    // activateFever()
+  FEVER_ENDED:       'fever:ended',        // tickFever() เมื่อหมดเวลา
+};
+</script>
+<script>
+/* =====================================================================
    ข้อมูลเกม (Stages / Upgrades)
    ===================================================================== */
 const STAGES = [
@@ -1488,7 +1531,8 @@ function deliverOrder(cust, worker) {
   reindexQueue();
   const coin = spawnCoin(cust.x, cust.y - 6, cust.orderRevenue, cust.orderTip);
   worker.pendingCoinId = coin.id;
-  addFeverProgress(FEVER_FILL_PER_ORDER); // Fever Mode: สะสมคอมโบทุกครั้งที่ส่งออเดอร์สำเร็จ
+  // ยิง event แทนเรียก addFeverProgress() ข้ามไฟล์ตรงๆ — fever.js subscribe เอง (ดู features/fever.js)
+  GameEvents.emit(EVENTS.ORDER_DELIVERED, { cust, worker });
 }
 
 
@@ -1551,12 +1595,8 @@ function finishCoinFlight(coin) {
   player.stats.totalGoldEarned += total;
   coin.el.remove();
   coins = coins.filter(c => c.id !== coin.id);
-  renderGold();
-  bumpGoldCounter();
-  renderUpgradeList();
-  renderPermUpgradeList();
-  renderProductBadge();
-  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+  // ยิง event แทนเรียก render*() 5-6 ฟังก์ชันข้ามไฟล์ตรงๆ — render.js subscribe เอง (ดู render.js ท้ายไฟล์)
+  GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: total });
 }
 
 function clearAllCustomers() {
@@ -1587,11 +1627,13 @@ function activateFever() {
   feverState.endsAt = performance.now() + FEVER_DURATION_MS;
   renderFeverBar();
   playSfxStageComplete(); // ยืมเสียงรัวเดิมมาใช้แทนเสียง Fever โดยเฉพาะ (ไม่ได้เพิ่มเสียงใหม่ในสโคปนี้)
+  GameEvents.emit(EVENTS.FEVER_ACTIVATED, {});
 }
 function tickFever() {
   if (feverState.active && performance.now() >= feverState.endsAt) {
     feverState.active = false;
     renderFeverBar();
+    GameEvents.emit(EVENTS.FEVER_ENDED, {});
   }
 }
 function renderFeverBar() {
@@ -1604,6 +1646,10 @@ function renderFeverBar() {
   wrap.classList.toggle('active', feverState.active);
   label.textContent = feverState.active ? 'FEVER!!' : ready ? 'แตะเลย!' : 'FEVER';
 }
+
+// รับ event จาก economy.js (deliverOrder) แทนถูกเรียกตรงๆ ข้ามไฟล์ — decouple ให้ economy.js
+// ไม่ต้องรู้จัก Fever Mode เลยด้วยซ้ำ
+GameEvents.on(EVENTS.ORDER_DELIVERED, () => addFeverProgress(FEVER_FILL_PER_ORDER));
 
 </script>
 <script>
@@ -1660,8 +1706,8 @@ function catchGoblin(el) {
   const stageRect = document.getElementById('standStageView').getBoundingClientRect();
   spawnFloatText(rect.left - stageRect.left, rect.top - stageRect.top, `👺 +${reward.toLocaleString()} 🪙`, 'gold');
   playSfxCashRegister();
-  renderGold();
-  bumpGoldCounter();
+  // ยิง event แทนเรียก renderGold()/bumpGoldCounter() ข้ามไฟล์ตรงๆ — render.js subscribe เอง
+  GameEvents.emit(EVENTS.GOBLIN_CAUGHT, { reward });
   setTimeout(() => { if (el.parentNode) el.remove(); }, 500);
 }
 
@@ -1681,12 +1727,8 @@ function buyUpgrade(key) {
   player.upgradeLevels[key] = newLevel;
   playSfxUpgrade();
   checkMilestone(key, newLevel, type.name);
-  renderGold();
-  renderUpgradeList();
-  renderPermUpgradeList();
-  renderStageProgress();
-  renderProductBadge();
-  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+  // ยิง event แทนเรียก render*() 5-6 ฟังก์ชันข้ามไฟล์ตรงๆ — render.js subscribe เอง (ดู render.js ท้ายไฟล์)
+  GameEvents.emit(EVENTS.UPGRADE_PURCHASED, { key, level: newLevel });
   saveGame();
   if (isStageMaxed()) showStageCompleteModal();
 }
@@ -1698,7 +1740,9 @@ function checkMilestone(key, level, displayName) {
   if (!player.milestonesShown[key]) player.milestonesShown[key] = [];
   if (player.milestonesShown[key].includes(level)) return;
   player.milestonesShown[key].push(level);
-  showMilestoneToast(displayName, level, getMilestoneMultiplier(level));
+  const mult = getMilestoneMultiplier(level);
+  showMilestoneToast(displayName, level, mult);
+  GameEvents.emit(EVENTS.MILESTONE_REACHED, { key, level, mult, displayName });
 }
 function showMilestoneToast(displayName, level, mult) {
   const el = document.createElement('div');
@@ -1720,8 +1764,7 @@ function hireHelper() {
   player.staffCount += 1;
   addWorker('staff');
   playSfxUpgrade();
-  renderGold();
-  renderPermUpgradeList();
+  GameEvents.emit(EVENTS.STAFF_HIRED, { staffCount: player.staffCount });
   saveGame();
 }
 
@@ -1732,8 +1775,7 @@ function buyVaultLevel() {
   player.gold -= cost;
   player.vaultLevel += 1;
   playSfxUpgrade();
-  renderGold();
-  renderPermUpgradeList();
+  GameEvents.emit(EVENTS.VAULT_UPGRADED, { vaultLevel: player.vaultLevel });
   saveGame();
 }
 
@@ -1784,7 +1826,8 @@ function advanceStage() {
   }
   clearAllCustomers();
   initWorkers();
-  renderAll();
+  // ยิง event แทนเรียก renderAll() ข้ามไฟล์ตรงๆ — render.js subscribe เอง
+  GameEvents.emit(EVENTS.STAGE_ADVANCED, { stageIndex: player.stageIndex });
   // Visual Workstation Upgrade: เด้ง pop ให้เห็นชัดว่า Station เปลี่ยนหน้าตาแล้วตอนขึ้นด่านใหม่
   const boothEl = document.getElementById('standBooth');
   const boothFrontEl = document.getElementById('standBoothFront');
@@ -2019,6 +2062,32 @@ function renderAll() {
   renderStatsFooter();
   renderFeverBar();
 }
+
+/* =====================================================================
+   Event Bus subscriptions — render.js รับ event ที่ economy.js/progression.js/
+   features/* ยิงออกมา แทนที่ไฟล์เหล่านั้นจะต้องเรียก render*() ข้ามไฟล์ตรงๆ เอง
+   (เดิม finishCoinFlight/buyUpgrade/hireHelper/... เรียกฟังก์ชันพวกนี้ตรงๆ ทุกจุด)
+   ===================================================================== */
+GameEvents.on(EVENTS.COIN_COLLECTED, () => {
+  renderGold();
+  bumpGoldCounter();
+  renderUpgradeList();
+  renderPermUpgradeList();
+  renderProductBadge();
+  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+});
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => {
+  renderGold();
+  renderUpgradeList();
+  renderPermUpgradeList();
+  renderStageProgress();
+  renderProductBadge();
+  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+});
+GameEvents.on(EVENTS.STAFF_HIRED, () => { renderGold(); renderPermUpgradeList(); });
+GameEvents.on(EVENTS.VAULT_UPGRADED, () => { renderGold(); renderPermUpgradeList(); });
+GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => { renderGold(); bumpGoldCounter(); });
+GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
 </script>
 <script>
 /* =====================================================================

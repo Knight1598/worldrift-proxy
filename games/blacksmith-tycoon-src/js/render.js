@@ -205,3 +205,29 @@ function renderAll() {
   renderStatsFooter();
   renderFeverBar();
 }
+
+/* =====================================================================
+   Event Bus subscriptions — render.js รับ event ที่ economy.js/progression.js/
+   features/* ยิงออกมา แทนที่ไฟล์เหล่านั้นจะต้องเรียก render*() ข้ามไฟล์ตรงๆ เอง
+   (เดิม finishCoinFlight/buyUpgrade/hireHelper/... เรียกฟังก์ชันพวกนี้ตรงๆ ทุกจุด)
+   ===================================================================== */
+GameEvents.on(EVENTS.COIN_COLLECTED, () => {
+  renderGold();
+  bumpGoldCounter();
+  renderUpgradeList();
+  renderPermUpgradeList();
+  renderProductBadge();
+  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+});
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => {
+  renderGold();
+  renderUpgradeList();
+  renderPermUpgradeList();
+  renderStageProgress();
+  renderProductBadge();
+  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+});
+GameEvents.on(EVENTS.STAFF_HIRED, () => { renderGold(); renderPermUpgradeList(); });
+GameEvents.on(EVENTS.VAULT_UPGRADED, () => { renderGold(); renderPermUpgradeList(); });
+GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => { renderGold(); bumpGoldCounter(); });
+GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());

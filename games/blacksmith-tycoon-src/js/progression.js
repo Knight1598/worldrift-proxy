@@ -12,12 +12,8 @@ function buyUpgrade(key) {
   player.upgradeLevels[key] = newLevel;
   playSfxUpgrade();
   checkMilestone(key, newLevel, type.name);
-  renderGold();
-  renderUpgradeList();
-  renderPermUpgradeList();
-  renderStageProgress();
-  renderProductBadge();
-  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+  // ยิง event แทนเรียก render*() 5-6 ฟังก์ชันข้ามไฟล์ตรงๆ — render.js subscribe เอง (ดู render.js ท้ายไฟล์)
+  GameEvents.emit(EVENTS.UPGRADE_PURCHASED, { key, level: newLevel });
   saveGame();
   if (isStageMaxed()) showStageCompleteModal();
 }
@@ -29,7 +25,9 @@ function checkMilestone(key, level, displayName) {
   if (!player.milestonesShown[key]) player.milestonesShown[key] = [];
   if (player.milestonesShown[key].includes(level)) return;
   player.milestonesShown[key].push(level);
-  showMilestoneToast(displayName, level, getMilestoneMultiplier(level));
+  const mult = getMilestoneMultiplier(level);
+  showMilestoneToast(displayName, level, mult);
+  GameEvents.emit(EVENTS.MILESTONE_REACHED, { key, level, mult, displayName });
 }
 function showMilestoneToast(displayName, level, mult) {
   const el = document.createElement('div');
@@ -51,8 +49,7 @@ function hireHelper() {
   player.staffCount += 1;
   addWorker('staff');
   playSfxUpgrade();
-  renderGold();
-  renderPermUpgradeList();
+  GameEvents.emit(EVENTS.STAFF_HIRED, { staffCount: player.staffCount });
   saveGame();
 }
 
@@ -63,8 +60,7 @@ function buyVaultLevel() {
   player.gold -= cost;
   player.vaultLevel += 1;
   playSfxUpgrade();
-  renderGold();
-  renderPermUpgradeList();
+  GameEvents.emit(EVENTS.VAULT_UPGRADED, { vaultLevel: player.vaultLevel });
   saveGame();
 }
 
@@ -115,7 +111,8 @@ function advanceStage() {
   }
   clearAllCustomers();
   initWorkers();
-  renderAll();
+  // ยิง event แทนเรียก renderAll() ข้ามไฟล์ตรงๆ — render.js subscribe เอง
+  GameEvents.emit(EVENTS.STAGE_ADVANCED, { stageIndex: player.stageIndex });
   // Visual Workstation Upgrade: เด้ง pop ให้เห็นชัดว่า Station เปลี่ยนหน้าตาแล้วตอนขึ้นด่านใหม่
   const boothEl = document.getElementById('standBooth');
   const boothFrontEl = document.getElementById('standBoothFront');

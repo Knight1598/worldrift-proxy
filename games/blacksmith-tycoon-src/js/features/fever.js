@@ -17,11 +17,13 @@ function activateFever() {
   feverState.endsAt = performance.now() + FEVER_DURATION_MS;
   renderFeverBar();
   playSfxStageComplete(); // ยืมเสียงรัวเดิมมาใช้แทนเสียง Fever โดยเฉพาะ (ไม่ได้เพิ่มเสียงใหม่ในสโคปนี้)
+  GameEvents.emit(EVENTS.FEVER_ACTIVATED, {});
 }
 function tickFever() {
   if (feverState.active && performance.now() >= feverState.endsAt) {
     feverState.active = false;
     renderFeverBar();
+    GameEvents.emit(EVENTS.FEVER_ENDED, {});
   }
 }
 function renderFeverBar() {
@@ -34,4 +36,8 @@ function renderFeverBar() {
   wrap.classList.toggle('active', feverState.active);
   label.textContent = feverState.active ? 'FEVER!!' : ready ? 'แตะเลย!' : 'FEVER';
 }
+
+// รับ event จาก economy.js (deliverOrder) แทนถูกเรียกตรงๆ ข้ามไฟล์ — decouple ให้ economy.js
+// ไม่ต้องรู้จัก Fever Mode เลยด้วยซ้ำ
+GameEvents.on(EVENTS.ORDER_DELIVERED, () => addFeverProgress(FEVER_FILL_PER_ORDER));
 

@@ -31,7 +31,8 @@ function deliverOrder(cust, worker) {
   reindexQueue();
   const coin = spawnCoin(cust.x, cust.y - 6, cust.orderRevenue, cust.orderTip);
   worker.pendingCoinId = coin.id;
-  addFeverProgress(FEVER_FILL_PER_ORDER); // Fever Mode: สะสมคอมโบทุกครั้งที่ส่งออเดอร์สำเร็จ
+  // ยิง event แทนเรียก addFeverProgress() ข้ามไฟล์ตรงๆ — fever.js subscribe เอง (ดู features/fever.js)
+  GameEvents.emit(EVENTS.ORDER_DELIVERED, { cust, worker });
 }
 
 
@@ -94,12 +95,8 @@ function finishCoinFlight(coin) {
   player.stats.totalGoldEarned += total;
   coin.el.remove();
   coins = coins.filter(c => c.id !== coin.id);
-  renderGold();
-  bumpGoldCounter();
-  renderUpgradeList();
-  renderPermUpgradeList();
-  renderProductBadge();
-  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+  // ยิง event แทนเรียก render*() 5-6 ฟังก์ชันข้ามไฟล์ตรงๆ — render.js subscribe เอง (ดู render.js ท้ายไฟล์)
+  GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: total });
 }
 
 function clearAllCustomers() {

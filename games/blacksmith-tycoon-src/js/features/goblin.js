@@ -51,8 +51,8 @@ function catchGoblin(el) {
   const stageRect = document.getElementById('standStageView').getBoundingClientRect();
   spawnFloatText(rect.left - stageRect.left, rect.top - stageRect.top, `👺 +${reward.toLocaleString()} 🪙`, 'gold');
   playSfxCashRegister();
-  renderGold();
-  bumpGoldCounter();
+  // ยิง event แทนเรียก renderGold()/bumpGoldCounter() ข้ามไฟล์ตรงๆ — render.js subscribe เอง
+  GameEvents.emit(EVENTS.GOBLIN_CAUGHT, { reward });
   setTimeout(() => { if (el.parentNode) el.remove(); }, 500);
 }
 
