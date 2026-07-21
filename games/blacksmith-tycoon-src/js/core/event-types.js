@@ -18,8 +18,7 @@ const EVENTS = {
   MATERIAL_RESTOCKED: 'material:restocked', // tickMaterialRegen() — { material, stock }
   ORDER_SERVED:       'order:served',       // pickupCoin() — {} (นับ order ที่เสิร์ฟจบสมบูรณ์ ใช้กับ Order Missions)
   MISSION_COMPLETED:  'mission:completed',  // tickMissionProgress() — { missionIndex, reward }
-  BUFF_ROLLED:        'buff:rolled',        // rollBuff() — { buff }
-  BUFF_ENDED:         'buff:ended',         // tickBuffs() เมื่อ buff แบบ duration หมดเวลา
+  EQUIPMENT_UPGRADED: 'equipment:upgraded', // buyEquipmentUpgrade() — { slot, tier }
   STATION_UNLOCKED:   'station:unlocked',   // buyStationUnlock() — { stationIndex }
   STATION_UPGRADED:   'station:upgraded',   // buyStationLevel() — { stationIndex, level }
   GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }

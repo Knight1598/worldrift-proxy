@@ -53,10 +53,10 @@ function openGiftBox(el) {
     saveGame();
   } else {
     kind = 'instant';
-    // แจกผลบัพแบบ instant ฟรี 1 ครั้ง (เติมคลังเต็ม หรือเติมหลอด Fever เต็ม)
+    // แจกผลทันทีฟรี 1 ครั้ง (เติมคลังเต็ม หรือเติมหลอด Fever เต็ม) — ผลครั้งเดียวจบ ไม่ใช่ของสวมใส่
     const instant = Math.random() < 0.5 ? 'instant_restock' : 'fever_now';
-    applyInstantBuff(getBuffDef(instant));
-    spawnFloatText(x, y, `🎁 ${getBuffDef(instant).name}!`, 'tip');
+    const eff = applyInstantEffect(instant);
+    spawnFloatText(x, y, `🎁 ${eff.name}!`, 'tip');
   }
   GameEvents.emit(EVENTS.GIFT_OPENED, { kind });
 }

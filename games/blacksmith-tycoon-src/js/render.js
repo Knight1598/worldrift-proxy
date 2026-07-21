@@ -17,8 +17,7 @@ function renderAll() {
   renderStatsFooter();
   renderFeverBar();
   renderMaterialStockPanel();
-  renderBuffPanel();
-  renderActiveBuffChip();
+  renderEquipmentPanel();
   refreshUpgradesFab();
   refreshRenovateFab();
   refreshStationsUi();

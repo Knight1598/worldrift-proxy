@@ -272,42 +272,53 @@ const ORDER_MISSION_REWARD_GROWTH = 1.15;
 // เลยเพิ่มเพชรก้อนใหญ่ให้จริงตอนจบเกม (คิดเป็น ~16 ครั้งสุ่มบัพ ให้รู้สึกคุ้มค่าที่เล่นจบ)
 const FINAL_STAGE_REWARD_GEMS = 50;
 
-// ===== Buff Roll (สุ่มบัพติดตัวด้วยเพชร) — ช่วยเร่งจบด่านเร็วขึ้น ไม่ใช่อัปเกรดถาวร =====
-// buff แบบ duration ใช้งานได้ทีละ 1 ตัว (สุ่มใหม่ทับของเดิม) ส่วนแบบ instant ใช้ผลทันทีครั้งเดียวไม่ค้าง state
-const BUFF_ROLL_COST_GEMS = 3;
-const BUFF_DURATION_MS = 60000; // buff แบบ duration ทั้งหมดอยู่ได้ 60 วินาทีเท่ากัน (เข้าใจง่าย ไม่ต้องจำหลายเลข)
-const BUFF_DEFS = [
-  // ----- แบบมีระยะเวลา (kind: 'duration') -----
-  { key: 'instant_craft',    kind: 'duration', weight: 15, icon: '⚡', name: 'ช่างไว',
-    desc: '30% โอกาสคราฟต์เสร็จทันทีต่อออเดอร์', chance: 0.30 },
-  { key: 'double_gold',      kind: 'duration', weight: 15, icon: '💰', name: 'เงินสองเท่า',
-    desc: '30% โอกาสได้เงิน x2 ต่อออเดอร์', chance: 0.30, mult: 2 },
-  { key: 'crit_gold',        kind: 'duration', weight: 6,  icon: '🍀', name: 'โชคกาชา',
-    desc: '10% โอกาสได้เงิน x5 ต่อออเดอร์', chance: 0.10, mult: 5 },
-  { key: 'speed_boost',      kind: 'duration', weight: 15, icon: '👟', name: 'เท้าไฟ',
-    desc: 'ความเร็วเดิน +50%' },
-  { key: 'tip_boost',        kind: 'duration', weight: 12, icon: '✨', name: 'มือทิป',
-    desc: 'โอกาสได้ทิป x2' },
-  { key: 'vip_magnet',       kind: 'duration', weight: 8,  icon: '👑', name: 'แม่เหล็ก VIP',
-    desc: 'โอกาสเจอลูกค้า VIP x3' },
-  { key: 'signage_boost',    kind: 'duration', weight: 12, icon: '📣', name: 'ป้ายเรืองแสง',
-    desc: 'ลูกค้ามาถี่ขึ้น + รับคิวเพิ่ม' },
-  { key: 'discount',         kind: 'duration', weight: 10, icon: '🏷️', name: 'ลดกระหน่ำ',
-    desc: 'ราคาซื้ออัปเกรด/จ้างลูกมือ/คลังออฟไลน์ลด 20%' },
-  { key: 'fever_fill_boost', kind: 'duration', weight: 10, icon: '🔥', name: 'ไฟลุก',
-    desc: 'สะสมหลอด Fever Mode ไวขึ้น 2 เท่า' },
-  { key: 'regen_boost',      kind: 'duration', weight: 10, icon: '📦', name: 'คลังไว',
-    desc: 'วัตถุดิบเติมคลังไวขึ้น 2 เท่า' },
-  // ----- แบบผลทันที ครั้งเดียว (kind: 'instant') -----
-  { key: 'instant_restock',  kind: 'instant', weight: 8, icon: '🎁', name: 'เติมเต็มทันที',
-    desc: 'เติมวัตถุดิบทุกชนิดเต็มคลังทันที' },
-  { key: 'goblin_now',       kind: 'instant', weight: 6, icon: '👺', name: 'เรียกโกบลิน',
-    desc: 'เรียกโกลเด้นโกบลินออกมาทันที' },
-  { key: 'fever_now',        kind: 'instant', weight: 5, icon: '🌟', name: 'ฟีเวอร์ทันใจ',
-    desc: 'เติมหลอด Fever Mode เต็มทันที' },
-  { key: 'gold_burst',       kind: 'instant', weight: 8, icon: '💎', name: 'กระเป๋าตุง',
-    desc: 'ได้ Gold ก้อนโตทันที (อิงรายได้ต่อนาทีปัจจุบัน)' },
+// ===== Equipment (อุปกรณ์สวมใส่ถาวร) — แทนที่ระบบสุ่มบัพชั่วคราวเดิม =====
+// ตัวละครมี 3 ช่องสวมใส่ แต่ละช่องอัปเกรดเป็น tier ที่สูงขึ้นด้วยเพชร (ถาวร ไม่หมดเวลา เก็บใน save)
+// tier 0 = ช่องว่าง (ไม่มีโบนัส), tier 1-4 = common/rare/epic/legendary ให้ effect มากขึ้นเรื่อยๆ
+// effect ของแต่ละช่องความหมายต่างกัน (ดู getEquip*Mult ใน formulas.js): tool=ลดเวลาคราฟต์,
+// outfit=เงินต่อออเดอร์+%, charm=โอกาสทิป(+absolute)+ตัวคูณโอกาส VIP
+const EQUIPMENT_RARITIES = ['empty', 'common', 'rare', 'epic', 'legendary']; // index = tier
+const EQUIP_UPGRADE_BASE_GEMS = 6;      // ราคาอัปจาก tier0->1 (เพชร)
+const EQUIP_UPGRADE_COST_GROWTH = 2.3;  // แต่ละ tier ถัดไปแพงขึ้น (6, 14, 32, 73)
+const EQUIPMENT_SLOTS = [
+  { key: 'tool', icon: '🔨', name: 'เครื่องมือช่าง', effectLabel: 'ลดเวลาคราฟต์', unit: 'pct',
+    tiers: [
+      { name: 'มือเปล่า',   effect: 0 },
+      { name: 'ค้อนไม้',    effect: 0.06 },
+      { name: 'ค้อนเหล็ก',  effect: 0.12 },
+      { name: 'ค้อนรูน',    effect: 0.20 },
+      { name: 'ค้อนมังกร',  effect: 0.30 },
+    ] },
+  { key: 'outfit', icon: '🦺', name: 'ชุดช่าง', effectLabel: 'เงินต่อออเดอร์', unit: 'pct',
+    tiers: [
+      { name: 'เสื้อเก่า',    effect: 0 },
+      { name: 'ผ้ากันเปื้อน', effect: 0.08 },
+      { name: 'ชุดหนัง',      effect: 0.18 },
+      { name: 'ชุดเกราะเบา',  effect: 0.30 },
+      { name: 'ชุดตำนาน',     effect: 0.50 },
+    ] },
+  { key: 'charm', icon: '🧿', name: 'เครื่องราง', effectLabel: 'โอกาสทิป + ลูกค้า VIP', unit: 'charm',
+    tiers: [
+      { name: 'ไม่มี',       effect: 0 },
+      { name: 'ปิ่นทองแดง',  effect: 0.05 },
+      { name: 'หยกนำโชค',    effect: 0.12 },
+      { name: 'ดวงตาเวท',    effect: 0.22 },
+      { name: 'ดาวนำทาง',    effect: 0.35 },
+    ] },
 ];
+
+// ===== ผลทันทีของกล่องของขวัญ (Mystery Gift Box) — ผลครั้งเดียวจบ ไม่ใช่บัพติดตัว (ดู features/giftbox.js) =====
+// แยกออกจากระบบ Equipment ชัดเจน: อันนี้คือ "เซอร์ไพรส์ครั้งเดียว" ที่กล่องสุ่มแจก ไม่เกี่ยวกับของสวมใส่
+const INSTANT_EFFECTS = {
+  instant_restock: { icon: '📦', name: 'เติมเต็มคลัง',
+    apply() { MATERIALS.forEach(m => { player.inventory[m.key].stock = player.inventory[m.key].capacity; }); } },
+  fever_now: { icon: '🌟', name: 'ฟีเวอร์ทันใจ',
+    apply() { feverState.progress = 1; GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: 1 }); } },
+  goblin_now: { icon: '👺', name: 'เรียกโกบลิน',
+    apply() { if (goblinTimerId) clearTimeout(goblinTimerId); spawnGoblin(); } },
+  gold_burst: { icon: '💎', name: 'กระเป๋าตุง',
+    apply() { const r = Math.max(20, Math.round(estimateIncomePerMinute() * 0.5)); player.gold += r; player.stats.totalGoldEarned += r; GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: r }); } },
+};
 
 const SAVE_KEY = 'blacksmithTycoonSave_v6';
 const SAVE_KEY_V5 = 'blacksmithTycoonSave_v5'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก

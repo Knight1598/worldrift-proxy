@@ -20,8 +20,6 @@ function gameTick(ts) {
   lastTickTime = ts;
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
   tickFever();
-  tickBuffs();
-  tickBuffCountdownDisplay();
   tickMaterialRegen(dt);
   tickWorkers(dt);
   tickCustomers(dt);

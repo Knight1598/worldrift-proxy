@@ -21,6 +21,12 @@ function defaultRenownUpgrades() {
   RENOWN_UPGRADES.forEach(u => { o[u.key] = 0; });
   return o;
 }
+// อุปกรณ์สวมใส่ถาวร (ดู EQUIPMENT_SLOTS ใน data.js) — เก็บ tier ที่สวมอยู่ของแต่ละช่อง (0 = ว่าง)
+function defaultEquipment() {
+  const o = {};
+  EQUIPMENT_SLOTS.forEach(s => { o[s.key] = 0; });
+  return o;
+}
 function defaultPrestige() {
   // renown = ชื่อเสียงสะสมถาวร, goldAtCycleStart = snapshot totalGoldEarned ตอนเริ่มรอบปัจจุบัน
   // (goldThisCycle = totalGoldEarned - goldAtCycleStart), count = จำนวนครั้งที่เกิดใหม่
@@ -41,6 +47,7 @@ let player = {
   missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
   missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
   stationsExtra: defaultStationsExtra(), // สถานีเสริมของด่านปัจจุบัน (Multi-Station ดู ui/stations.js)
+  equipment: defaultEquipment(),         // อุปกรณ์สวมใส่ถาวร (ดู systems/equipment.js)
   prestige: defaultPrestige(),           // ชื่อเสียง/เกิดใหม่ (ดู systems/prestige.js)
   achievements: { claimed: {} },         // { claimed: { key: true } } — ความสำเร็จที่กดรับรางวัลแล้ว
   daily: { lastClaimDay: null, streak: 0 }, // รางวัลล็อกอินรายวัน (lastClaimDay = 'YYYY-M-D')
@@ -54,17 +61,13 @@ let player = {
 // Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
 let feverState = { progress: 0, active: false, endsAt: 0 };
 
-// Active Buff ก็เป็น session state ล้วนๆ เหมือนกัน (ตั้งใจไม่ persist — สุ่มใหม่ได้ทุกครั้งที่เข้าเกม ไม่ต้องมี
-// กรณี edge-case บัพค้างข้ามเซสชันให้ดูแล)
-let activeBuff = null; // null หรือ { key, endsAt } (ดู systems/buffs.js)
-
 let audioCtx = null;
 
 /* =====================================================================
    Save / Load — SAVE_KEY เป็น v4 (gems/missionIndex/missionProgress ใหม่ สำหรับ Order Missions + Buff Roll)
    chain การ migrate: v4 (ตรงๆ) -> v3 (ตรงๆ + เติม default v4) -> v2 (ตรงๆ + เติม default v3 แล้วต่อ v4)
    -> v1 (แปลงเป็น v2 ก่อน แล้วเติม default v3 ต่อด้วย v4) กันผู้เล่นเก่าทุกรุ่นความคืบหน้าไม่หาย
-   worker/customer/coin/feverState/activeBuff เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
+   worker/customer/coin/feverState เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
    ===================================================================== */
 function saveGame() {
   const data = {
@@ -80,6 +83,7 @@ function saveGame() {
     missionIndex: player.missionIndex,
     missionProgress: player.missionProgress,
     stationsExtra: player.stationsExtra,
+    equipment: player.equipment,
     prestige: player.prestige,
     achievements: player.achievements,
     daily: player.daily,
@@ -217,6 +221,8 @@ function loadGame() {
     missionIndex: Math.max(0, data.missionIndex || 0),
     missionProgress: Math.max(0, data.missionProgress || 0),
     stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
+    // อุปกรณ์สวมใส่ (Tier ต่อช่อง) — เติมแบบ additive ไม่ต้อง bump save version เหมือนฟิลด์ Tier 3
+    equipment: Object.assign(defaultEquipment(), data.equipment || {}),
     // merge ระดับบน + เติม upgrades ที่ขาด (เซฟ v6 รุ่นแรกยังไม่มี field upgrades — เติมให้ครบทุก key)
     prestige: Object.assign(defaultPrestige(), data.prestige || {}, {
       upgrades: Object.assign(defaultRenownUpgrades(), (data.prestige && data.prestige.upgrades) || {}),

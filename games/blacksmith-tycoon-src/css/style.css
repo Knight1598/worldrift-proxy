@@ -1053,8 +1053,9 @@
     border-radius: 2px;
     display: inline-block;
   }
-  .buff-panel { margin-bottom: 4px; }
-  .buff-card {
+  /* ===== Equipment (อุปกรณ์สวมใส่ถาวร) — การ์ด 3 ช่อง ขอบสีตาม rarity ของ tier ที่สวมอยู่ ===== */
+  .equipment-panel { margin-bottom: 4px; display: flex; flex-direction: column; gap: 5px; }
+  .equip-slot {
     background: linear-gradient(135deg, #2e2050, #1c1438);
     border: 3px solid #6a4fc9;
     border-radius: 3px;
@@ -1064,21 +1065,40 @@
     gap: 8px;
     box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
   }
-  .buff-card .upgrade-name { color: #e9daff; }
-  .buff-card .upgrade-desc { color: #b6a3dd; }
-  .buff-card .upgrade-level { color: #d8bfff; }
-  .buff-card--active {
+  .equip-slot-icon {
+    font-size: 1.5rem; flex-shrink: 0;
+    width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.35); border-radius: 6px;
+  }
+  .equip-slot-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .equip-slot-name { font-size: 0.68rem; font-weight: bold; color: #e9daff; }
+  .equip-tier-name { color: #fff; }
+  .equip-slot-effect { font-size: 0.62rem; color: #b6a3dd; }
+  .equip-tier-dots { display: flex; gap: 3px; margin-top: 2px; }
+  .equip-tier-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.18); border: 1px solid rgba(0,0,0,0.4); }
+  .equip-tier-dot.filled { background: currentColor; }
+  .equip-slot .buy-btn--affordable { background: linear-gradient(180deg, #d8bfff, #8a5fe0); color: #241a42; }
+
+  /* rarity: สีขอบ + สีจุด tier ตามระดับที่สวมอยู่ (empty=เทา, common=เขียว, rare=ฟ้า, epic=ม่วง, legendary=ทอง) */
+  .equip-slot--empty     { border-color: #5a5a6e; }
+  .equip-slot--empty     .equip-tier-dots { color: #8a8aa0; }
+  .equip-slot--common    { border-color: #6fbf73; }
+  .equip-slot--common    .equip-tier-dots { color: #6fbf73; }
+  .equip-slot--rare      { border-color: #5aa9e6; box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 7px 1px rgba(90,169,230,0.4); }
+  .equip-slot--rare      .equip-tier-dots { color: #5aa9e6; }
+  .equip-slot--epic      { border-color: #b46fe0; box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 9px 1px rgba(180,111,224,0.5); }
+  .equip-slot--epic      .equip-tier-dots { color: #d8bfff; }
+  .equip-slot--legendary {
     border-color: #ffd76a;
-    box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 10px 2px rgba(255,215,106,0.5);
-    animation: buffActivePulse 1.2s ease-in-out infinite;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 12px 2px rgba(255,215,106,0.6);
+    animation: equipLegendaryPulse 1.4s ease-in-out infinite;
   }
-  @keyframes buffActivePulse {
-    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 10px 2px rgba(255,215,106,0.5); }
-    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 16px 4px rgba(255,215,106,0.75); }
-  }
-  .buff-card .buy-btn--affordable {
-    background: linear-gradient(180deg, #d8bfff, #8a5fe0);
-    color: #241a42;
+  .equip-slot--legendary .equip-tier-dots { color: #ffd76a; }
+  .equip-slot--legendary .equip-slot-name { color: #ffe8a8; }
+  @keyframes equipLegendaryPulse {
+    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 12px 2px rgba(255,215,106,0.55); }
+    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 18px 5px rgba(255,215,106,0.85); }
   }
 
   /* ===== Prestige (เกิดใหม่) — โทนทอง/เหลืองอำพัน แยกจากม่วง(บัพ)/น้ำตาล(อัปเกรด) ===== */

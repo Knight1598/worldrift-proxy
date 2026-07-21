@@ -123,10 +123,6 @@ function startCrafting(w) {
   w.state = 'CRAFTING';
   w.craftElapsed = 0;
   w.sparkElapsed = 0;
-  // บัพ "ช่างไว" — สุ่มโอกาสให้ออเดอร์นี้เสร็จทันทีในติ๊กถัดไป (ตั้ง craftElapsed ให้เกิน dur แน่นอนเลย)
-  if (isBuffActive('instant_craft') && Math.random() < getBuffDef('instant_craft').chance) {
-    w.craftElapsed = BASE_CRAFT_MS * 10;
-  }
   showCraftBar(w);
   w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
 }
@@ -143,16 +139,12 @@ function tickWorkers(dt) {
         cust.stationIndex = unlocked[Math.floor(Math.random() * unlocked.length)];
         w.targetStation = cust.stationIndex;
         cust.orderIcon = getStationIcon(cust.stationIndex);
-        // บัพ "เงินสองเท่า"/"โชคกาชา" — สุ่มโอกาสคูณเงินออเดอร์นี้เพิ่ม (มีได้ทีละบัพเดียวอยู่แล้ว เลยไม่มีทางชนกัน)
-        let buffGoldMult = 1;
-        if (isBuffActive('double_gold') && Math.random() < getBuffDef('double_gold').chance) buffGoldMult = getBuffDef('double_gold').mult;
-        else if (isBuffActive('crit_gold') && Math.random() < getBuffDef('crit_gold').chance) buffGoldMult = getBuffDef('crit_gold').mult;
         // ออเดอร์หลายชิ้น (x2/x3) แบบตัวเลขในบับเบิลของเกมต้นแบบ — จ่ายคูณตามจำนวน คราฟต์รอบเดียวได้ทั้งชุด
         const qtyRoll = Math.random();
         cust.orderQty = qtyRoll < ORDER_QTY_3_CHANCE ? 3 : qtyRoll < ORDER_QTY_3_CHANCE + ORDER_QTY_2_CHANCE ? 2 : 1;
         // VIP: จ่าย 10 เท่าของราคาปกติ + ทิปการันตี 100% ของยอดออเดอร์ (ลูกค้าทั่วไปสุ่มทิปตามอัปเกรด "ตกแต่งร้าน")
-        // ราคาอิงสถานีที่สั่ง (สถานีเสริมขายของแพงกว่าตาม revenueMult)
-        cust.orderRevenue = getStationRevenue(cust.stationIndex) * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult * cust.orderQty;
+        // ราคาอิงสถานีที่สั่ง (สถานีเสริมขายของแพงกว่าตาม revenueMult) — โบนัสเงินจากอุปกรณ์คูณอยู่ใน getStationRevenue แล้ว
+        cust.orderRevenue = getStationRevenue(cust.stationIndex) * (cust.isVIP ? VIP_REVENUE_MULT : 1) * cust.orderQty;
         cust.orderTip = cust.isVIP
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);

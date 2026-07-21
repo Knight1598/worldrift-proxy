@@ -1061,8 +1061,9 @@
     border-radius: 2px;
     display: inline-block;
   }
-  .buff-panel { margin-bottom: 4px; }
-  .buff-card {
+  /* ===== Equipment (อุปกรณ์สวมใส่ถาวร) — การ์ด 3 ช่อง ขอบสีตาม rarity ของ tier ที่สวมอยู่ ===== */
+  .equipment-panel { margin-bottom: 4px; display: flex; flex-direction: column; gap: 5px; }
+  .equip-slot {
     background: linear-gradient(135deg, #2e2050, #1c1438);
     border: 3px solid #6a4fc9;
     border-radius: 3px;
@@ -1072,21 +1073,40 @@
     gap: 8px;
     box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
   }
-  .buff-card .upgrade-name { color: #e9daff; }
-  .buff-card .upgrade-desc { color: #b6a3dd; }
-  .buff-card .upgrade-level { color: #d8bfff; }
-  .buff-card--active {
+  .equip-slot-icon {
+    font-size: 1.5rem; flex-shrink: 0;
+    width: 34px; height: 34px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.35); border-radius: 6px;
+  }
+  .equip-slot-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .equip-slot-name { font-size: 0.68rem; font-weight: bold; color: #e9daff; }
+  .equip-tier-name { color: #fff; }
+  .equip-slot-effect { font-size: 0.62rem; color: #b6a3dd; }
+  .equip-tier-dots { display: flex; gap: 3px; margin-top: 2px; }
+  .equip-tier-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.18); border: 1px solid rgba(0,0,0,0.4); }
+  .equip-tier-dot.filled { background: currentColor; }
+  .equip-slot .buy-btn--affordable { background: linear-gradient(180deg, #d8bfff, #8a5fe0); color: #241a42; }
+
+  /* rarity: สีขอบ + สีจุด tier ตามระดับที่สวมอยู่ (empty=เทา, common=เขียว, rare=ฟ้า, epic=ม่วง, legendary=ทอง) */
+  .equip-slot--empty     { border-color: #5a5a6e; }
+  .equip-slot--empty     .equip-tier-dots { color: #8a8aa0; }
+  .equip-slot--common    { border-color: #6fbf73; }
+  .equip-slot--common    .equip-tier-dots { color: #6fbf73; }
+  .equip-slot--rare      { border-color: #5aa9e6; box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 7px 1px rgba(90,169,230,0.4); }
+  .equip-slot--rare      .equip-tier-dots { color: #5aa9e6; }
+  .equip-slot--epic      { border-color: #b46fe0; box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 9px 1px rgba(180,111,224,0.5); }
+  .equip-slot--epic      .equip-tier-dots { color: #d8bfff; }
+  .equip-slot--legendary {
     border-color: #ffd76a;
-    box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 10px 2px rgba(255,215,106,0.5);
-    animation: buffActivePulse 1.2s ease-in-out infinite;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 12px 2px rgba(255,215,106,0.6);
+    animation: equipLegendaryPulse 1.4s ease-in-out infinite;
   }
-  @keyframes buffActivePulse {
-    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 10px 2px rgba(255,215,106,0.5); }
-    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 16px 4px rgba(255,215,106,0.75); }
-  }
-  .buff-card .buy-btn--affordable {
-    background: linear-gradient(180deg, #d8bfff, #8a5fe0);
-    color: #241a42;
+  .equip-slot--legendary .equip-tier-dots { color: #ffd76a; }
+  .equip-slot--legendary .equip-slot-name { color: #ffe8a8; }
+  @keyframes equipLegendaryPulse {
+    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 12px 2px rgba(255,215,106,0.55); }
+    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 18px 5px rgba(255,215,106,0.85); }
   }
 
   /* ===== Prestige (เกิดใหม่) — โทนทอง/เหลืองอำพัน แยกจากม่วง(บัพ)/น้ำตาล(อัปเกรด) ===== */
@@ -1231,7 +1251,6 @@
     <span class="fever-bar-label" id="feverBarLabel">FEVER</span>
   </div>
   <div class="material-stock-panel" id="materialStockPanel"></div>
-  <div class="active-buff-chip" id="activeBuffChip"></div>
 
   <!-- ป้ายเป้าหมายนำทาง (Guided Objective Chain) — ค้างเหนือปุ่ม FAB ชี้นำผู้เล่นใหม่ทีละสเต็ป -->
   <div class="objective-banner" id="objectiveBanner">
@@ -1260,8 +1279,8 @@
     <button class="modal-close-x" id="btnCloseUpgrades">✕</button>
     <h2>อัปเกรดร้าน</h2>
     <div class="upgrades-scroll">
-      <div class="section-label section-label--buff">สุ่มบัพ (ใช้เพชร ช่วยเร่งจบด่านเร็วขึ้น)</div>
-      <div class="buff-panel" id="buffPanel"></div>
+      <div class="section-label section-label--buff">อุปกรณ์สวมใส่ (ใช้เพชรอัปเกรดถาวร — โบนัสติดตัวตลอด)</div>
+      <div class="equipment-panel" id="equipmentPanel"></div>
       <div class="section-label">อัปเกรดด่านนี้</div>
       <div class="upgrade-list" id="upgradeList"></div>
       <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
@@ -1459,8 +1478,7 @@ const EVENTS = {
   MATERIAL_RESTOCKED: 'material:restocked', // tickMaterialRegen() — { material, stock }
   ORDER_SERVED:       'order:served',       // pickupCoin() — {} (นับ order ที่เสิร์ฟจบสมบูรณ์ ใช้กับ Order Missions)
   MISSION_COMPLETED:  'mission:completed',  // tickMissionProgress() — { missionIndex, reward }
-  BUFF_ROLLED:        'buff:rolled',        // rollBuff() — { buff }
-  BUFF_ENDED:         'buff:ended',         // tickBuffs() เมื่อ buff แบบ duration หมดเวลา
+  EQUIPMENT_UPGRADED: 'equipment:upgraded', // buyEquipmentUpgrade() — { slot, tier }
   STATION_UNLOCKED:   'station:unlocked',   // buyStationUnlock() — { stationIndex }
   STATION_UPGRADED:   'station:upgraded',   // buyStationLevel() — { stationIndex, level }
   GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }
@@ -1817,42 +1835,53 @@ const ORDER_MISSION_REWARD_GROWTH = 1.15;
 // เลยเพิ่มเพชรก้อนใหญ่ให้จริงตอนจบเกม (คิดเป็น ~16 ครั้งสุ่มบัพ ให้รู้สึกคุ้มค่าที่เล่นจบ)
 const FINAL_STAGE_REWARD_GEMS = 50;
 
-// ===== Buff Roll (สุ่มบัพติดตัวด้วยเพชร) — ช่วยเร่งจบด่านเร็วขึ้น ไม่ใช่อัปเกรดถาวร =====
-// buff แบบ duration ใช้งานได้ทีละ 1 ตัว (สุ่มใหม่ทับของเดิม) ส่วนแบบ instant ใช้ผลทันทีครั้งเดียวไม่ค้าง state
-const BUFF_ROLL_COST_GEMS = 3;
-const BUFF_DURATION_MS = 60000; // buff แบบ duration ทั้งหมดอยู่ได้ 60 วินาทีเท่ากัน (เข้าใจง่าย ไม่ต้องจำหลายเลข)
-const BUFF_DEFS = [
-  // ----- แบบมีระยะเวลา (kind: 'duration') -----
-  { key: 'instant_craft',    kind: 'duration', weight: 15, icon: '⚡', name: 'ช่างไว',
-    desc: '30% โอกาสคราฟต์เสร็จทันทีต่อออเดอร์', chance: 0.30 },
-  { key: 'double_gold',      kind: 'duration', weight: 15, icon: '💰', name: 'เงินสองเท่า',
-    desc: '30% โอกาสได้เงิน x2 ต่อออเดอร์', chance: 0.30, mult: 2 },
-  { key: 'crit_gold',        kind: 'duration', weight: 6,  icon: '🍀', name: 'โชคกาชา',
-    desc: '10% โอกาสได้เงิน x5 ต่อออเดอร์', chance: 0.10, mult: 5 },
-  { key: 'speed_boost',      kind: 'duration', weight: 15, icon: '👟', name: 'เท้าไฟ',
-    desc: 'ความเร็วเดิน +50%' },
-  { key: 'tip_boost',        kind: 'duration', weight: 12, icon: '✨', name: 'มือทิป',
-    desc: 'โอกาสได้ทิป x2' },
-  { key: 'vip_magnet',       kind: 'duration', weight: 8,  icon: '👑', name: 'แม่เหล็ก VIP',
-    desc: 'โอกาสเจอลูกค้า VIP x3' },
-  { key: 'signage_boost',    kind: 'duration', weight: 12, icon: '📣', name: 'ป้ายเรืองแสง',
-    desc: 'ลูกค้ามาถี่ขึ้น + รับคิวเพิ่ม' },
-  { key: 'discount',         kind: 'duration', weight: 10, icon: '🏷️', name: 'ลดกระหน่ำ',
-    desc: 'ราคาซื้ออัปเกรด/จ้างลูกมือ/คลังออฟไลน์ลด 20%' },
-  { key: 'fever_fill_boost', kind: 'duration', weight: 10, icon: '🔥', name: 'ไฟลุก',
-    desc: 'สะสมหลอด Fever Mode ไวขึ้น 2 เท่า' },
-  { key: 'regen_boost',      kind: 'duration', weight: 10, icon: '📦', name: 'คลังไว',
-    desc: 'วัตถุดิบเติมคลังไวขึ้น 2 เท่า' },
-  // ----- แบบผลทันที ครั้งเดียว (kind: 'instant') -----
-  { key: 'instant_restock',  kind: 'instant', weight: 8, icon: '🎁', name: 'เติมเต็มทันที',
-    desc: 'เติมวัตถุดิบทุกชนิดเต็มคลังทันที' },
-  { key: 'goblin_now',       kind: 'instant', weight: 6, icon: '👺', name: 'เรียกโกบลิน',
-    desc: 'เรียกโกลเด้นโกบลินออกมาทันที' },
-  { key: 'fever_now',        kind: 'instant', weight: 5, icon: '🌟', name: 'ฟีเวอร์ทันใจ',
-    desc: 'เติมหลอด Fever Mode เต็มทันที' },
-  { key: 'gold_burst',       kind: 'instant', weight: 8, icon: '💎', name: 'กระเป๋าตุง',
-    desc: 'ได้ Gold ก้อนโตทันที (อิงรายได้ต่อนาทีปัจจุบัน)' },
+// ===== Equipment (อุปกรณ์สวมใส่ถาวร) — แทนที่ระบบสุ่มบัพชั่วคราวเดิม =====
+// ตัวละครมี 3 ช่องสวมใส่ แต่ละช่องอัปเกรดเป็น tier ที่สูงขึ้นด้วยเพชร (ถาวร ไม่หมดเวลา เก็บใน save)
+// tier 0 = ช่องว่าง (ไม่มีโบนัส), tier 1-4 = common/rare/epic/legendary ให้ effect มากขึ้นเรื่อยๆ
+// effect ของแต่ละช่องความหมายต่างกัน (ดู getEquip*Mult ใน formulas.js): tool=ลดเวลาคราฟต์,
+// outfit=เงินต่อออเดอร์+%, charm=โอกาสทิป(+absolute)+ตัวคูณโอกาส VIP
+const EQUIPMENT_RARITIES = ['empty', 'common', 'rare', 'epic', 'legendary']; // index = tier
+const EQUIP_UPGRADE_BASE_GEMS = 6;      // ราคาอัปจาก tier0->1 (เพชร)
+const EQUIP_UPGRADE_COST_GROWTH = 2.3;  // แต่ละ tier ถัดไปแพงขึ้น (6, 14, 32, 73)
+const EQUIPMENT_SLOTS = [
+  { key: 'tool', icon: '🔨', name: 'เครื่องมือช่าง', effectLabel: 'ลดเวลาคราฟต์', unit: 'pct',
+    tiers: [
+      { name: 'มือเปล่า',   effect: 0 },
+      { name: 'ค้อนไม้',    effect: 0.06 },
+      { name: 'ค้อนเหล็ก',  effect: 0.12 },
+      { name: 'ค้อนรูน',    effect: 0.20 },
+      { name: 'ค้อนมังกร',  effect: 0.30 },
+    ] },
+  { key: 'outfit', icon: '🦺', name: 'ชุดช่าง', effectLabel: 'เงินต่อออเดอร์', unit: 'pct',
+    tiers: [
+      { name: 'เสื้อเก่า',    effect: 0 },
+      { name: 'ผ้ากันเปื้อน', effect: 0.08 },
+      { name: 'ชุดหนัง',      effect: 0.18 },
+      { name: 'ชุดเกราะเบา',  effect: 0.30 },
+      { name: 'ชุดตำนาน',     effect: 0.50 },
+    ] },
+  { key: 'charm', icon: '🧿', name: 'เครื่องราง', effectLabel: 'โอกาสทิป + ลูกค้า VIP', unit: 'charm',
+    tiers: [
+      { name: 'ไม่มี',       effect: 0 },
+      { name: 'ปิ่นทองแดง',  effect: 0.05 },
+      { name: 'หยกนำโชค',    effect: 0.12 },
+      { name: 'ดวงตาเวท',    effect: 0.22 },
+      { name: 'ดาวนำทาง',    effect: 0.35 },
+    ] },
 ];
+
+// ===== ผลทันทีของกล่องของขวัญ (Mystery Gift Box) — ผลครั้งเดียวจบ ไม่ใช่บัพติดตัว (ดู features/giftbox.js) =====
+// แยกออกจากระบบ Equipment ชัดเจน: อันนี้คือ "เซอร์ไพรส์ครั้งเดียว" ที่กล่องสุ่มแจก ไม่เกี่ยวกับของสวมใส่
+const INSTANT_EFFECTS = {
+  instant_restock: { icon: '📦', name: 'เติมเต็มคลัง',
+    apply() { MATERIALS.forEach(m => { player.inventory[m.key].stock = player.inventory[m.key].capacity; }); } },
+  fever_now: { icon: '🌟', name: 'ฟีเวอร์ทันใจ',
+    apply() { feverState.progress = 1; GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: 1 }); } },
+  goblin_now: { icon: '👺', name: 'เรียกโกบลิน',
+    apply() { if (goblinTimerId) clearTimeout(goblinTimerId); spawnGoblin(); } },
+  gold_burst: { icon: '💎', name: 'กระเป๋าตุง',
+    apply() { const r = Math.max(20, Math.round(estimateIncomePerMinute() * 0.5)); player.gold += r; player.stats.totalGoldEarned += r; GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: r }); } },
+};
 
 const SAVE_KEY = 'blacksmithTycoonSave_v6';
 const SAVE_KEY_V5 = 'blacksmithTycoonSave_v5'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
@@ -1886,6 +1915,12 @@ function defaultRenownUpgrades() {
   RENOWN_UPGRADES.forEach(u => { o[u.key] = 0; });
   return o;
 }
+// อุปกรณ์สวมใส่ถาวร (ดู EQUIPMENT_SLOTS ใน data.js) — เก็บ tier ที่สวมอยู่ของแต่ละช่อง (0 = ว่าง)
+function defaultEquipment() {
+  const o = {};
+  EQUIPMENT_SLOTS.forEach(s => { o[s.key] = 0; });
+  return o;
+}
 function defaultPrestige() {
   // renown = ชื่อเสียงสะสมถาวร, goldAtCycleStart = snapshot totalGoldEarned ตอนเริ่มรอบปัจจุบัน
   // (goldThisCycle = totalGoldEarned - goldAtCycleStart), count = จำนวนครั้งที่เกิดใหม่
@@ -1906,6 +1941,7 @@ let player = {
   missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
   missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
   stationsExtra: defaultStationsExtra(), // สถานีเสริมของด่านปัจจุบัน (Multi-Station ดู ui/stations.js)
+  equipment: defaultEquipment(),         // อุปกรณ์สวมใส่ถาวร (ดู systems/equipment.js)
   prestige: defaultPrestige(),           // ชื่อเสียง/เกิดใหม่ (ดู systems/prestige.js)
   achievements: { claimed: {} },         // { claimed: { key: true } } — ความสำเร็จที่กดรับรางวัลแล้ว
   daily: { lastClaimDay: null, streak: 0 }, // รางวัลล็อกอินรายวัน (lastClaimDay = 'YYYY-M-D')
@@ -1919,17 +1955,13 @@ let player = {
 // Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
 let feverState = { progress: 0, active: false, endsAt: 0 };
 
-// Active Buff ก็เป็น session state ล้วนๆ เหมือนกัน (ตั้งใจไม่ persist — สุ่มใหม่ได้ทุกครั้งที่เข้าเกม ไม่ต้องมี
-// กรณี edge-case บัพค้างข้ามเซสชันให้ดูแล)
-let activeBuff = null; // null หรือ { key, endsAt } (ดู systems/buffs.js)
-
 let audioCtx = null;
 
 /* =====================================================================
    Save / Load — SAVE_KEY เป็น v4 (gems/missionIndex/missionProgress ใหม่ สำหรับ Order Missions + Buff Roll)
    chain การ migrate: v4 (ตรงๆ) -> v3 (ตรงๆ + เติม default v4) -> v2 (ตรงๆ + เติม default v3 แล้วต่อ v4)
    -> v1 (แปลงเป็น v2 ก่อน แล้วเติม default v3 ต่อด้วย v4) กันผู้เล่นเก่าทุกรุ่นความคืบหน้าไม่หาย
-   worker/customer/coin/feverState/activeBuff เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
+   worker/customer/coin/feverState เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
    ===================================================================== */
 function saveGame() {
   const data = {
@@ -1945,6 +1977,7 @@ function saveGame() {
     missionIndex: player.missionIndex,
     missionProgress: player.missionProgress,
     stationsExtra: player.stationsExtra,
+    equipment: player.equipment,
     prestige: player.prestige,
     achievements: player.achievements,
     daily: player.daily,
@@ -2082,6 +2115,8 @@ function loadGame() {
     missionIndex: Math.max(0, data.missionIndex || 0),
     missionProgress: Math.max(0, data.missionProgress || 0),
     stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
+    // อุปกรณ์สวมใส่ (Tier ต่อช่อง) — เติมแบบ additive ไม่ต้อง bump save version เหมือนฟิลด์ Tier 3
+    equipment: Object.assign(defaultEquipment(), data.equipment || {}),
     // merge ระดับบน + เติม upgrades ที่ขาด (เซฟ v6 รุ่นแรกยังไม่มี field upgrades — เติมให้ครบทุก key)
     prestige: Object.assign(defaultPrestige(), data.prestige || {}, {
       upgrades: Object.assign(defaultRenownUpgrades(), (data.prestige && data.prestige.upgrades) || {}),
@@ -2144,14 +2179,15 @@ function getUpgradeCost(key) {
   const type = getUpgradeType(key);
   const level = player.upgradeLevels[key];
   const base = getStage().baseRevenue * type.baseCostMult * Math.pow(UPGRADE_COST_GROWTH, level);
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 
 function getRevenuePerSale() {
   const level = player.upgradeLevels.portion;
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
   // คูณ prestige ด้วย — ฟังก์ชันนี้ป้อน income tracker (offline earnings / Golden Goblin) ให้สเกลตามชื่อเสียง
-  return getStage().baseRevenue * (1 + bonus) * getPrestigeMultiplier();
+  // คูณโบนัสเงินจากอุปกรณ์ "ชุดช่าง" ด้วย (ถาวร)
+  return getStage().baseRevenue * (1 + bonus) * getPrestigeMultiplier() * getEquipGoldMult();
 }
 
 /* ===== Multi-Station (3 สถานีต่อด่าน ดู STATION_SETS ใน data.js) =====
@@ -2170,8 +2206,14 @@ function getUnlockedStationIndices() {
 function getStationRevenue(i) {
   const level = getStationLevel(i);
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
-  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus) * getPrestigeMultiplier();
+  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus) * getPrestigeMultiplier() * getEquipGoldMult();
 }
+
+/* ===== Equipment (อุปกรณ์สวมใส่ถาวร ดู systems/equipment.js) — ตัวคูณ/โบนัสถาวรตาม tier ที่สวมอยู่ ===== */
+function getEquipCraftMult() { return 1 - getEquipCurrentEffect('tool'); }   // 🔨 ลดเวลาคราฟต์
+function getEquipGoldMult() { return 1 + getEquipCurrentEffect('outfit'); }  // 🦺 เงินต่อออเดอร์ +%
+function getEquipTipBonus() { return getEquipCurrentEffect('charm'); }       // 🧿 บวกโอกาสทิป (absolute)
+function getEquipVipMult() { return 1 + getEquipTier('charm') * 0.4; }       // 🧿 ตัวคูณโอกาสเจอ VIP ตาม tier
 
 /* ===== Prestige (systems/prestige.js) — ตัวคูณรายได้ถาวรจากชื่อเสียง + จำนวน renown ที่จะได้ถ้ากดตอนนี้ ===== */
 // ตัวคูณ prestige รวม = (โบนัส renown แบบ passive) x (อัปเกรด "สายเลือดพ่อค้า" จากร้านชื่อเสียง)
@@ -2190,11 +2232,11 @@ function getRenownGain() {
 function getStationUpgradeCost(i) {
   if (i === 0) return getUpgradeCost('portion');
   const base = getStage().baseRevenue * getStationDef(i).revenueMult * 10 * Math.pow(UPGRADE_COST_GROWTH, getStationLevel(i));
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 function getStationUnlockCost(i) {
   const base = getStage().baseRevenue * getStationDef(i).unlockCostMult;
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 function getStationIcon(i) {
   const def = getStationDef(i);
@@ -2205,15 +2247,14 @@ function getCraftDurationMs() {
   if (isFeverActive()) return FEVER_CRAFT_MS; // Fever Mode: แทบจะทำเสร็จทันที
   const level = player.upgradeLevels.speed;
   const reduction = level * SPEED_CRAFT_MS_REDUCTION * getMilestoneMultiplier(level);
-  // อัปเกรด "มือเทวดา" (ร้านชื่อเสียง) ลดเวลาคราฟต์ถาวรเป็น % คูณทับหลังหักจากเลเวล speed
-  return Math.max(MIN_CRAFT_MS, (BASE_CRAFT_MS - reduction) * getRenownCraftMult());
+  // อัปเกรด "มือเทวดา" (ร้านชื่อเสียง) + อุปกรณ์ "เครื่องมือช่าง" ลดเวลาคราฟต์ถาวรเป็น % คูณทับหลังหักจากเลเวล speed
+  return Math.max(MIN_CRAFT_MS, (BASE_CRAFT_MS - reduction) * getRenownCraftMult() * getEquipCraftMult());
 }
 
 function getMoveSpeedPxPerSec() {
   const level = player.upgradeLevels.speed;
   const bonus = level * SPEED_MOVE_BONUS_PX * getMilestoneMultiplier(level);
   let base = Math.min(MAX_MOVE_SPEED_PX, BASE_MOVE_SPEED_PX + bonus);
-  if (isBuffActive('speed_boost')) base *= 1.5; // บัพ "เท้าไฟ"
   return isFeverActive() ? base * FEVER_SPEED_MULT : base; // Fever Mode: 2 เท่าความเร็วเดิน
 }
 
@@ -2221,7 +2262,6 @@ function getSpawnIntervalMs() {
   const level = player.upgradeLevels.signage;
   const reduction = level * SIGNAGE_SPAWN_MS_REDUCTION * getMilestoneMultiplier(level);
   let ms = Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - reduction);
-  if (isBuffActive('signage_boost')) ms = Math.max(MIN_SPAWN_INTERVAL_MS, ms * 0.7); // บัพ "ป้ายเรืองแสง"
   return ms;
 }
 
@@ -2229,20 +2269,19 @@ function getMaxQueueSize() {
   const level = player.upgradeLevels.signage;
   const bonus = level * SIGNAGE_QUEUE_BONUS * getMilestoneMultiplier(level);
   let size = Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus));
-  if (isBuffActive('signage_boost')) size += 2; // บัพ "ป้ายเรืองแสง"
   return size;
 }
 
 function getTipChance() {
   const level = player.upgradeLevels.decor;
   let chance = level * DECOR_LEVEL_TIP_CHANCE * getMilestoneMultiplier(level);
-  if (isBuffActive('tip_boost')) chance *= 2; // บัพ "มือทิป"
+  chance += getEquipTipBonus(); // อุปกรณ์ "เครื่องราง" บวกโอกาสทิปถาวร
   return Math.min(MAX_TIP_CHANCE, chance);
 }
 
-// โอกาสเจอลูกค้า VIP ตอนเกิดใหม่ — แยกเป็นฟังก์ชันแทนใช้ VIP_CHANCE คงที่ตรงๆ เพื่อให้บัพ "แม่เหล็ก VIP" มีผลได้
+// โอกาสเจอลูกค้า VIP ตอนเกิดใหม่ — แยกเป็นฟังก์ชันแทนใช้ VIP_CHANCE คงที่ เพื่อให้อุปกรณ์ "เครื่องราง" มีผลได้
 function getVipChance() {
-  return VIP_CHANCE * (isBuffActive('vip_magnet') ? 3 : 1);
+  return VIP_CHANCE * getEquipVipMult();
 }
 
 // เงื่อนไขขึ้นด่านย้ายไปอยู่ที่ isRenovateReady() (ui/renovate-modal.js) แบบเกมต้นแบบ:
@@ -2256,12 +2295,12 @@ function getWorkerCount() { return 1 + player.staffCount; }
 
 function getHireHelperCost() {
   const base = getStage().baseRevenue * HIRE_HELPER_BASE_COST_MULT * Math.pow(HIRE_HELPER_COST_GROWTH, player.staffCount);
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 
 function getVaultUpgradeCost() {
   const base = VAULT_BASE_COST * Math.pow(VAULT_COST_GROWTH, player.vaultLevel);
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 
 function getOfflineMaxHours() {
@@ -2324,8 +2363,8 @@ function playSfxCashRegister() { playTone(1200, 0.05, 'square', 0.08); playTone(
 function playSfxUpgrade() { [523, 659, 784].forEach((f, i) => playTone(f, 0.1, 'triangle', 0.09, i * 0.05)); }
 function playSfxStageComplete() { [523, 659, 784, 1047, 1319].forEach((f, i) => playTone(f, 0.16, 'triangle', 0.11, i * 0.09)); }
 function playSfxTap() { playTone(700, 0.03, 'square', 0.05); }
-// เสียงสุ่มบัพ (rollBuff) — เดิมไม่มีเสียงเลย ทั้งที่ทุก action อื่นในเกมมีเสียงตอบรับหมด (ซื้อของ/แตะ/จบด่าน)
-// ใช้ทำนองไต่ขึ้น 4 โน้ตแบบ sine ให้ความรู้สึก "กาชา/วิบวับ" แยกจาก playSfxUpgrade (triangle 3 โน้ต)
+// เสียงอัปเกรดอุปกรณ์ (buyEquipmentUpgrade) — ทำนองไต่ขึ้น 4 โน้ตแบบ sine ให้ความรู้สึก "วิบวับ/ตีเหล็กเสร็จ"
+// แยกจาก playSfxUpgrade (triangle 3 โน้ต) — คงชื่อ playSfxBuffRoll ไว้เพื่อไม่ต้องแก้จุดเรียกหลายที่
 function playSfxBuffRoll() { [880, 1108, 1318, 1760].forEach((f, i) => playTone(f, 0.09, 'sine', 0.09, i * 0.04)); }
 
 /* =====================================================================
@@ -2578,10 +2617,6 @@ function startCrafting(w) {
   w.state = 'CRAFTING';
   w.craftElapsed = 0;
   w.sparkElapsed = 0;
-  // บัพ "ช่างไว" — สุ่มโอกาสให้ออเดอร์นี้เสร็จทันทีในติ๊กถัดไป (ตั้ง craftElapsed ให้เกิน dur แน่นอนเลย)
-  if (isBuffActive('instant_craft') && Math.random() < getBuffDef('instant_craft').chance) {
-    w.craftElapsed = BASE_CRAFT_MS * 10;
-  }
   showCraftBar(w);
   w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
 }
@@ -2598,16 +2633,12 @@ function tickWorkers(dt) {
         cust.stationIndex = unlocked[Math.floor(Math.random() * unlocked.length)];
         w.targetStation = cust.stationIndex;
         cust.orderIcon = getStationIcon(cust.stationIndex);
-        // บัพ "เงินสองเท่า"/"โชคกาชา" — สุ่มโอกาสคูณเงินออเดอร์นี้เพิ่ม (มีได้ทีละบัพเดียวอยู่แล้ว เลยไม่มีทางชนกัน)
-        let buffGoldMult = 1;
-        if (isBuffActive('double_gold') && Math.random() < getBuffDef('double_gold').chance) buffGoldMult = getBuffDef('double_gold').mult;
-        else if (isBuffActive('crit_gold') && Math.random() < getBuffDef('crit_gold').chance) buffGoldMult = getBuffDef('crit_gold').mult;
         // ออเดอร์หลายชิ้น (x2/x3) แบบตัวเลขในบับเบิลของเกมต้นแบบ — จ่ายคูณตามจำนวน คราฟต์รอบเดียวได้ทั้งชุด
         const qtyRoll = Math.random();
         cust.orderQty = qtyRoll < ORDER_QTY_3_CHANCE ? 3 : qtyRoll < ORDER_QTY_3_CHANCE + ORDER_QTY_2_CHANCE ? 2 : 1;
         // VIP: จ่าย 10 เท่าของราคาปกติ + ทิปการันตี 100% ของยอดออเดอร์ (ลูกค้าทั่วไปสุ่มทิปตามอัปเกรด "ตกแต่งร้าน")
-        // ราคาอิงสถานีที่สั่ง (สถานีเสริมขายของแพงกว่าตาม revenueMult)
-        cust.orderRevenue = getStationRevenue(cust.stationIndex) * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult * cust.orderQty;
+        // ราคาอิงสถานีที่สั่ง (สถานีเสริมขายของแพงกว่าตาม revenueMult) — โบนัสเงินจากอุปกรณ์คูณอยู่ใน getStationRevenue แล้ว
+        cust.orderRevenue = getStationRevenue(cust.stationIndex) * (cust.isVIP ? VIP_REVENUE_MULT : 1) * cust.orderQty;
         cust.orderTip = cust.isVIP
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);
@@ -2928,7 +2959,7 @@ function consumeMaterials(recipe) {
 function tickMaterialRegen(dt) {
   // scale ตามจำนวน worker (getWorkerCount()) กันไม่ให้ Multi-Staff (สูงสุด 5 คน) + อัปเกรดความเร็วเต็มเลเวล
   // เบิกวัตถุดิบไวกว่าคลังเติมจนเป็นคอขวดที่ทำให้ speed/signage/จ้างลูกมือแทบไม่มีผล (ดู data.js's MATERIAL_REGEN_PER_SEC)
-  const rate = MATERIAL_REGEN_PER_SEC * getWorkerCount() * (isBuffActive('regen_boost') ? 2 : 1); // บัพ "คลังไว"
+  const rate = MATERIAL_REGEN_PER_SEC * getWorkerCount();
   MATERIALS.forEach(m => {
     const inv = player.inventory[m.key];
     if (inv.stock >= inv.capacity) return; // เต็มแล้วไม่ต้องทำอะไร กัน emit event เปล่าๆ ทุกเฟรม
@@ -2947,8 +2978,7 @@ function isFeverActive() {
 }
 function addFeverProgress(amount) {
   if (feverState.active) return; // ระหว่าง Fever ไม่ต้องสะสมซ้ำ (เต็มแล้วรอใช้ให้หมดก่อน)
-  const boosted = isBuffActive('fever_fill_boost') ? amount * 2 : amount; // บัพ "ไฟลุก"
-  feverState.progress = Math.min(1, feverState.progress + boosted);
+  feverState.progress = Math.min(1, feverState.progress + amount);
   // ยิง event แทนเรียก renderFeverBar() (ui/hud.js) ข้ามโดเมนตรงๆ — features/ ไม่ควรรู้จัก DOM ของ HUD
   GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: feverState.progress });
 }
@@ -3091,10 +3121,10 @@ function openGiftBox(el) {
     saveGame();
   } else {
     kind = 'instant';
-    // แจกผลบัพแบบ instant ฟรี 1 ครั้ง (เติมคลังเต็ม หรือเติมหลอด Fever เต็ม)
+    // แจกผลทันทีฟรี 1 ครั้ง (เติมคลังเต็ม หรือเติมหลอด Fever เต็ม) — ผลครั้งเดียวจบ ไม่ใช่ของสวมใส่
     const instant = Math.random() < 0.5 ? 'instant_restock' : 'fever_now';
-    applyInstantBuff(getBuffDef(instant));
-    spawnFloatText(x, y, `🎁 ${getBuffDef(instant).name}!`, 'tip');
+    const eff = applyInstantEffect(instant);
+    spawnFloatText(x, y, `🎁 ${eff.name}!`, 'tip');
   }
   GameEvents.emit(EVENTS.GIFT_OPENED, { kind });
 }
@@ -3197,67 +3227,48 @@ GameEvents.on(EVENTS.ORDER_SERVED, () => tickMissionProgress());
 </script>
 <script>
 /* =====================================================================
-   Buff Roll (สุ่มบัพติดตัวด้วยเพชร) — ช่วยเร่งจบด่านเร็วขึ้น ไม่ใช่อัปเกรดถาวร
-   บัพแบบ duration ใช้ได้ทีละ 1 ตัวเท่านั้น (สุ่มใหม่ทับของเดิม) ส่วนแบบ instant ใช้ผลทันทีครั้งเดียว
-   activeBuff เป็น transient state ล้วนๆ (ประกาศไว้ที่ state.js เหมือน feverState) ไม่ persist ผ่าน save
+   Equipment (อุปกรณ์สวมใส่ถาวร) — แทนที่ระบบสุ่มบัพชั่วคราวเดิม (ดู EQUIPMENT_SLOTS ใน data.js)
+   แต่ละช่องสวมใส่มี tier ปัจจุบัน (player.equipment[slot], 0 = ว่าง) อัปเป็น tier สูงขึ้นด้วยเพชร
+   โบนัสถาวร ไม่หมดเวลา เก็บใน save — ตรรกะ/รางวัลอยู่ที่นี่ ส่วน UI อยู่ที่ ui/equipment-panel.js
+   applyInstantEffect() = ผลครั้งเดียวของกล่องของขวัญ (ดู INSTANT_EFFECTS ใน data.js) แยกคนละเรื่องกับของสวมใส่
    ===================================================================== */
-function getBuffDef(key) {
-  return BUFF_DEFS.find(b => b.key === key);
+function getEquipSlotDef(slotKey) { return EQUIPMENT_SLOTS.find(s => s.key === slotKey); }
+function getEquipTier(slotKey) { return player.equipment[slotKey] || 0; }
+function getEquipMaxTier(slotKey) { return getEquipSlotDef(slotKey).tiers.length - 1; }
+function getEquipTierDef(slotKey) { return getEquipSlotDef(slotKey).tiers[getEquipTier(slotKey)]; }
+function getEquipCurrentEffect(slotKey) { return getEquipTierDef(slotKey).effect; }
+function getEquipRarity(slotKey) { return EQUIPMENT_RARITIES[getEquipTier(slotKey)]; }
+function isEquipMaxed(slotKey) { return getEquipTier(slotKey) >= getEquipMaxTier(slotKey); }
+
+// ราคาอัป tier ถัดไป (เพชร) — โตแบบ base * growth^tier ปัจจุบัน | maxed แล้วคืน Infinity
+function getEquipUpgradeCost(slotKey) {
+  if (isEquipMaxed(slotKey)) return Infinity;
+  return Math.ceil(EQUIP_UPGRADE_BASE_GEMS * Math.pow(EQUIP_UPGRADE_COST_GROWTH, getEquipTier(slotKey)));
+}
+function canUpgradeEquip(slotKey) {
+  return !isEquipMaxed(slotKey) && player.gems >= getEquipUpgradeCost(slotKey);
+}
+function hasAnyEquipUpgradeAffordable() {
+  return EQUIPMENT_SLOTS.some(s => canUpgradeEquip(s.key));
 }
 
-function isBuffActive(key) {
-  return !!(activeBuff && activeBuff.key === key);
+function buyEquipmentUpgrade(slotKey) {
+  if (isEquipMaxed(slotKey)) return false;
+  const cost = getEquipUpgradeCost(slotKey);
+  if (player.gems < cost) return false;
+  player.gems -= cost;
+  player.equipment[slotKey] = getEquipTier(slotKey) + 1;
+  playSfxBuffRoll(); // ยืมเสียงตอบรับเดิม (ยังอยู่ใน sound.js) มาใช้ตอนอัปอุปกรณ์
+  GameEvents.emit(EVENTS.EQUIPMENT_UPGRADED, { slot: slotKey, tier: player.equipment[slotKey] });
+  saveGame(); // เพชร/อุปกรณ์เปลี่ยน เก็บทันทีเหมือน progression อื่นๆ
+  return true;
 }
 
-function pickWeightedBuff() {
-  const totalWeight = BUFF_DEFS.reduce((sum, b) => sum + b.weight, 0);
-  let r = Math.random() * totalWeight;
-  for (const b of BUFF_DEFS) {
-    r -= b.weight;
-    if (r <= 0) return b;
-  }
-  return BUFF_DEFS[BUFF_DEFS.length - 1]; // กันพลาดจาก floating point เศษเล็กน้อย
-}
-
-function rollBuff() {
-  if (player.gems < BUFF_ROLL_COST_GEMS) return null;
-  player.gems -= BUFF_ROLL_COST_GEMS;
-  const buff = pickWeightedBuff();
-  if (buff.kind === 'instant') {
-    applyInstantBuff(buff);
-  } else {
-    activeBuff = { key: buff.key, endsAt: performance.now() + BUFF_DURATION_MS };
-  }
-  playSfxBuffRoll();
-  GameEvents.emit(EVENTS.BUFF_ROLLED, { buff });
-  saveGame(); // เพชรเปลี่ยน เก็บทันที
-  return buff;
-}
-
-function applyInstantBuff(buff) {
-  if (buff.key === 'instant_restock') {
-    MATERIALS.forEach(m => { player.inventory[m.key].stock = player.inventory[m.key].capacity; });
-  } else if (buff.key === 'goblin_now') {
-    if (goblinTimerId) clearTimeout(goblinTimerId);
-    spawnGoblin();
-  } else if (buff.key === 'fever_now') {
-    feverState.progress = 1;
-    // ยิง event แทนเรียก renderFeverBar() (ui/hud.js) ข้ามโดเมน — systems/ ไม่ควรแตะ DOM ของ HUD โดยตรง
-    GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: feverState.progress });
-  } else if (buff.key === 'gold_burst') {
-    const reward = Math.max(20, Math.round(estimateIncomePerMinute() * 0.5));
-    player.gold += reward;
-    player.stats.totalGoldEarned += reward;
-    // ยิง COIN_COLLECTED เดียวกับที่เหรียญบินมาถึงจริงยิง -- ให้ income tracker/HUD/อัปเกรด list รับรู้เหมือนได้เงินจริง
-    GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: reward });
-  }
-}
-
-function tickBuffs() {
-  if (activeBuff && performance.now() >= activeBuff.endsAt) {
-    activeBuff = null;
-    GameEvents.emit(EVENTS.BUFF_ENDED, {});
-  }
+// ผลทันทีของกล่องของขวัญ (ไม่ใช่ของสวมใส่) — คืน def เพื่อให้ผู้เรียกโชว์ไอคอน/ชื่อได้
+function applyInstantEffect(key) {
+  const e = INSTANT_EFFECTS[key];
+  if (e) e.apply();
+  return e;
 }
 </script>
 <script>
@@ -3707,7 +3718,7 @@ GameEvents.on(EVENTS.FEVER_ENDED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_PROGRESS, () => renderFeverBar()); // สะสมหลอด Fever (แทน features/fever.js เรียก DOM ตรงๆ)
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderGems());
 GameEvents.on(EVENTS.OBJECTIVE_COMPLETED, () => { renderGems(); renderRenown(); }); // รางวัลเควสนำทาง = เพชร/ชื่อเสียง
-GameEvents.on(EVENTS.BUFF_ROLLED, () => renderGems());
+GameEvents.on(EVENTS.EQUIPMENT_UPGRADED, () => renderGems()); // ซื้ออุปกรณ์จ่ายด้วยเพชร
 GameEvents.on(EVENTS.MILESTONE_REACHED, () => renderGems()); // รางวัลดาว milestone = เพชร
 GameEvents.on(EVENTS.GIFT_OPENED, () => { renderGold(); renderGems(); });
 GameEvents.on(EVENTS.STATION_UNLOCKED, () => renderGold()); // จ่าย Gold ปลดล็อกสถานี
@@ -3785,8 +3796,6 @@ GameEvents.on(EVENTS.COIN_COLLECTED, () => renderUpgradeList());
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderUpgradeList());
 // บัพ "ลดกระหน่ำ" (discount) เปลี่ยนราคาที่ getUpgradeCost() คืนค่า -- ต้องรีเฟรชราคาที่โชว์ทันทีตอนเริ่ม/หมดบัพ
 // ไม่งั้นราคาที่เห็นค้างเป็นค่าก่อนหน้าจนกว่าจะบังเอิญมี COIN_COLLECTED/UPGRADE_PURCHASED มาเรียก re-render ให้
-GameEvents.on(EVENTS.BUFF_ROLLED, () => renderUpgradeList());
-GameEvents.on(EVENTS.BUFF_ENDED, () => renderUpgradeList());
 </script>
 <script>
 /* =====================================================================
@@ -3874,8 +3883,6 @@ GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderPermUpgradeList());
 GameEvents.on(EVENTS.STAFF_HIRED, () => renderPermUpgradeList());
 GameEvents.on(EVENTS.VAULT_UPGRADED, () => renderPermUpgradeList());
 // บัพ "ลดกระหน่ำ" เปลี่ยนราคาจ้างลูกมือ/อัปคลังออฟไลน์ -- รีเฟรชราคาที่โชว์ทันทีตอนเริ่ม/หมดบัพ (ดู upgrade-list.js)
-GameEvents.on(EVENTS.BUFF_ROLLED, () => renderPermUpgradeList());
-GameEvents.on(EVENTS.BUFF_ENDED, () => renderPermUpgradeList());
 </script>
 <script>
 /* =====================================================================
@@ -3960,8 +3967,6 @@ GameEvents.on(EVENTS.COIN_COLLECTED, () => { renderProductBadge(); refreshProduc
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 GameEvents.on(EVENTS.STATION_UPGRADED, () => refreshProductLevelModalIfOpen());
 // บัพ "ลดกระหน่ำ" เปลี่ยนราคาที่ getUpgradeCost('portion') คืนค่าเหมือนกัน -- รีเฟรชตอนเริ่ม/หมดบัพ (ดู upgrade-list.js)
-GameEvents.on(EVENTS.BUFF_ROLLED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
-GameEvents.on(EVENTS.BUFF_ENDED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 </script>
 <script>
 /* =====================================================================
@@ -3972,7 +3977,7 @@ GameEvents.on(EVENTS.BUFF_ENDED, () => { renderProductBadge(); refreshProductLev
 function openUpgradesModal() {
   renderUpgradeList();
   renderPermUpgradeList();
-  renderBuffPanel();
+  renderEquipmentPanel();
   renderPrestigeRow();
   renderStatsFooter();
   document.getElementById('upgradesModal').classList.add('show');
@@ -3996,8 +4001,8 @@ function anyUpgradeAffordable() {
     !u.hiddenFromList && player.upgradeLevels[u.key] < u.maxLevel && player.gold >= getUpgradeCost(u.key));
   const hireOk = player.staffCount < MAX_STAFF_COUNT && player.gold >= getHireHelperCost();
   const vaultOk = player.vaultLevel < MAX_VAULT_LEVEL && player.gold >= getVaultUpgradeCost();
-  const rollOk = player.gems >= BUFF_ROLL_COST_GEMS;
-  return stageUpgradeOk || hireOk || vaultOk || rollOk;
+  const equipOk = hasAnyEquipUpgradeAffordable(); // มีอุปกรณ์ที่อัปได้ด้วยเพชร
+  return stageUpgradeOk || hireOk || vaultOk || equipOk;
 }
 
 function refreshUpgradesFab() {
@@ -4014,7 +4019,7 @@ GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => refreshUpgradesFab());
 GameEvents.on(EVENTS.STAFF_HIRED, () => refreshUpgradesFab());
 GameEvents.on(EVENTS.VAULT_UPGRADED, () => refreshUpgradesFab());
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => refreshUpgradesFab());
-GameEvents.on(EVENTS.BUFF_ROLLED, () => refreshUpgradesFab());
+GameEvents.on(EVENTS.EQUIPMENT_UPGRADED, () => refreshUpgradesFab());
 GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => refreshUpgradesFab());
 </script>
 <script>
@@ -4245,96 +4250,91 @@ GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => refreshStationsUi());
 GameEvents.on(EVENTS.STATION_UNLOCKED, () => refreshStationsUi());
 GameEvents.on(EVENTS.STATION_UPGRADED, () => refreshStationsUi());
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => refreshStationsUi());
-GameEvents.on(EVENTS.BUFF_ROLLED, () => refreshStationsUi());  // discount เปลี่ยนราคาปลดล็อก/อัปเลเวล
-GameEvents.on(EVENTS.BUFF_ENDED, () => refreshStationsUi());
 GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => renderStationArrows());
 </script>
 <script>
 /* =====================================================================
-   Buff Roll panel — การ์ดเดียวใน ui-area: สุ่มบัพด้วยเพชร + โชว์บัพที่กำลัง active อยู่ (ถ้ามี)
-   ใช้โครง .upgrade-card เดิมซ้ำ (เหมือน Hire Helper/Vault card) ไม่ต้องคิด style ใหม่
+   Equipment panel — การ์ด 3 ช่องสวมใส่ในโมดัลอัปเกรด (ตรรกะอยู่ที่ systems/equipment.js)
+   แต่ละช่องโชว์ไอคอน + ชื่อไอเทม tier ปัจจุบัน (สีตาม rarity) + ค่าโบนัส + ปุ่มอัป tier ถัดไปด้วยเพชร
    ===================================================================== */
-function renderBuffPanel() {
-  const panel = document.getElementById('buffPanel');
-  panel.innerHTML = '';
-
-  const card = document.createElement('div');
-  const active = !!activeBuff;
-  card.className = 'buff-card' + (active ? ' buff-card--active' : '');
-
-  const icon = document.createElement('div');
-  icon.className = 'upgrade-icon';
-  icon.textContent = active ? getBuffDef(activeBuff.key).icon : '💎';
-
-  const info = document.createElement('div');
-  info.className = 'upgrade-info';
-  const name = document.createElement('div');
-  name.className = 'upgrade-name';
-  name.textContent = active ? getBuffDef(activeBuff.key).name : 'สุ่มบัพติดตัว';
-  const desc = document.createElement('div');
-  desc.className = 'upgrade-desc';
-  desc.textContent = active ? getBuffDef(activeBuff.key).desc : `มีเพชร ${formatCompact(player.gems)} เม็ด`;
-  const countdown = document.createElement('div');
-  countdown.className = 'upgrade-level';
-  countdown.id = 'buffCountdownText';
-  countdown.textContent = active ? formatBuffCountdown() : '';
-  info.append(name, desc, countdown);
-
-  const btn = document.createElement('button');
-  const affordable = player.gems >= BUFF_ROLL_COST_GEMS;
-  btn.className = 'buy-btn ' + (affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
-  btn.textContent = `สุ่ม (${BUFF_ROLL_COST_GEMS}💎)`;
-  btn.disabled = !affordable;
-  btn.addEventListener('click', () => {
-    const buff = rollBuff();
-    if (buff) showBuffResultToast(buff);
-  });
-
-  card.append(icon, info, btn);
-  panel.appendChild(card);
-}
-
-function formatBuffCountdown() {
-  if (!activeBuff) return '';
-  const secLeft = Math.max(0, Math.round((activeBuff.endsAt - performance.now()) / 1000));
-  return `เหลือ ${secLeft} วินาที`;
-}
-
-// ชิปบัพลอยบนฉาก — ลิสต์สุ่มบัพอยู่ใน modal อัปเกรดแล้ว แต่ตัวนับถอยหลังของบัพที่กำลังทำงาน
-// ต้องมองเห็นได้ตลอดโดยไม่ต้องเปิด modal (แบบไอคอนบัฟลอยในเกมแนวเดียวกัน)
-function renderActiveBuffChip() {
-  const chip = document.getElementById('activeBuffChip');
-  if (!activeBuff) {
-    chip.classList.remove('show');
-    return;
+// จัดรูปข้อความโบนัสตามความหมายของแต่ละช่อง (unit) — ช่อง charm มีสองผล (ทิป + ตัวคูณ VIP)
+function formatEquipEffect(slotDef) {
+  const effect = getEquipCurrentEffect(slotDef.key);
+  if (slotDef.unit === 'charm') {
+    const vip = getEquipVipMult();
+    return effect > 0
+      ? `ทิป +${Math.round(effect * 100)}% · VIP x${vip.toFixed(1)}`
+      : 'ยังไม่มีโบนัส';
   }
-  const def = getBuffDef(activeBuff.key);
-  chip.innerHTML = `${def.icon} <span id="buffChipCountdown">${formatBuffCountdown()}</span>`;
-  chip.classList.add('show');
-  chip.title = `${def.name} — ${def.desc}`;
+  // 'pct' — tool = ลดเวลาคราฟต์, outfit = เงินต่อออเดอร์
+  return effect > 0 ? `${slotDef.effectLabel} ${slotDef.key === 'tool' ? '-' : '+'}${Math.round(effect * 100)}%` : 'ยังไม่มีโบนัส';
 }
 
-// เรียกทุกเฟรมจาก gameTick แค่ตอนมีบัพ active เท่านั้น -- อัปเดตแค่ textContent ของตัวนับถอยหลัง
-// ไม่ rebuild การ์ด/ชิปทั้งใบทุกเฟรม (ประหยัดกว่า renderBuffPanel() เต็มรูปแบบมาก)
-function tickBuffCountdownDisplay() {
-  if (!activeBuff) return;
-  const el = document.getElementById('buffCountdownText');
-  if (el) el.textContent = formatBuffCountdown();
-  const chipEl = document.getElementById('buffChipCountdown');
-  if (chipEl) chipEl.textContent = formatBuffCountdown();
+function renderEquipmentPanel() {
+  const panel = document.getElementById('equipmentPanel');
+  if (!panel) return;
+  panel.innerHTML = '';
+  EQUIPMENT_SLOTS.forEach(slotDef => {
+    const tier = getEquipTier(slotDef.key);
+    const rarity = getEquipRarity(slotDef.key);
+    const maxed = isEquipMaxed(slotDef.key);
+    const affordable = canUpgradeEquip(slotDef.key);
+
+    const card = document.createElement('div');
+    card.className = 'equip-slot equip-slot--' + rarity;
+
+    const icon = document.createElement('div');
+    icon.className = 'equip-slot-icon';
+    icon.textContent = slotDef.icon;
+
+    const info = document.createElement('div');
+    info.className = 'equip-slot-info';
+    const name = document.createElement('div');
+    name.className = 'equip-slot-name';
+    name.innerHTML = slotDef.name + ' · <span class="equip-tier-name">' + getEquipTierDef(slotDef.key).name + '</span>';
+    const effect = document.createElement('div');
+    effect.className = 'equip-slot-effect';
+    effect.textContent = formatEquipEffect(slotDef);
+    const tierDots = document.createElement('div');
+    tierDots.className = 'equip-tier-dots';
+    for (let i = 1; i <= getEquipMaxTier(slotDef.key); i++) {
+      const dot = document.createElement('span');
+      dot.className = 'equip-tier-dot' + (i <= tier ? ' filled' : '');
+      tierDots.appendChild(dot);
+    }
+    info.append(name, effect, tierDots);
+
+    const btn = document.createElement('button');
+    if (maxed) {
+      btn.className = 'buy-btn buy-btn--disabled';
+      btn.textContent = 'สูงสุด';
+      btn.disabled = true;
+    } else {
+      btn.className = 'buy-btn ' + (affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
+      btn.textContent = 'อัป (' + getEquipUpgradeCost(slotDef.key) + '💎)';
+      btn.disabled = !affordable;
+      btn.addEventListener('click', () => {
+        if (buyEquipmentUpgrade(slotDef.key)) showEquipUpgradeToast(slotDef);
+      });
+    }
+
+    card.append(icon, info, btn);
+    panel.appendChild(card);
+  });
 }
 
-function showBuffResultToast(buff) {
+function showEquipUpgradeToast(slotDef) {
   const el = document.createElement('div');
-  el.className = 'milestone-toast'; // ยืมสไตล์ป๊อปอัพเดิมจาก Milestone Boosts มาใช้ซ้ำ
-  el.innerHTML = `${buff.icon} ได้บัพ <b>${buff.name}</b>!<br>${buff.desc}`;
+  el.className = 'milestone-toast'; // ยืมสไตล์ป๊อปอัพเดิมมาใช้ซ้ำ
+  el.innerHTML = `${slotDef.icon} สวมใส่ <b>${getEquipTierDef(slotDef.key).name}</b>!<br>${formatEquipEffect(slotDef)}`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1900);
 }
 
-GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderBuffPanel()); // เพชรเพิ่ม อาจพอสุ่มได้แล้ว
-GameEvents.on(EVENTS.BUFF_ROLLED, () => { renderBuffPanel(); renderActiveBuffChip(); });
-GameEvents.on(EVENTS.BUFF_ENDED, () => { renderBuffPanel(); renderActiveBuffChip(); });
+// mount ตัวเอง: เพชรเพิ่ม (อาจพออัปได้แล้ว) หรืออัปอุปกรณ์ไปแล้ว — วาดการ์ดใหม่
+GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderEquipmentPanel());
+GameEvents.on(EVENTS.OBJECTIVE_COMPLETED, () => renderEquipmentPanel());
+GameEvents.on(EVENTS.EQUIPMENT_UPGRADED, () => renderEquipmentPanel());
 </script>
 <script>
 /* =====================================================================
@@ -4687,8 +4687,7 @@ function renderAll() {
   renderStatsFooter();
   renderFeverBar();
   renderMaterialStockPanel();
-  renderBuffPanel();
-  renderActiveBuffChip();
+  renderEquipmentPanel();
   refreshUpgradesFab();
   refreshRenovateFab();
   refreshStationsUi();
@@ -4720,8 +4719,6 @@ function gameTick(ts) {
   lastTickTime = ts;
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
   tickFever();
-  tickBuffs();
-  tickBuffCountdownDisplay();
   tickMaterialRegen(dt);
   tickWorkers(dt);
   tickCustomers(dt);

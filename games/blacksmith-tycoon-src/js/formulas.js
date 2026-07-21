@@ -40,14 +40,15 @@ function getUpgradeCost(key) {
   const type = getUpgradeType(key);
   const level = player.upgradeLevels[key];
   const base = getStage().baseRevenue * type.baseCostMult * Math.pow(UPGRADE_COST_GROWTH, level);
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 
 function getRevenuePerSale() {
   const level = player.upgradeLevels.portion;
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
   // คูณ prestige ด้วย — ฟังก์ชันนี้ป้อน income tracker (offline earnings / Golden Goblin) ให้สเกลตามชื่อเสียง
-  return getStage().baseRevenue * (1 + bonus) * getPrestigeMultiplier();
+  // คูณโบนัสเงินจากอุปกรณ์ "ชุดช่าง" ด้วย (ถาวร)
+  return getStage().baseRevenue * (1 + bonus) * getPrestigeMultiplier() * getEquipGoldMult();
 }
 
 /* ===== Multi-Station (3 สถานีต่อด่าน ดู STATION_SETS ใน data.js) =====
@@ -66,8 +67,14 @@ function getUnlockedStationIndices() {
 function getStationRevenue(i) {
   const level = getStationLevel(i);
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
-  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus) * getPrestigeMultiplier();
+  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus) * getPrestigeMultiplier() * getEquipGoldMult();
 }
+
+/* ===== Equipment (อุปกรณ์สวมใส่ถาวร ดู systems/equipment.js) — ตัวคูณ/โบนัสถาวรตาม tier ที่สวมอยู่ ===== */
+function getEquipCraftMult() { return 1 - getEquipCurrentEffect('tool'); }   // 🔨 ลดเวลาคราฟต์
+function getEquipGoldMult() { return 1 + getEquipCurrentEffect('outfit'); }  // 🦺 เงินต่อออเดอร์ +%
+function getEquipTipBonus() { return getEquipCurrentEffect('charm'); }       // 🧿 บวกโอกาสทิป (absolute)
+function getEquipVipMult() { return 1 + getEquipTier('charm') * 0.4; }       // 🧿 ตัวคูณโอกาสเจอ VIP ตาม tier
 
 /* ===== Prestige (systems/prestige.js) — ตัวคูณรายได้ถาวรจากชื่อเสียง + จำนวน renown ที่จะได้ถ้ากดตอนนี้ ===== */
 // ตัวคูณ prestige รวม = (โบนัส renown แบบ passive) x (อัปเกรด "สายเลือดพ่อค้า" จากร้านชื่อเสียง)
@@ -86,11 +93,11 @@ function getRenownGain() {
 function getStationUpgradeCost(i) {
   if (i === 0) return getUpgradeCost('portion');
   const base = getStage().baseRevenue * getStationDef(i).revenueMult * 10 * Math.pow(UPGRADE_COST_GROWTH, getStationLevel(i));
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 function getStationUnlockCost(i) {
   const base = getStage().baseRevenue * getStationDef(i).unlockCostMult;
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 function getStationIcon(i) {
   const def = getStationDef(i);
@@ -101,15 +108,14 @@ function getCraftDurationMs() {
   if (isFeverActive()) return FEVER_CRAFT_MS; // Fever Mode: แทบจะทำเสร็จทันที
   const level = player.upgradeLevels.speed;
   const reduction = level * SPEED_CRAFT_MS_REDUCTION * getMilestoneMultiplier(level);
-  // อัปเกรด "มือเทวดา" (ร้านชื่อเสียง) ลดเวลาคราฟต์ถาวรเป็น % คูณทับหลังหักจากเลเวล speed
-  return Math.max(MIN_CRAFT_MS, (BASE_CRAFT_MS - reduction) * getRenownCraftMult());
+  // อัปเกรด "มือเทวดา" (ร้านชื่อเสียง) + อุปกรณ์ "เครื่องมือช่าง" ลดเวลาคราฟต์ถาวรเป็น % คูณทับหลังหักจากเลเวล speed
+  return Math.max(MIN_CRAFT_MS, (BASE_CRAFT_MS - reduction) * getRenownCraftMult() * getEquipCraftMult());
 }
 
 function getMoveSpeedPxPerSec() {
   const level = player.upgradeLevels.speed;
   const bonus = level * SPEED_MOVE_BONUS_PX * getMilestoneMultiplier(level);
   let base = Math.min(MAX_MOVE_SPEED_PX, BASE_MOVE_SPEED_PX + bonus);
-  if (isBuffActive('speed_boost')) base *= 1.5; // บัพ "เท้าไฟ"
   return isFeverActive() ? base * FEVER_SPEED_MULT : base; // Fever Mode: 2 เท่าความเร็วเดิน
 }
 
@@ -117,7 +123,6 @@ function getSpawnIntervalMs() {
   const level = player.upgradeLevels.signage;
   const reduction = level * SIGNAGE_SPAWN_MS_REDUCTION * getMilestoneMultiplier(level);
   let ms = Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - reduction);
-  if (isBuffActive('signage_boost')) ms = Math.max(MIN_SPAWN_INTERVAL_MS, ms * 0.7); // บัพ "ป้ายเรืองแสง"
   return ms;
 }
 
@@ -125,20 +130,19 @@ function getMaxQueueSize() {
   const level = player.upgradeLevels.signage;
   const bonus = level * SIGNAGE_QUEUE_BONUS * getMilestoneMultiplier(level);
   let size = Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus));
-  if (isBuffActive('signage_boost')) size += 2; // บัพ "ป้ายเรืองแสง"
   return size;
 }
 
 function getTipChance() {
   const level = player.upgradeLevels.decor;
   let chance = level * DECOR_LEVEL_TIP_CHANCE * getMilestoneMultiplier(level);
-  if (isBuffActive('tip_boost')) chance *= 2; // บัพ "มือทิป"
+  chance += getEquipTipBonus(); // อุปกรณ์ "เครื่องราง" บวกโอกาสทิปถาวร
   return Math.min(MAX_TIP_CHANCE, chance);
 }
 
-// โอกาสเจอลูกค้า VIP ตอนเกิดใหม่ — แยกเป็นฟังก์ชันแทนใช้ VIP_CHANCE คงที่ตรงๆ เพื่อให้บัพ "แม่เหล็ก VIP" มีผลได้
+// โอกาสเจอลูกค้า VIP ตอนเกิดใหม่ — แยกเป็นฟังก์ชันแทนใช้ VIP_CHANCE คงที่ เพื่อให้อุปกรณ์ "เครื่องราง" มีผลได้
 function getVipChance() {
-  return VIP_CHANCE * (isBuffActive('vip_magnet') ? 3 : 1);
+  return VIP_CHANCE * getEquipVipMult();
 }
 
 // เงื่อนไขขึ้นด่านย้ายไปอยู่ที่ isRenovateReady() (ui/renovate-modal.js) แบบเกมต้นแบบ:
@@ -152,12 +156,12 @@ function getWorkerCount() { return 1 + player.staffCount; }
 
 function getHireHelperCost() {
   const base = getStage().baseRevenue * HIRE_HELPER_BASE_COST_MULT * Math.pow(HIRE_HELPER_COST_GROWTH, player.staffCount);
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 
 function getVaultUpgradeCost() {
   const base = VAULT_BASE_COST * Math.pow(VAULT_COST_GROWTH, player.vaultLevel);
-  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+  return Math.ceil(base);
 }
 
 function getOfflineMaxHours() {

@@ -69,6 +69,4 @@ GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => refreshStationsUi());
 GameEvents.on(EVENTS.STATION_UNLOCKED, () => refreshStationsUi());
 GameEvents.on(EVENTS.STATION_UPGRADED, () => refreshStationsUi());
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => refreshStationsUi());
-GameEvents.on(EVENTS.BUFF_ROLLED, () => refreshStationsUi());  // discount เปลี่ยนราคาปลดล็อก/อัปเลเวล
-GameEvents.on(EVENTS.BUFF_ENDED, () => refreshStationsUi());
 GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => renderStationArrows());

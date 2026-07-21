@@ -6,7 +6,7 @@
 function openUpgradesModal() {
   renderUpgradeList();
   renderPermUpgradeList();
-  renderBuffPanel();
+  renderEquipmentPanel();
   renderPrestigeRow();
   renderStatsFooter();
   document.getElementById('upgradesModal').classList.add('show');
@@ -30,8 +30,8 @@ function anyUpgradeAffordable() {
     !u.hiddenFromList && player.upgradeLevels[u.key] < u.maxLevel && player.gold >= getUpgradeCost(u.key));
   const hireOk = player.staffCount < MAX_STAFF_COUNT && player.gold >= getHireHelperCost();
   const vaultOk = player.vaultLevel < MAX_VAULT_LEVEL && player.gold >= getVaultUpgradeCost();
-  const rollOk = player.gems >= BUFF_ROLL_COST_GEMS;
-  return stageUpgradeOk || hireOk || vaultOk || rollOk;
+  const equipOk = hasAnyEquipUpgradeAffordable(); // มีอุปกรณ์ที่อัปได้ด้วยเพชร
+  return stageUpgradeOk || hireOk || vaultOk || equipOk;
 }
 
 function refreshUpgradesFab() {
@@ -48,5 +48,5 @@ GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => refreshUpgradesFab());
 GameEvents.on(EVENTS.STAFF_HIRED, () => refreshUpgradesFab());
 GameEvents.on(EVENTS.VAULT_UPGRADED, () => refreshUpgradesFab());
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => refreshUpgradesFab());
-GameEvents.on(EVENTS.BUFF_ROLLED, () => refreshUpgradesFab());
+GameEvents.on(EVENTS.EQUIPMENT_UPGRADED, () => refreshUpgradesFab());
 GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => refreshUpgradesFab());
