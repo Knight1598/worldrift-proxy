@@ -8,7 +8,7 @@ function renderBuffPanel() {
 
   const card = document.createElement('div');
   const active = !!activeBuff;
-  card.className = 'upgrade-card' + (active ? ' upgrade-card--buff-active' : '');
+  card.className = 'buff-card' + (active ? ' buff-card--active' : '');
 
   const icon = document.createElement('div');
   icon.className = 'upgrade-icon';
