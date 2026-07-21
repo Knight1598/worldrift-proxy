@@ -23,4 +23,5 @@ const EVENTS = {
   STATION_UNLOCKED:   'station:unlocked',   // buyStationUnlock() — { stationIndex }
   STATION_UPGRADED:   'station:upgraded',   // buyStationLevel() — { stationIndex, level }
   GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }
+  PRESTIGE_DONE:      'prestige:done',      // doPrestige() — { renownGained, totalRenown }
 };

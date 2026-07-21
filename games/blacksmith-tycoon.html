@@ -191,7 +191,7 @@
     box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
     flex-shrink: 0;
   }
-  .gold-counter, .gem-counter {
+  .gold-counter, .gem-counter, .renown-counter {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -214,6 +214,16 @@
     border-left: 1px solid rgba(255,255,255,0.18);
     font-size: 0.68rem;
   }
+  /* ชื่อเสียง 🏅 — โชว์เฉพาะเมื่อเคยเกิดใหม่แล้ว (renderRenown เพิ่ม .show) กัน HUD รกช่วงต้นเกม */
+  .renown-counter {
+    display: none;
+    color: #ffcf5a;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(255,255,255,0.18);
+    font-size: 0.68rem;
+  }
+  .renown-counter.show { display: inline-flex; }
 
   .btn-tertiary {
     width: 30px; height: 30px;
@@ -1020,6 +1030,57 @@
     background: linear-gradient(180deg, #d8bfff, #8a5fe0);
     color: #241a42;
   }
+
+  /* ===== Prestige (เกิดใหม่) — โทนทอง/เหลืองอำพัน แยกจากม่วง(บัพ)/น้ำตาล(อัปเกรด) ===== */
+  .section-label--prestige { color: #ffcf5a; display: flex; align-items: center; gap: 5px; }
+  .section-label--prestige::before {
+    content: ''; width: 3px; height: 10px; background: #ffcf5a; border-radius: 2px; display: inline-block;
+  }
+  .prestige-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    background: linear-gradient(135deg, #3a2e12, #241c0a);
+    border: 3px solid #c9941f;
+    border-radius: 3px;
+    padding: 8px 10px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+    cursor: pointer;
+    color: var(--text-main);
+    font-family: inherit;
+  }
+  .prestige-row:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,0.5); }
+  .prestige-row-icon { font-size: 1.5rem; flex-shrink: 0; }
+  .prestige-row-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .prestige-row-title { font-weight: bold; font-size: 0.78rem; color: #ffe08a; }
+  .prestige-row-sub { font-size: 0.6rem; color: var(--text-dim); margin-top: 1px; }
+  .prestige-row-gain {
+    flex-shrink: 0; font-weight: bold; font-size: 0.72rem; color: #ffcf5a;
+    background: rgba(0,0,0,0.4); border-radius: 4px; padding: 4px 8px;
+  }
+  .prestige-row--ready { animation: prestigeReadyPulse 1.3s ease-in-out infinite; }
+  @keyframes prestigeReadyPulse {
+    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 8px 1px rgba(255,207,90,0.4); }
+    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 16px 4px rgba(255,207,90,0.75); }
+  }
+
+  /* หน้าต่าง Prestige */
+  .prestige-box { position: relative; padding-top: 30px; }
+  .prestige-intro { margin-top: -4px !important; }
+  .prestige-stats { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .prestige-stat {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #f1e8d5; border-radius: 8px; padding: 7px 12px;
+    font-size: 0.8rem; color: #4a3728;
+  }
+  .prestige-stat-label { color: #8a7a60; font-weight: bold; }
+  .prestige-stat-val { font-weight: bold; font-variant-numeric: tabular-nums; }
+  .prestige-stat--gain { background: #fff2cc; }
+  .prestige-stat--gain .prestige-stat-val { color: #b8860b; }
+  .prestige-warn { font-size: 0.68rem !important; color: #a06a1a !important; margin: 0 0 12px !important; line-height: 1.5; }
+  .prestige-gate-text { font-size: 0.72rem !important; color: var(--primary-dark) !important; font-weight: bold; margin: 10px 0 0 !important; }
 </style>
 </head>
 <body>
@@ -1045,6 +1106,7 @@
     <div class="hud-currency-group">
       <div class="gold-counter"><img class="coin-icon" src="assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
       <div class="gem-counter" id="gemCounter" title="เพชร — ได้จาก Order Missions ใช้สุ่มบัพ">💎<span id="gemValue" class="pixel-num">0</span></div>
+      <div class="renown-counter" id="renownCounter" title="ชื่อเสียง — จากการเกิดใหม่ ให้ตัวคูณรายได้ถาวร">🏅<span id="renownValue" class="pixel-num">0</span></div>
     </div>
     <div class="hud-title">⚒️ Blacksmith Tycoon</div>
     <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
@@ -1078,6 +1140,15 @@
       <div class="upgrade-list" id="upgradeList"></div>
       <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
       <div class="upgrade-list" id="permUpgradeList"></div>
+      <div class="section-label section-label--prestige">เกิดใหม่ (ชื่อเสียงถาวร ข้ามทุกด่าน)</div>
+      <button class="prestige-row" id="prestigeRow">
+        <span class="prestige-row-icon">🏅</span>
+        <span class="prestige-row-info">
+          <span class="prestige-row-title">เกิดใหม่ · <span id="prestigeRowMult">x1.00</span></span>
+          <span class="prestige-row-sub" id="prestigeRowSub">เริ่มร้านใหม่ แลกชื่อเสียงเพิ่มรายได้ถาวร</span>
+        </span>
+        <span class="prestige-row-gain" id="prestigeRowGain">+0 🏅</span>
+      </button>
       <div class="stats-footer" id="statsFooter"></div>
     </div>
   </div>
@@ -1151,8 +1222,27 @@
     <div class="modal-emoji-big">👑</div>
     <h2>สร้างอาณาจักรช่างตีเหล็กสำเร็จ!</h2>
     <p class="game-complete-reward" id="gameCompleteRewardText"></p>
-    <p>คุณอัปเกรดร้านจนสุดทางแล้วในเวอร์ชันนี้ ขอบคุณที่เล่นจนจบ — ระบบใหม่กำลังจะตามมาเร็วๆ นี้!</p>
-    <button class="btn-cta-mega" id="btnCloseGameComplete">เยี่ยมไปเลย!</button>
+    <p>อัปเกรดร้านจนสุดทางแล้ว! ถึงเวลา <b>เกิดใหม่</b> — เริ่มร้านใหม่พร้อมชื่อเสียงที่ทำให้รวยไวขึ้นตลอดไป</p>
+    <button class="btn-cta-mega" id="btnGameCompletePrestige">🏅 เกิดใหม่เลย!</button>
+    <button class="btn-secondary-modal" id="btnCloseGameComplete">ไว้ก่อน</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="prestigeModal">
+  <div class="modal-box prestige-box">
+    <button class="modal-close-x" id="btnClosePrestige">✕</button>
+    <div class="modal-emoji-big">🏅</div>
+    <h2>เกิดใหม่ (Prestige)</h2>
+    <p class="prestige-intro">เริ่มร้านใหม่ตั้งแต่ต้น แต่ได้ <b>ชื่อเสียง</b> ที่เพิ่มรายได้ทุกสถานีอย่างถาวร</p>
+    <div class="prestige-stats">
+      <div class="prestige-stat"><span class="prestige-stat-label">ชื่อเสียงตอนนี้</span><span class="prestige-stat-val" id="prestigeCurrentRenown">0 🏅</span></div>
+      <div class="prestige-stat"><span class="prestige-stat-label">ตัวคูณรายได้ตอนนี้</span><span class="prestige-stat-val" id="prestigeCurrentMult">x1.00</span></div>
+      <div class="prestige-stat prestige-stat--gain"><span class="prestige-stat-label">เกิดใหม่รอบนี้จะได้</span><span class="prestige-stat-val" id="prestigeGain">+0 🏅</span></div>
+      <div class="prestige-stat prestige-stat--gain"><span class="prestige-stat-label">ตัวคูณใหม่จะเป็น</span><span class="prestige-stat-val" id="prestigeNextMult">x1.00</span></div>
+    </div>
+    <p class="prestige-warn">⚠️ Gold / ด่าน / อัปเกรด / สถานี / ลูกมือ จะรีเซ็ต — แต่ 💎 เพชร และ 🏅 ชื่อเสียง จะอยู่ครบ</p>
+    <button class="btn-cta-mega" id="btnConfirmPrestige">🏅 เกิดใหม่!</button>
+    <p class="prestige-gate-text" id="prestigeGateText"></p>
   </div>
 </div>
 
@@ -1207,6 +1297,7 @@ const EVENTS = {
   STATION_UNLOCKED:   'station:unlocked',   // buyStationUnlock() — { stationIndex }
   STATION_UPGRADED:   'station:upgraded',   // buyStationLevel() — { stationIndex, level }
   GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }
+  PRESTIGE_DONE:      'prestige:done',      // doPrestige() — { renownGained, totalRenown }
 };
 </script>
 <script>
@@ -1377,6 +1468,15 @@ const APPROX_ORDER_TRAVEL_PX = 240; // ลดลงหลังตัดขา�
 const RENOVATE_GATE_LEVEL = 15;   // ลดจาก 25 -> 15 ตามคำขอ "เดินเกมเร็วขึ้น" (ยังคงคอนเซ็ปต์ gate เดียวแบบคลิป)
 const RENOVATE_REWARD_GEMS = 10;  // รางวัลเพชรตอน Renovate สำเร็จ (คลิปมีช่อง Rewards ในหน้าต่าง Renovate)
 
+// ===== Prestige / เกิดใหม่ (ชื่อเสียงช่างตีเหล็ก 🏅) =====
+// รีเซ็ตความคืบหน้ารอบนี้ (gold/ด่าน/อัปเกรด/สถานี/ภารกิจ/ลูกมือ/คลัง) เพื่อแลก "ชื่อเสียง" (renown)
+// ที่ให้ตัวคูณรายได้ถาวรข้ามรอบ — ทำให้เกมเล่นได้ไม่รู้จบ (เก็บ gems/renown/identity/settings/สถิติสะสมไว้)
+// renown ที่ได้ = floor(sqrt(goldThisCycle / RENOWN_DIVISOR)) — รากที่สองให้ผลตอบแทนค่อยๆ ลด (โค้ง prestige คลาสสิก)
+// goldThisCycle คำนวณจาก player.stats.totalGoldEarned (สะสมทุกแหล่งอยู่แล้ว) ลบ snapshot ตอนเริ่มรอบ
+const RENOWN_DIVISOR = 800;             // ปรับด้วย sim: เล่นจบเกม 1 รอบ (~119K gold) = ~12 renown (+24% รายได้)
+const PRESTIGE_MULT_PER_RENOWN = 0.02;  // renown 1 หน่วย = +2% รายได้ทุกสถานี (50 renown = x2)
+const PRESTIGE_MIN_GEMS_REWARD = 5;     // โบนัสเพชรก้อนเล็กตอน prestige (ให้รู้สึกคุ้มทุกรอบ ไม่ใช่แค่ตัวคูณ)
+
 // ===== หลายสถานีในด่านเดียว (Multi-Station แบบ Eatventure) =====
 // แต่ละด่านมี 3 สถานี: สถานีหลัก (ปลดล็อกอยู่แล้ว ใช้ระบบเลเวลสินค้าเดิม) + สถานีเสริม 2 ตัว
 // ปลดล็อกด้วย Gold แล้วอัปเลเวลแยกของใครของมัน สินค้าแพงขึ้นตาม revenueMult — จังหวะ "เก็บเงินก้อนปลดล็อกโต๊ะใหม่"
@@ -1512,7 +1612,8 @@ const BUFF_DEFS = [
     desc: 'ได้ Gold ก้อนโตทันที (อิงรายได้ต่อนาทีปัจจุบัน)' },
 ];
 
-const SAVE_KEY = 'blacksmithTycoonSave_v5';
+const SAVE_KEY = 'blacksmithTycoonSave_v6';
+const SAVE_KEY_V5 = 'blacksmithTycoonSave_v5'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V4 = 'blacksmithTycoonSave_v4'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V3 = 'blacksmithTycoonSave_v3'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V2 = 'blacksmithTycoonSave_v2'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
@@ -1538,6 +1639,11 @@ function defaultIdentity() {
 function defaultStationsExtra() {
   return { s1: { unlocked: false, level: 0 }, s2: { unlocked: false, level: 0 } };
 }
+function defaultPrestige() {
+  // renown = ชื่อเสียงสะสมถาวร, goldAtCycleStart = snapshot totalGoldEarned ตอนเริ่มรอบปัจจุบัน
+  // (goldThisCycle = totalGoldEarned - goldAtCycleStart), count = จำนวนครั้งที่เกิดใหม่
+  return { renown: 0, goldAtCycleStart: 0, count: 0 };
+}
 
 let player = {
   gold: 0,
@@ -1552,6 +1658,7 @@ let player = {
   missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
   missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
   stationsExtra: defaultStationsExtra(), // สถานีเสริมของด่านปัจจุบัน (Multi-Station ดู ui/stations.js)
+  prestige: defaultPrestige(),           // ชื่อเสียง/เกิดใหม่ (ดู systems/prestige.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
@@ -1586,6 +1693,7 @@ function saveGame() {
     missionIndex: player.missionIndex,
     missionProgress: player.missionProgress,
     stationsExtra: player.stationsExtra,
+    prestige: player.prestige,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -1637,52 +1745,70 @@ function fillV5Defaults(v4Data) {
   });
 }
 
+// เติมฟิลด์ใหม่ของ v6 (prestige — ชื่อเสียง/เกิดใหม่) ให้ข้อมูลทรง v5
+function fillV6Defaults(v5Data) {
+  const p = Object.assign({}, v5Data, { prestige: defaultPrestige() });
+  // ผู้เล่นเก่าเคยหาเงินมาแล้วก่อนมีระบบ prestige -- ตั้ง snapshot เป็นยอดสะสมปัจจุบัน ไม่ให้กด prestige แรก
+  // แล้วได้ renown ก้อนใหญ่จากเงินที่หามาก่อนระบบนี้จะมี (goldThisCycle เริ่มนับ 0 จากตรงนี้)
+  if (p.stats && typeof p.stats.totalGoldEarned === 'number') p.prestige.goldAtCycleStart = p.stats.totalGoldEarned;
+  return p;
+}
+
 function loadGame() {
   let raw;
   try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
   let data = null;
   if (raw) {
-    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v5 เสีย ลอง fallback ลงไปต่อ */ }
+    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v6 เสีย ลอง fallback ลงไปต่อ */ }
   }
   let needsResave = false;
   const keysToClean = [];
   if (!data) {
-    // ไม่เจอ v5 -- ไล่ fallback ทีละรุ่น v4 -> v3 -> v2 -> v1 (แต่ละชั้นเติม default ของรุ่นถัดขึ้นมา)
-    let v4Data = null;
-    let rawV4;
-    try { rawV4 = localStorage.getItem(SAVE_KEY_V4); } catch (e) { rawV4 = null; }
-    if (rawV4) {
-      try { v4Data = JSON.parse(rawV4); keysToClean.push(SAVE_KEY_V4); } catch (e) { v4Data = null; }
+    // ไม่เจอ v6 -- ไล่ fallback ทีละรุ่น v5 -> v4 -> v3 -> v2 -> v1 (แต่ละชั้นเติม default ของรุ่นถัดขึ้นมา)
+    let v5Data = null;
+    let rawV5;
+    try { rawV5 = localStorage.getItem(SAVE_KEY_V5); } catch (e) { rawV5 = null; }
+    if (rawV5) {
+      try { v5Data = JSON.parse(rawV5); keysToClean.push(SAVE_KEY_V5); } catch (e) { v5Data = null; }
     }
-    if (!v4Data) {
-      let rawV3;
-      try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
-      let v3Data = null;
-      if (rawV3) {
-        try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
+    if (!v5Data) {
+      let v4Data = null;
+      let rawV4;
+      try { rawV4 = localStorage.getItem(SAVE_KEY_V4); } catch (e) { rawV4 = null; }
+      if (rawV4) {
+        try { v4Data = JSON.parse(rawV4); keysToClean.push(SAVE_KEY_V4); } catch (e) { v4Data = null; }
       }
-      if (!v3Data) {
-        // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
-        let rawV2;
-        try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
-        let v2Data = null;
-        if (rawV2) {
-          try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
+      if (!v4Data) {
+        let rawV3;
+        try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
+        let v3Data = null;
+        if (rawV3) {
+          try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
         }
-        if (!v2Data) {
-          // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
-          let rawV1;
-          try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
-          if (rawV1) {
-            try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+        if (!v3Data) {
+          // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
+          let rawV2;
+          try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
+          let v2Data = null;
+          if (rawV2) {
+            try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
           }
+          if (!v2Data) {
+            // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
+            let rawV1;
+            try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
+            if (rawV1) {
+              try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+            }
+          }
+          if (v2Data) v3Data = fillV3Defaults(v2Data);
         }
-        if (v2Data) v3Data = fillV3Defaults(v2Data);
+        if (v3Data) v4Data = fillV4Defaults(v3Data);
       }
-      if (v3Data) v4Data = fillV4Defaults(v3Data);
+      if (v4Data) v5Data = fillV5Defaults(v4Data);
     }
-    if (v4Data) {
-      data = fillV5Defaults(v4Data);
+    if (v5Data) {
+      data = fillV6Defaults(v5Data);
       needsResave = true;
     }
   }
@@ -1700,12 +1826,13 @@ function loadGame() {
     missionIndex: Math.max(0, data.missionIndex || 0),
     missionProgress: Math.max(0, data.missionProgress || 0),
     stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
+    prestige: Object.assign(defaultPrestige(), data.prestige || {}),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
   });
   if (needsResave) {
-    saveGame(); // เขียนเป็น v4 ทันทีหลัง migrate สำเร็จ
+    saveGame(); // เขียนเป็น v6 ทันทีหลัง migrate สำเร็จ
     keysToClean.forEach(key => { try { localStorage.removeItem(key); } catch (e) { /* ไม่เป็นไรถ้าลบไม่ได้ */ } });
   }
 }
@@ -1727,7 +1854,8 @@ function getUpgradeCost(key) {
 function getRevenuePerSale() {
   const level = player.upgradeLevels.portion;
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
-  return getStage().baseRevenue * (1 + bonus);
+  // คูณ prestige ด้วย — ฟังก์ชันนี้ป้อน income tracker (offline earnings / Golden Goblin) ให้สเกลตามชื่อเสียง
+  return getStage().baseRevenue * (1 + bonus) * getPrestigeMultiplier();
 }
 
 /* ===== Multi-Station (3 สถานีต่อด่าน ดู STATION_SETS ใน data.js) =====
@@ -1746,7 +1874,18 @@ function getUnlockedStationIndices() {
 function getStationRevenue(i) {
   const level = getStationLevel(i);
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
-  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus);
+  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus) * getPrestigeMultiplier();
+}
+
+/* ===== Prestige (systems/prestige.js) — ตัวคูณรายได้ถาวรจากชื่อเสียง + จำนวน renown ที่จะได้ถ้ากดตอนนี้ ===== */
+function getPrestigeMultiplier() {
+  return 1 + player.prestige.renown * PRESTIGE_MULT_PER_RENOWN;
+}
+function getGoldThisCycle() {
+  return Math.max(0, player.stats.totalGoldEarned - player.prestige.goldAtCycleStart);
+}
+function getRenownGain() {
+  return Math.floor(Math.sqrt(getGoldThisCycle() / RENOWN_DIVISOR));
 }
 function getStationUpgradeCost(i) {
   if (i === 0) return getUpgradeCost('portion');
@@ -2759,6 +2898,53 @@ function tickBuffs() {
 </script>
 <script>
 /* =====================================================================
+   Prestige / เกิดใหม่ — รีเซ็ตความคืบหน้ารอบนี้เพื่อแลกชื่อเสียง (renown 🏅)
+   ที่ให้ตัวคูณรายได้ถาวรข้ามรอบ (getPrestigeMultiplier ใน formulas.js)
+   เก็บไว้ไม่รีเซ็ต: gems, prestige, identity, settings, stats (สะสมทั้งชีวิต)
+   รีเซ็ต: gold, ด่าน, อัปเกรด, สถานีเสริม, ภารกิจ, ลูกมือ, คลัง Vault, milestone flags
+   goldThisCycle คำนวณจาก totalGoldEarned (แหล่งเดียวที่ทุกรายได้บวกเข้าอยู่แล้ว) ลบ snapshot
+   จึงไม่ต้องดัก event รายได้หลายจุด — decoupled โดยสมบูรณ์
+   ===================================================================== */
+function canPrestige() {
+  return getRenownGain() >= 1;
+}
+
+function doPrestige() {
+  const gain = getRenownGain();
+  if (gain < 1) return null; // ยังไม่คุ้ม (goldThisCycle น้อยเกินจนได้ 0 renown)
+
+  player.prestige.renown += gain;
+  player.prestige.count += 1;
+  player.prestige.goldAtCycleStart = player.stats.totalGoldEarned; // เริ่มนับ cycle ใหม่จากยอดสะสมปัจจุบัน
+  player.gems += PRESTIGE_MIN_GEMS_REWARD; // โบนัสเพชรเล็กๆ ทุกครั้ง
+
+  // ---- รีเซ็ตความคืบหน้ารอบนี้ (คงของถาวรไว้) ----
+  player.gold = 0;
+  player.stageIndex = 0;
+  player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
+  player.stationsExtra = defaultStationsExtra();
+  player.staffCount = 0;
+  player.vaultLevel = 0;
+  player.milestonesShown = {};
+  player.missionIndex = 0;
+  player.missionProgress = 0;
+  player.inventory = defaultInventory();
+
+  saveGame();
+
+  // รีเซ็ตฉากเหมือน advanceStage: ล้างลูกค้า/เหรียญ + สร้าง worker ใหม่ + รีสตาร์ท spawn loop
+  clearAllCustomers();
+  initWorkers();
+  GameEvents.emit(EVENTS.STAGE_ADVANCED, { stageIndex: 0 }); // ให้ทุก UI รีเฟรชเป็นด่าน 1
+  GameEvents.emit(EVENTS.PRESTIGE_DONE, { renownGained: gain, totalRenown: player.prestige.renown });
+  scheduleNextCustomer();
+  playSfxStageComplete();
+  spawnConfetti(60);
+  return gain;
+}
+</script>
+<script>
+/* =====================================================================
    Upgrades / Stage progression
    ===================================================================== */
 function buyUpgrade(key) {
@@ -3282,9 +3468,23 @@ function openUpgradesModal() {
   renderUpgradeList();
   renderPermUpgradeList();
   renderBuffPanel();
+  renderPrestigeRow();
   renderStatsFooter();
   document.getElementById('upgradesModal').classList.add('show');
 }
+
+// แถวเกิดใหม่ในหน้าอัปเกรด — โชว์ตัวคูณปัจจุบัน + renown ที่จะได้ถ้ากดตอนนี้ (เด้งเมื่อคุ้มค่า)
+function renderPrestigeRow() {
+  const row = document.getElementById('prestigeRow');
+  const gain = getRenownGain();
+  document.getElementById('prestigeRowMult').textContent = `x${getPrestigeMultiplier().toFixed(2)}`;
+  document.getElementById('prestigeRowGain').textContent = `+${formatCompact(gain)} 🏅`;
+  document.getElementById('prestigeRowSub').textContent = gain >= 1
+    ? 'พร้อมเกิดใหม่! แตะเพื่อดูรายละเอียด'
+    : 'เริ่มร้านใหม่ แลกชื่อเสียงเพิ่มรายได้ถาวร';
+  row.classList.toggle('prestige-row--ready', gain >= 1);
+}
+document.getElementById('prestigeRow').addEventListener('click', () => openPrestigeModal());
 
 function anyUpgradeAffordable() {
   const stageUpgradeOk = UPGRADE_TYPES.some(u =>
@@ -3406,6 +3606,7 @@ document.getElementById('btnToggleSound').addEventListener('click', () => {
 document.getElementById('btnResetGame').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  try { localStorage.removeItem(SAVE_KEY_V5); } catch (e) {} // กันเซฟ v5 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V4); } catch (e) {} // กันเซฟ v4 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V3); } catch (e) {} // กันเซฟ v3 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V2); } catch (e) {} // กันเซฟ v2 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
@@ -3610,6 +3811,70 @@ GameEvents.on(EVENTS.BUFF_ENDED, () => { renderBuffPanel(); renderActiveBuffChip
 </script>
 <script>
 /* =====================================================================
+   Prestige Modal + Renown HUD chip
+   - เปิดจากปุ่ม "เกิดใหม่" ในหน้าต่างอัปเกรด (⬆️) หรือหน้าจบเกม
+   - โชว์ชื่อเสียง/ตัวคูณปัจจุบัน + พรีวิวว่าเกิดใหม่ตอนนี้จะได้ renown เท่าไหร่ (ตัวคูณใหม่เท่าไหร่)
+   - ปุ่มยืนยันปิดถ้ายังได้ 0 renown (ยังหาเงินรอบนี้ไม่พอ)
+   ===================================================================== */
+function renderRenown() {
+  const chip = document.getElementById('renownCounter');
+  // โชว์ชิปเฉพาะเมื่อเคยเกิดใหม่แล้ว (มี renown) — ช่วงต้นเกมยังไม่มี ไม่ต้องรก HUD
+  if (player.prestige.renown > 0) {
+    chip.classList.add('show');
+    document.getElementById('renownValue').textContent = formatCompact(player.prestige.renown);
+  } else {
+    chip.classList.remove('show');
+  }
+}
+
+function renderPrestigeModal() {
+  const gain = getRenownGain();
+  const curMult = getPrestigeMultiplier();
+  const nextMult = 1 + (player.prestige.renown + gain) * PRESTIGE_MULT_PER_RENOWN;
+  document.getElementById('prestigeCurrentRenown').textContent = `${formatCompact(player.prestige.renown)} 🏅`;
+  document.getElementById('prestigeCurrentMult').textContent = `x${curMult.toFixed(2)}`;
+  document.getElementById('prestigeGain').textContent = `+${formatCompact(gain)} 🏅`;
+  document.getElementById('prestigeNextMult').textContent = `x${nextMult.toFixed(2)}`;
+
+  const btn = document.getElementById('btnConfirmPrestige');
+  const ready = gain >= 1;
+  btn.disabled = !ready;
+  document.getElementById('prestigeGateText').textContent = ready
+    ? ''
+    : `หาเงินให้ได้มากกว่านี้ก่อน แล้วค่อยเกิดใหม่ให้คุ้ม (ยิ่งรวยรอบนี้ ยิ่งได้ชื่อเสียงเยอะ)`;
+}
+
+function openPrestigeModal() {
+  renderPrestigeModal();
+  document.getElementById('prestigeModal').classList.add('show');
+}
+function closePrestigeModal() {
+  document.getElementById('prestigeModal').classList.remove('show');
+}
+
+document.getElementById('btnClosePrestige').addEventListener('click', () => closePrestigeModal());
+document.getElementById('btnConfirmPrestige').addEventListener('click', () => {
+  const gained = doPrestige();
+  if (gained == null) return; // ยังไม่ถึงเกณฑ์ (ปุ่มควร disabled อยู่แล้ว กันไว้อีกชั้น)
+  closePrestigeModal();
+  document.getElementById('upgradesModal').classList.remove('show'); // เผื่อเปิดจากในหน้าอัปเกรด
+  const el = document.createElement('div');
+  el.className = 'milestone-toast';
+  el.innerHTML = `🏅 เกิดใหม่สำเร็จ! ได้ <b>${formatCompact(gained)}</b> ชื่อเสียง<br>ตัวคูณรายได้ x${getPrestigeMultiplier().toFixed(2)} ถาวร!`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+});
+
+// หน้าจบเกม: ปุ่ม "เกิดใหม่เลย!" เปิดหน้าต่าง prestige แทนแค่ปิดเฉยๆ
+document.getElementById('btnGameCompletePrestige').addEventListener('click', () => {
+  document.getElementById('gameCompleteModal').classList.remove('show');
+  openPrestigeModal();
+});
+
+GameEvents.on(EVENTS.PRESTIGE_DONE, () => { renderRenown(); renderAll(); });
+</script>
+<script>
+/* =====================================================================
    Rendering orchestrator — renderAll() คือจุดเดียวที่ compose การรีเฟรชทั้งจอ
    (ตอนโหลดเกม/ขึ้นด่านใหม่) ฟังก์ชัน render ย่อยแต่ละตัวถูกย้ายไปอยู่ใน ui/*.js
    ตามหน้าที่ของมันแล้ว (hud.js, stage-status-bar.js, upgrade-list.js, ...) —
@@ -3619,6 +3884,7 @@ GameEvents.on(EVENTS.BUFF_ENDED, () => { renderBuffPanel(); renderActiveBuffChip
 function renderAll() {
   renderGold();
   renderGems();
+  renderRenown();
   renderStageView();
   renderStageProgress();
   renderUpgradeList();

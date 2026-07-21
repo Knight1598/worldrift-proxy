@@ -8,6 +8,7 @@
 function renderAll() {
   renderGold();
   renderGems();
+  renderRenown();
   renderStageView();
   renderStageProgress();
   renderUpgradeList();

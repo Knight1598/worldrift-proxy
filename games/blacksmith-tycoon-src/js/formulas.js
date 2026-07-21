@@ -14,7 +14,8 @@ function getUpgradeCost(key) {
 function getRevenuePerSale() {
   const level = player.upgradeLevels.portion;
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
-  return getStage().baseRevenue * (1 + bonus);
+  // คูณ prestige ด้วย — ฟังก์ชันนี้ป้อน income tracker (offline earnings / Golden Goblin) ให้สเกลตามชื่อเสียง
+  return getStage().baseRevenue * (1 + bonus) * getPrestigeMultiplier();
 }
 
 /* ===== Multi-Station (3 สถานีต่อด่าน ดู STATION_SETS ใน data.js) =====
@@ -33,7 +34,18 @@ function getUnlockedStationIndices() {
 function getStationRevenue(i) {
   const level = getStationLevel(i);
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
-  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus);
+  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus) * getPrestigeMultiplier();
+}
+
+/* ===== Prestige (systems/prestige.js) — ตัวคูณรายได้ถาวรจากชื่อเสียง + จำนวน renown ที่จะได้ถ้ากดตอนนี้ ===== */
+function getPrestigeMultiplier() {
+  return 1 + player.prestige.renown * PRESTIGE_MULT_PER_RENOWN;
+}
+function getGoldThisCycle() {
+  return Math.max(0, player.stats.totalGoldEarned - player.prestige.goldAtCycleStart);
+}
+function getRenownGain() {
+  return Math.floor(Math.sqrt(getGoldThisCycle() / RENOWN_DIVISOR));
 }
 function getStationUpgradeCost(i) {
   if (i === 0) return getUpgradeCost('portion');

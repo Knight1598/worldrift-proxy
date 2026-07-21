@@ -183,7 +183,7 @@
     box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
     flex-shrink: 0;
   }
-  .gold-counter, .gem-counter {
+  .gold-counter, .gem-counter, .renown-counter {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -206,6 +206,16 @@
     border-left: 1px solid rgba(255,255,255,0.18);
     font-size: 0.68rem;
   }
+  /* ชื่อเสียง 🏅 — โชว์เฉพาะเมื่อเคยเกิดใหม่แล้ว (renderRenown เพิ่ม .show) กัน HUD รกช่วงต้นเกม */
+  .renown-counter {
+    display: none;
+    color: #ffcf5a;
+    margin-left: 8px;
+    padding-left: 8px;
+    border-left: 1px solid rgba(255,255,255,0.18);
+    font-size: 0.68rem;
+  }
+  .renown-counter.show { display: inline-flex; }
 
   .btn-tertiary {
     width: 30px; height: 30px;
@@ -1012,3 +1022,54 @@
     background: linear-gradient(180deg, #d8bfff, #8a5fe0);
     color: #241a42;
   }
+
+  /* ===== Prestige (เกิดใหม่) — โทนทอง/เหลืองอำพัน แยกจากม่วง(บัพ)/น้ำตาล(อัปเกรด) ===== */
+  .section-label--prestige { color: #ffcf5a; display: flex; align-items: center; gap: 5px; }
+  .section-label--prestige::before {
+    content: ''; width: 3px; height: 10px; background: #ffcf5a; border-radius: 2px; display: inline-block;
+  }
+  .prestige-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    background: linear-gradient(135deg, #3a2e12, #241c0a);
+    border: 3px solid #c9941f;
+    border-radius: 3px;
+    padding: 8px 10px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+    cursor: pointer;
+    color: var(--text-main);
+    font-family: inherit;
+  }
+  .prestige-row:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,0.5); }
+  .prestige-row-icon { font-size: 1.5rem; flex-shrink: 0; }
+  .prestige-row-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .prestige-row-title { font-weight: bold; font-size: 0.78rem; color: #ffe08a; }
+  .prestige-row-sub { font-size: 0.6rem; color: var(--text-dim); margin-top: 1px; }
+  .prestige-row-gain {
+    flex-shrink: 0; font-weight: bold; font-size: 0.72rem; color: #ffcf5a;
+    background: rgba(0,0,0,0.4); border-radius: 4px; padding: 4px 8px;
+  }
+  .prestige-row--ready { animation: prestigeReadyPulse 1.3s ease-in-out infinite; }
+  @keyframes prestigeReadyPulse {
+    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 8px 1px rgba(255,207,90,0.4); }
+    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 16px 4px rgba(255,207,90,0.75); }
+  }
+
+  /* หน้าต่าง Prestige */
+  .prestige-box { position: relative; padding-top: 30px; }
+  .prestige-intro { margin-top: -4px !important; }
+  .prestige-stats { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .prestige-stat {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #f1e8d5; border-radius: 8px; padding: 7px 12px;
+    font-size: 0.8rem; color: #4a3728;
+  }
+  .prestige-stat-label { color: #8a7a60; font-weight: bold; }
+  .prestige-stat-val { font-weight: bold; font-variant-numeric: tabular-nums; }
+  .prestige-stat--gain { background: #fff2cc; }
+  .prestige-stat--gain .prestige-stat-val { color: #b8860b; }
+  .prestige-warn { font-size: 0.68rem !important; color: #a06a1a !important; margin: 0 0 12px !important; line-height: 1.5; }
+  .prestige-gate-text { font-size: 0.72rem !important; color: var(--primary-dark) !important; font-weight: bold; margin: 10px 0 0 !important; }

@@ -94,6 +94,15 @@ const APPROX_ORDER_TRAVEL_PX = 240; // ลดลงหลังตัดขา�
 const RENOVATE_GATE_LEVEL = 15;   // ลดจาก 25 -> 15 ตามคำขอ "เดินเกมเร็วขึ้น" (ยังคงคอนเซ็ปต์ gate เดียวแบบคลิป)
 const RENOVATE_REWARD_GEMS = 10;  // รางวัลเพชรตอน Renovate สำเร็จ (คลิปมีช่อง Rewards ในหน้าต่าง Renovate)
 
+// ===== Prestige / เกิดใหม่ (ชื่อเสียงช่างตีเหล็ก 🏅) =====
+// รีเซ็ตความคืบหน้ารอบนี้ (gold/ด่าน/อัปเกรด/สถานี/ภารกิจ/ลูกมือ/คลัง) เพื่อแลก "ชื่อเสียง" (renown)
+// ที่ให้ตัวคูณรายได้ถาวรข้ามรอบ — ทำให้เกมเล่นได้ไม่รู้จบ (เก็บ gems/renown/identity/settings/สถิติสะสมไว้)
+// renown ที่ได้ = floor(sqrt(goldThisCycle / RENOWN_DIVISOR)) — รากที่สองให้ผลตอบแทนค่อยๆ ลด (โค้ง prestige คลาสสิก)
+// goldThisCycle คำนวณจาก player.stats.totalGoldEarned (สะสมทุกแหล่งอยู่แล้ว) ลบ snapshot ตอนเริ่มรอบ
+const RENOWN_DIVISOR = 800;             // ปรับด้วย sim: เล่นจบเกม 1 รอบ (~119K gold) = ~12 renown (+24% รายได้)
+const PRESTIGE_MULT_PER_RENOWN = 0.02;  // renown 1 หน่วย = +2% รายได้ทุกสถานี (50 renown = x2)
+const PRESTIGE_MIN_GEMS_REWARD = 5;     // โบนัสเพชรก้อนเล็กตอน prestige (ให้รู้สึกคุ้มทุกรอบ ไม่ใช่แค่ตัวคูณ)
+
 // ===== หลายสถานีในด่านเดียว (Multi-Station แบบ Eatventure) =====
 // แต่ละด่านมี 3 สถานี: สถานีหลัก (ปลดล็อกอยู่แล้ว ใช้ระบบเลเวลสินค้าเดิม) + สถานีเสริม 2 ตัว
 // ปลดล็อกด้วย Gold แล้วอัปเลเวลแยกของใครของมัน สินค้าแพงขึ้นตาม revenueMult — จังหวะ "เก็บเงินก้อนปลดล็อกโต๊ะใหม่"
@@ -229,7 +238,8 @@ const BUFF_DEFS = [
     desc: 'ได้ Gold ก้อนโตทันที (อิงรายได้ต่อนาทีปัจจุบัน)' },
 ];
 
-const SAVE_KEY = 'blacksmithTycoonSave_v5';
+const SAVE_KEY = 'blacksmithTycoonSave_v6';
+const SAVE_KEY_V5 = 'blacksmithTycoonSave_v5'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V4 = 'blacksmithTycoonSave_v4'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V3 = 'blacksmithTycoonSave_v3'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V2 = 'blacksmithTycoonSave_v2'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก

@@ -29,6 +29,7 @@
     <div class="hud-currency-group">
       <div class="gold-counter"><img class="coin-icon" src="../assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
       <div class="gem-counter" id="gemCounter" title="เพชร — ได้จาก Order Missions ใช้สุ่มบัพ">💎<span id="gemValue" class="pixel-num">0</span></div>
+      <div class="renown-counter" id="renownCounter" title="ชื่อเสียง — จากการเกิดใหม่ ให้ตัวคูณรายได้ถาวร">🏅<span id="renownValue" class="pixel-num">0</span></div>
     </div>
     <div class="hud-title">⚒️ Blacksmith Tycoon</div>
     <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
@@ -62,6 +63,15 @@
       <div class="upgrade-list" id="upgradeList"></div>
       <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
       <div class="upgrade-list" id="permUpgradeList"></div>
+      <div class="section-label section-label--prestige">เกิดใหม่ (ชื่อเสียงถาวร ข้ามทุกด่าน)</div>
+      <button class="prestige-row" id="prestigeRow">
+        <span class="prestige-row-icon">🏅</span>
+        <span class="prestige-row-info">
+          <span class="prestige-row-title">เกิดใหม่ · <span id="prestigeRowMult">x1.00</span></span>
+          <span class="prestige-row-sub" id="prestigeRowSub">เริ่มร้านใหม่ แลกชื่อเสียงเพิ่มรายได้ถาวร</span>
+        </span>
+        <span class="prestige-row-gain" id="prestigeRowGain">+0 🏅</span>
+      </button>
       <div class="stats-footer" id="statsFooter"></div>
     </div>
   </div>
@@ -135,8 +145,27 @@
     <div class="modal-emoji-big">👑</div>
     <h2>สร้างอาณาจักรช่างตีเหล็กสำเร็จ!</h2>
     <p class="game-complete-reward" id="gameCompleteRewardText"></p>
-    <p>คุณอัปเกรดร้านจนสุดทางแล้วในเวอร์ชันนี้ ขอบคุณที่เล่นจนจบ — ระบบใหม่กำลังจะตามมาเร็วๆ นี้!</p>
-    <button class="btn-cta-mega" id="btnCloseGameComplete">เยี่ยมไปเลย!</button>
+    <p>อัปเกรดร้านจนสุดทางแล้ว! ถึงเวลา <b>เกิดใหม่</b> — เริ่มร้านใหม่พร้อมชื่อเสียงที่ทำให้รวยไวขึ้นตลอดไป</p>
+    <button class="btn-cta-mega" id="btnGameCompletePrestige">🏅 เกิดใหม่เลย!</button>
+    <button class="btn-secondary-modal" id="btnCloseGameComplete">ไว้ก่อน</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="prestigeModal">
+  <div class="modal-box prestige-box">
+    <button class="modal-close-x" id="btnClosePrestige">✕</button>
+    <div class="modal-emoji-big">🏅</div>
+    <h2>เกิดใหม่ (Prestige)</h2>
+    <p class="prestige-intro">เริ่มร้านใหม่ตั้งแต่ต้น แต่ได้ <b>ชื่อเสียง</b> ที่เพิ่มรายได้ทุกสถานีอย่างถาวร</p>
+    <div class="prestige-stats">
+      <div class="prestige-stat"><span class="prestige-stat-label">ชื่อเสียงตอนนี้</span><span class="prestige-stat-val" id="prestigeCurrentRenown">0 🏅</span></div>
+      <div class="prestige-stat"><span class="prestige-stat-label">ตัวคูณรายได้ตอนนี้</span><span class="prestige-stat-val" id="prestigeCurrentMult">x1.00</span></div>
+      <div class="prestige-stat prestige-stat--gain"><span class="prestige-stat-label">เกิดใหม่รอบนี้จะได้</span><span class="prestige-stat-val" id="prestigeGain">+0 🏅</span></div>
+      <div class="prestige-stat prestige-stat--gain"><span class="prestige-stat-label">ตัวคูณใหม่จะเป็น</span><span class="prestige-stat-val" id="prestigeNextMult">x1.00</span></div>
+    </div>
+    <p class="prestige-warn">⚠️ Gold / ด่าน / อัปเกรด / สถานี / ลูกมือ จะรีเซ็ต — แต่ 💎 เพชร และ 🏅 ชื่อเสียง จะอยู่ครบ</p>
+    <button class="btn-cta-mega" id="btnConfirmPrestige">🏅 เกิดใหม่!</button>
+    <p class="prestige-gate-text" id="prestigeGateText"></p>
   </div>
 </div>
 
@@ -160,6 +189,7 @@
 <script src="js/systems/leaderboard.js"></script>
 <script src="js/systems/missions.js"></script>
 <script src="js/systems/buffs.js"></script>
+<script src="js/systems/prestige.js"></script>
 <script src="js/progression.js"></script>
 <script src="js/ui/floating-text.js"></script>
 <script src="js/ui/hud.js"></script>
@@ -175,6 +205,7 @@
 <script src="js/ui/material-stock.js"></script>
 <script src="js/ui/stations.js"></script>
 <script src="js/ui/buff-roll.js"></script>
+<script src="js/ui/prestige-modal.js"></script>
 <script src="js/render.js"></script>
 <script src="js/main.js"></script>
 </body>

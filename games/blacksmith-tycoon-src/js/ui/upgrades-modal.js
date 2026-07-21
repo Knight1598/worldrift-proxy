@@ -7,9 +7,23 @@ function openUpgradesModal() {
   renderUpgradeList();
   renderPermUpgradeList();
   renderBuffPanel();
+  renderPrestigeRow();
   renderStatsFooter();
   document.getElementById('upgradesModal').classList.add('show');
 }
+
+// แถวเกิดใหม่ในหน้าอัปเกรด — โชว์ตัวคูณปัจจุบัน + renown ที่จะได้ถ้ากดตอนนี้ (เด้งเมื่อคุ้มค่า)
+function renderPrestigeRow() {
+  const row = document.getElementById('prestigeRow');
+  const gain = getRenownGain();
+  document.getElementById('prestigeRowMult').textContent = `x${getPrestigeMultiplier().toFixed(2)}`;
+  document.getElementById('prestigeRowGain').textContent = `+${formatCompact(gain)} 🏅`;
+  document.getElementById('prestigeRowSub').textContent = gain >= 1
+    ? 'พร้อมเกิดใหม่! แตะเพื่อดูรายละเอียด'
+    : 'เริ่มร้านใหม่ แลกชื่อเสียงเพิ่มรายได้ถาวร';
+  row.classList.toggle('prestige-row--ready', gain >= 1);
+}
+document.getElementById('prestigeRow').addEventListener('click', () => openPrestigeModal());
 
 function anyUpgradeAffordable() {
   const stageUpgradeOk = UPGRADE_TYPES.some(u =>

@@ -16,6 +16,11 @@ function defaultIdentity() {
 function defaultStationsExtra() {
   return { s1: { unlocked: false, level: 0 }, s2: { unlocked: false, level: 0 } };
 }
+function defaultPrestige() {
+  // renown = ชื่อเสียงสะสมถาวร, goldAtCycleStart = snapshot totalGoldEarned ตอนเริ่มรอบปัจจุบัน
+  // (goldThisCycle = totalGoldEarned - goldAtCycleStart), count = จำนวนครั้งที่เกิดใหม่
+  return { renown: 0, goldAtCycleStart: 0, count: 0 };
+}
 
 let player = {
   gold: 0,
@@ -30,6 +35,7 @@ let player = {
   missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
   missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
   stationsExtra: defaultStationsExtra(), // สถานีเสริมของด่านปัจจุบัน (Multi-Station ดู ui/stations.js)
+  prestige: defaultPrestige(),           // ชื่อเสียง/เกิดใหม่ (ดู systems/prestige.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
@@ -64,6 +70,7 @@ function saveGame() {
     missionIndex: player.missionIndex,
     missionProgress: player.missionProgress,
     stationsExtra: player.stationsExtra,
+    prestige: player.prestige,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -115,52 +122,70 @@ function fillV5Defaults(v4Data) {
   });
 }
 
+// เติมฟิลด์ใหม่ของ v6 (prestige — ชื่อเสียง/เกิดใหม่) ให้ข้อมูลทรง v5
+function fillV6Defaults(v5Data) {
+  const p = Object.assign({}, v5Data, { prestige: defaultPrestige() });
+  // ผู้เล่นเก่าเคยหาเงินมาแล้วก่อนมีระบบ prestige -- ตั้ง snapshot เป็นยอดสะสมปัจจุบัน ไม่ให้กด prestige แรก
+  // แล้วได้ renown ก้อนใหญ่จากเงินที่หามาก่อนระบบนี้จะมี (goldThisCycle เริ่มนับ 0 จากตรงนี้)
+  if (p.stats && typeof p.stats.totalGoldEarned === 'number') p.prestige.goldAtCycleStart = p.stats.totalGoldEarned;
+  return p;
+}
+
 function loadGame() {
   let raw;
   try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
   let data = null;
   if (raw) {
-    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v5 เสีย ลอง fallback ลงไปต่อ */ }
+    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v6 เสีย ลอง fallback ลงไปต่อ */ }
   }
   let needsResave = false;
   const keysToClean = [];
   if (!data) {
-    // ไม่เจอ v5 -- ไล่ fallback ทีละรุ่น v4 -> v3 -> v2 -> v1 (แต่ละชั้นเติม default ของรุ่นถัดขึ้นมา)
-    let v4Data = null;
-    let rawV4;
-    try { rawV4 = localStorage.getItem(SAVE_KEY_V4); } catch (e) { rawV4 = null; }
-    if (rawV4) {
-      try { v4Data = JSON.parse(rawV4); keysToClean.push(SAVE_KEY_V4); } catch (e) { v4Data = null; }
+    // ไม่เจอ v6 -- ไล่ fallback ทีละรุ่น v5 -> v4 -> v3 -> v2 -> v1 (แต่ละชั้นเติม default ของรุ่นถัดขึ้นมา)
+    let v5Data = null;
+    let rawV5;
+    try { rawV5 = localStorage.getItem(SAVE_KEY_V5); } catch (e) { rawV5 = null; }
+    if (rawV5) {
+      try { v5Data = JSON.parse(rawV5); keysToClean.push(SAVE_KEY_V5); } catch (e) { v5Data = null; }
     }
-    if (!v4Data) {
-      let rawV3;
-      try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
-      let v3Data = null;
-      if (rawV3) {
-        try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
+    if (!v5Data) {
+      let v4Data = null;
+      let rawV4;
+      try { rawV4 = localStorage.getItem(SAVE_KEY_V4); } catch (e) { rawV4 = null; }
+      if (rawV4) {
+        try { v4Data = JSON.parse(rawV4); keysToClean.push(SAVE_KEY_V4); } catch (e) { v4Data = null; }
       }
-      if (!v3Data) {
-        // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
-        let rawV2;
-        try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
-        let v2Data = null;
-        if (rawV2) {
-          try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
+      if (!v4Data) {
+        let rawV3;
+        try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
+        let v3Data = null;
+        if (rawV3) {
+          try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
         }
-        if (!v2Data) {
-          // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
-          let rawV1;
-          try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
-          if (rawV1) {
-            try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+        if (!v3Data) {
+          // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
+          let rawV2;
+          try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
+          let v2Data = null;
+          if (rawV2) {
+            try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
           }
+          if (!v2Data) {
+            // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
+            let rawV1;
+            try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
+            if (rawV1) {
+              try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+            }
+          }
+          if (v2Data) v3Data = fillV3Defaults(v2Data);
         }
-        if (v2Data) v3Data = fillV3Defaults(v2Data);
+        if (v3Data) v4Data = fillV4Defaults(v3Data);
       }
-      if (v3Data) v4Data = fillV4Defaults(v3Data);
+      if (v4Data) v5Data = fillV5Defaults(v4Data);
     }
-    if (v4Data) {
-      data = fillV5Defaults(v4Data);
+    if (v5Data) {
+      data = fillV6Defaults(v5Data);
       needsResave = true;
     }
   }
@@ -178,12 +203,13 @@ function loadGame() {
     missionIndex: Math.max(0, data.missionIndex || 0),
     missionProgress: Math.max(0, data.missionProgress || 0),
     stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
+    prestige: Object.assign(defaultPrestige(), data.prestige || {}),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
   });
   if (needsResave) {
-    saveGame(); // เขียนเป็น v4 ทันทีหลัง migrate สำเร็จ
+    saveGame(); // เขียนเป็น v6 ทันทีหลัง migrate สำเร็จ
     keysToClean.forEach(key => { try { localStorage.removeItem(key); } catch (e) { /* ไม่เป็นไรถ้าลบไม่ได้ */ } });
   }
 }
