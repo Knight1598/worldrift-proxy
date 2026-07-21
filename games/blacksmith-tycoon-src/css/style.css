@@ -288,6 +288,167 @@
   }
   .btn-tertiary:active { transform: translate(2px, 2px); box-shadow: none; }
 
+  /* ปุ่มเข้าโหมดเตาเดือด — แดงเด่น เด้งเรียกความสนใจ */
+  .btn-frenzy {
+    border: 2px solid #7a1010;
+    border-radius: 5px;
+    background: linear-gradient(180deg, #ff6a3d, #d61f1f);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: bold;
+    padding: 3px 7px;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+    animation: frenzyBtnPulse 1.1s ease-in-out infinite;
+  }
+  .btn-frenzy:active { transform: translate(2px, 2px); box-shadow: none; }
+  @keyframes frenzyBtnPulse {
+    0%,100% { box-shadow: 2px 2px 0 rgba(0,0,0,0.5), 0 0 6px 1px rgba(255,90,50,0.5); }
+    50%     { box-shadow: 2px 2px 0 rgba(0,0,0,0.5), 0 0 13px 3px rgba(255,90,50,0.9); }
+  }
+
+  /* ===== Forge Frenzy (โหมดเตาเดือด) overlay ===== */
+  .frenzy-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    display: none;
+    background: radial-gradient(circle at 50% 30%, #3a1410 0%, #160806 70%, #0a0403 100%);
+    justify-content: center;
+  }
+  .frenzy-overlay.show { display: flex; }
+  .frenzy-scene {
+    position: relative;
+    width: 100%; max-width: 440px; height: 100%;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 14px 14px 26px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .frenzy-quit {
+    position: absolute; top: 10px; right: 10px; z-index: 3;
+    width: 30px; height: 30px; border-radius: 4px;
+    border: 2px solid #7a1010; background: rgba(0,0,0,0.5); color: #ffb3a0;
+    font-size: 0.9rem; cursor: pointer;
+  }
+  .frenzy-top {
+    width: 100%; display: flex; justify-content: space-between; align-items: flex-start;
+    margin-top: 6px;
+  }
+  .frenzy-score-box, .frenzy-best-box {
+    font-size: 0.62rem; color: #ffcaa8; text-align: center; line-height: 1.5;
+  }
+  .frenzy-score-box .pixel-num { font-size: 1.5rem; color: #ffd76a; }
+  .frenzy-best-box .pixel-num { font-size: 1rem; color: #ffae7a; }
+  .frenzy-lives { font-size: 1.35rem; letter-spacing: 3px; margin-top: 10px; }
+  .frenzy-combo {
+    font-size: 1.1rem; font-weight: bold; color: #ff8a3d; margin-top: 6px; height: 1.3rem;
+    text-shadow: 1px 1px 0 #000; opacity: 0; transition: opacity 0.15s;
+  }
+  .frenzy-combo.show { opacity: 1; animation: frenzyComboPop 0.3s ease; }
+  @keyframes frenzyComboPop { 0% { transform: scale(0.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+  .frenzy-order {
+    margin-top: auto; margin-bottom: 14px;
+    width: 100%; max-width: 300px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .frenzy-timer-bg {
+    width: 100%; height: 16px; border-radius: 8px;
+    background: rgba(0,0,0,0.55); border: 2px solid #000; overflow: hidden;
+  }
+  .frenzy-timer-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #6bbf6b, #ffd76a);
+    transition: width 0.05s linear;
+  }
+  .frenzy-timer-fill.frenzy-timer-danger {
+    background: linear-gradient(90deg, #ff3030, #ff8a3d);
+    animation: frenzyDanger 0.35s ease-in-out infinite;
+  }
+  @keyframes frenzyDanger { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .frenzy-order-icon {
+    width: 96px; height: 96px; image-rendering: pixelated;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6));
+    animation: frenzyIconBob 0.9s ease-in-out infinite;
+  }
+  @keyframes frenzyIconBob { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
+  .frenzy-forge-bg {
+    width: 100%; height: 22px; border-radius: 6px;
+    background: rgba(0,0,0,0.55); border: 2px solid #000; overflow: hidden;
+    position: relative;
+  }
+  .frenzy-forge-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #ff9f45, #ffe08a);
+    transition: width 0.06s ease-out;
+  }
+  .frenzy-forge-label {
+    position: absolute; margin-top: -22px; width: 100%; text-align: center;
+    font-size: 0.75rem; color: #fff; text-shadow: 1px 1px 0 #000; line-height: 22px;
+    pointer-events: none;
+  }
+
+  .frenzy-anvil {
+    width: 88%; max-width: 340px; height: 128px;
+    border-radius: 18px;
+    border: 4px solid #7a1010;
+    background: linear-gradient(180deg, #ff7a4d, #c81d1d);
+    color: #fff; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    box-shadow: 0 7px 0 #7a1010, 0 10px 14px rgba(0,0,0,0.5);
+    user-select: none; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .frenzy-anvil-icon { font-size: 2.6rem; line-height: 1; }
+  .frenzy-anvil-text { font-size: 1.1rem; font-weight: bold; text-shadow: 1px 1px 0 rgba(0,0,0,0.4); }
+  .frenzy-anvil-hit { animation: frenzyAnvilHit 0.09s ease; }
+  @keyframes frenzyAnvilHit {
+    0% { transform: translateY(0) scale(1); box-shadow: 0 7px 0 #7a1010, 0 10px 14px rgba(0,0,0,0.5); }
+    100% { transform: translateY(5px) scale(0.97); box-shadow: 0 2px 0 #7a1010, 0 4px 8px rgba(0,0,0,0.5); }
+  }
+  .frenzy-anvil-serve { animation: frenzyAnvilServe 0.28s ease; }
+  @keyframes frenzyAnvilServe {
+    0% { filter: brightness(1); } 40% { filter: brightness(1.9) saturate(1.4); } 100% { filter: brightness(1); }
+  }
+  .frenzy-hint { font-size: 0.58rem; color: #b98a78; margin-top: 12px; text-align: center; }
+
+  .frenzy-shake { animation: frenzyShake 0.32s ease; }
+  @keyframes frenzyShake {
+    0%,100% { transform: translateX(0); }
+    15% { transform: translateX(-9px) rotate(-0.5deg); } 30% { transform: translateX(8px) rotate(0.5deg); }
+    45% { transform: translateX(-7px); } 60% { transform: translateX(6px); } 75% { transform: translateX(-3px); }
+  }
+  .frenzy-flash::after {
+    content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    background: rgba(255,40,40,0.45); animation: frenzyFlash 0.32s ease forwards;
+  }
+  @keyframes frenzyFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  .frenzy-gameover {
+    position: absolute; inset: 0; z-index: 6;
+    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    background: rgba(10,4,3,0.92);
+    text-align: center;
+  }
+  .frenzy-gameover.show { display: flex; animation: frenzyGoIn 0.3s ease; }
+  @keyframes frenzyGoIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+  .frenzy-go-title { font-size: 1.7rem; font-weight: bold; color: #ff5a3d; text-shadow: 2px 2px 0 #000; }
+  .frenzy-go-title.frenzy-newbest { color: #ffd76a; animation: frenzyDanger 0.5s ease-in-out infinite; }
+  .frenzy-go-row { font-size: 0.95rem; color: #ffcaa8; }
+  .frenzy-go-row b { color: #ffd76a; font-size: 1.15rem; }
+  .frenzy-retry {
+    margin-top: 6px; padding: 14px 34px; border-radius: 12px;
+    border: 3px solid #7a1010; background: linear-gradient(180deg, #ff7a4d, #c81d1d);
+    color: #fff; font-size: 1.1rem; font-weight: bold; cursor: pointer;
+    box-shadow: 0 5px 0 #7a1010; animation: frenzyBtnPulse 1s ease-in-out infinite;
+  }
+  .frenzy-retry:active { transform: translateY(4px); box-shadow: none; }
+  .frenzy-exit {
+    padding: 8px 20px; border-radius: 8px; border: 2px solid #555;
+    background: rgba(0,0,0,0.5); color: #ccc; font-size: 0.8rem; cursor: pointer;
+  }
+
   /* ===== Room layout (มุมมองแบบ Eatventure, ล่างขึ้นบน, ทุกอย่าง center แนวนอน) =====
      บน = สถานีผลิต (หลังร้าน) / กลาง = พื้นที่ว่างให้ Blacksmith วิ่งขึ้นลง / ล่าง = เคาน์เตอร์รับออเดอร์ (หน้าร้าน) */
   .stand-booth {

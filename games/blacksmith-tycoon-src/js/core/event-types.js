@@ -31,4 +31,8 @@ const EVENTS = {
   RUSH_STARTED:       'rush:started',        // startRush() — {}
   RUSH_ENDED:         'rush:ended',          // endRush() — {}
   ORDER_MISSED:       'order:missed',        // ลูกค้าหมดความอดทนขณะกำลังเสิร์ฟ — { cust } (คอมโบขาด+เสียทิป)
+  FRENZY_STARTED:     'frenzy:started',      // startFrenzy() — {}
+  FRENZY_SERVED:      'frenzy:served',       // serveFrenzyOrder() — { score, combo }
+  FRENZY_MISS:        'frenzy:miss',         // frenzyMiss() — { lives }
+  FRENZY_OVER:        'frenzy:over',         // frenzyGameOver() — { score, best, isNewBest }
 };

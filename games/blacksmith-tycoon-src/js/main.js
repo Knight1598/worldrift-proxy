@@ -19,6 +19,11 @@ function gameTick(ts) {
   let dt = ts - lastTickTime;
   lastTickTime = ts;
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
+  // โหมดเตาเดือด (Forge Frenzy) — ถ้ากำลังเล่นอยู่ นับเวลาถอยหลัง + อัปเดตหลอดแบบลื่นๆ (พักเกม idle ไว้เบื้องหลัง)
+  if (frenzyState.active) {
+    tickFrenzy(dt);
+    renderFrenzyLive();
+  }
   tickFever();
   tickCombo();
   tickRush();

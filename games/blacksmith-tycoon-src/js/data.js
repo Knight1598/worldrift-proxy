@@ -342,6 +342,25 @@ const INSTANT_EFFECTS = {
     apply() { const r = Math.max(20, Math.round(estimateIncomePerMinute() * 0.5)); player.gold += r; player.stats.totalGoldEarned += r; GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: r }); } },
 };
 
+// ===== Forge Frenzy (โหมดเตาเดือด) — score-attack โหดๆ ตายง่าย เก็บไฮสกอร์ เล่นเอาชนะตัวเอง =====
+// ออเดอร์โผล่ทีละอันพร้อมหลอดเวลานับถอยหลังไวมาก — แตะทั่งตีเหล็กรัวๆ ให้ครบก่อนหมดเวลา = เสิร์ฟ +คะแนน
+// พลาด (หมดเวลา) = เสีย 1 หัวใจ | หมดหัวใจ = จบเกม | ยิ่งเสิร์ฟยิ่งเวลาน้อยลง+ต้องตีเยอะขึ้น (เร่งจนตายแน่ๆ)
+const FRENZY_LIVES = 3;
+const FRENZY_ORDER_TIME_START_MS = 2600; // เวลาต่อออเดอร์ตอนเริ่ม
+const FRENZY_ORDER_TIME_MIN_MS = 750;    // เพดานล่าง (โหดสุด)
+const FRENZY_TIME_DECAY_MS = 42;         // เวลาลดลงต่อออเดอร์ที่เสิร์ฟสำเร็จ (เร่งความโหด)
+const FRENZY_FORGE_TAPS_START = 5;       // จำนวนแตะที่ต้องตีให้เต็มตอนเริ่ม
+const FRENZY_FORGE_TAPS_MAX = 15;        // เพดานบน
+const FRENZY_TAPS_PER_STEP = 6;          // ทุกๆ 6 ออเดอร์ ต้องตีเพิ่มอีก 1 แตะ
+const FRENZY_SCORE_BASE = 10;            // คะแนนฐานต่อการเสิร์ฟ (คูณด้วยคอมโบ)
+const FRENZY_COMBO_STEP = 0.5;           // คอมโบ +0.5x ต่อการเสิร์ฟต่อเนื่อง (พลาดแล้วรีเซ็ต)
+// ไอคอนสินค้าที่หมุนเวียนโผล่ในออเดอร์ (ภาพล้วนๆ ให้ไม่จำเจ ใช้สไปรต์จริงที่มีอยู่)
+const FRENZY_ITEM_ICONS = [
+  '../assets/blacksmith/sword_bronze.png', '../assets/blacksmith/sword_silver.png',
+  '../assets/blacksmith/sword_blue.png', '../assets/blacksmith/shield_wood.png',
+  '../assets/blacksmith/potion_red.png', '../assets/blacksmith/potion_blue.png',
+];
+
 const SAVE_KEY = 'blacksmithTycoonSave_v6';
 const SAVE_KEY_V5 = 'blacksmithTycoonSave_v5'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V4 = 'blacksmithTycoonSave_v4'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก

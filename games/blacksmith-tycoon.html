@@ -296,6 +296,167 @@
   }
   .btn-tertiary:active { transform: translate(2px, 2px); box-shadow: none; }
 
+  /* ปุ่มเข้าโหมดเตาเดือด — แดงเด่น เด้งเรียกความสนใจ */
+  .btn-frenzy {
+    border: 2px solid #7a1010;
+    border-radius: 5px;
+    background: linear-gradient(180deg, #ff6a3d, #d61f1f);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: bold;
+    padding: 3px 7px;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    text-shadow: 1px 1px 0 rgba(0,0,0,0.4);
+    animation: frenzyBtnPulse 1.1s ease-in-out infinite;
+  }
+  .btn-frenzy:active { transform: translate(2px, 2px); box-shadow: none; }
+  @keyframes frenzyBtnPulse {
+    0%,100% { box-shadow: 2px 2px 0 rgba(0,0,0,0.5), 0 0 6px 1px rgba(255,90,50,0.5); }
+    50%     { box-shadow: 2px 2px 0 rgba(0,0,0,0.5), 0 0 13px 3px rgba(255,90,50,0.9); }
+  }
+
+  /* ===== Forge Frenzy (โหมดเตาเดือด) overlay ===== */
+  .frenzy-overlay {
+    position: fixed; inset: 0; z-index: 500;
+    display: none;
+    background: radial-gradient(circle at 50% 30%, #3a1410 0%, #160806 70%, #0a0403 100%);
+    justify-content: center;
+  }
+  .frenzy-overlay.show { display: flex; }
+  .frenzy-scene {
+    position: relative;
+    width: 100%; max-width: 440px; height: 100%;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 14px 14px 26px;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  .frenzy-quit {
+    position: absolute; top: 10px; right: 10px; z-index: 3;
+    width: 30px; height: 30px; border-radius: 4px;
+    border: 2px solid #7a1010; background: rgba(0,0,0,0.5); color: #ffb3a0;
+    font-size: 0.9rem; cursor: pointer;
+  }
+  .frenzy-top {
+    width: 100%; display: flex; justify-content: space-between; align-items: flex-start;
+    margin-top: 6px;
+  }
+  .frenzy-score-box, .frenzy-best-box {
+    font-size: 0.62rem; color: #ffcaa8; text-align: center; line-height: 1.5;
+  }
+  .frenzy-score-box .pixel-num { font-size: 1.5rem; color: #ffd76a; }
+  .frenzy-best-box .pixel-num { font-size: 1rem; color: #ffae7a; }
+  .frenzy-lives { font-size: 1.35rem; letter-spacing: 3px; margin-top: 10px; }
+  .frenzy-combo {
+    font-size: 1.1rem; font-weight: bold; color: #ff8a3d; margin-top: 6px; height: 1.3rem;
+    text-shadow: 1px 1px 0 #000; opacity: 0; transition: opacity 0.15s;
+  }
+  .frenzy-combo.show { opacity: 1; animation: frenzyComboPop 0.3s ease; }
+  @keyframes frenzyComboPop { 0% { transform: scale(0.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+
+  .frenzy-order {
+    margin-top: auto; margin-bottom: 14px;
+    width: 100%; max-width: 300px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .frenzy-timer-bg {
+    width: 100%; height: 16px; border-radius: 8px;
+    background: rgba(0,0,0,0.55); border: 2px solid #000; overflow: hidden;
+  }
+  .frenzy-timer-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg, #6bbf6b, #ffd76a);
+    transition: width 0.05s linear;
+  }
+  .frenzy-timer-fill.frenzy-timer-danger {
+    background: linear-gradient(90deg, #ff3030, #ff8a3d);
+    animation: frenzyDanger 0.35s ease-in-out infinite;
+  }
+  @keyframes frenzyDanger { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .frenzy-order-icon {
+    width: 96px; height: 96px; image-rendering: pixelated;
+    filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6));
+    animation: frenzyIconBob 0.9s ease-in-out infinite;
+  }
+  @keyframes frenzyIconBob { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
+  .frenzy-forge-bg {
+    width: 100%; height: 22px; border-radius: 6px;
+    background: rgba(0,0,0,0.55); border: 2px solid #000; overflow: hidden;
+    position: relative;
+  }
+  .frenzy-forge-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #ff9f45, #ffe08a);
+    transition: width 0.06s ease-out;
+  }
+  .frenzy-forge-label {
+    position: absolute; margin-top: -22px; width: 100%; text-align: center;
+    font-size: 0.75rem; color: #fff; text-shadow: 1px 1px 0 #000; line-height: 22px;
+    pointer-events: none;
+  }
+
+  .frenzy-anvil {
+    width: 88%; max-width: 340px; height: 128px;
+    border-radius: 18px;
+    border: 4px solid #7a1010;
+    background: linear-gradient(180deg, #ff7a4d, #c81d1d);
+    color: #fff; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    box-shadow: 0 7px 0 #7a1010, 0 10px 14px rgba(0,0,0,0.5);
+    user-select: none; -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  .frenzy-anvil-icon { font-size: 2.6rem; line-height: 1; }
+  .frenzy-anvil-text { font-size: 1.1rem; font-weight: bold; text-shadow: 1px 1px 0 rgba(0,0,0,0.4); }
+  .frenzy-anvil-hit { animation: frenzyAnvilHit 0.09s ease; }
+  @keyframes frenzyAnvilHit {
+    0% { transform: translateY(0) scale(1); box-shadow: 0 7px 0 #7a1010, 0 10px 14px rgba(0,0,0,0.5); }
+    100% { transform: translateY(5px) scale(0.97); box-shadow: 0 2px 0 #7a1010, 0 4px 8px rgba(0,0,0,0.5); }
+  }
+  .frenzy-anvil-serve { animation: frenzyAnvilServe 0.28s ease; }
+  @keyframes frenzyAnvilServe {
+    0% { filter: brightness(1); } 40% { filter: brightness(1.9) saturate(1.4); } 100% { filter: brightness(1); }
+  }
+  .frenzy-hint { font-size: 0.58rem; color: #b98a78; margin-top: 12px; text-align: center; }
+
+  .frenzy-shake { animation: frenzyShake 0.32s ease; }
+  @keyframes frenzyShake {
+    0%,100% { transform: translateX(0); }
+    15% { transform: translateX(-9px) rotate(-0.5deg); } 30% { transform: translateX(8px) rotate(0.5deg); }
+    45% { transform: translateX(-7px); } 60% { transform: translateX(6px); } 75% { transform: translateX(-3px); }
+  }
+  .frenzy-flash::after {
+    content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none;
+    background: rgba(255,40,40,0.45); animation: frenzyFlash 0.32s ease forwards;
+  }
+  @keyframes frenzyFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  .frenzy-gameover {
+    position: absolute; inset: 0; z-index: 6;
+    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    background: rgba(10,4,3,0.92);
+    text-align: center;
+  }
+  .frenzy-gameover.show { display: flex; animation: frenzyGoIn 0.3s ease; }
+  @keyframes frenzyGoIn { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+  .frenzy-go-title { font-size: 1.7rem; font-weight: bold; color: #ff5a3d; text-shadow: 2px 2px 0 #000; }
+  .frenzy-go-title.frenzy-newbest { color: #ffd76a; animation: frenzyDanger 0.5s ease-in-out infinite; }
+  .frenzy-go-row { font-size: 0.95rem; color: #ffcaa8; }
+  .frenzy-go-row b { color: #ffd76a; font-size: 1.15rem; }
+  .frenzy-retry {
+    margin-top: 6px; padding: 14px 34px; border-radius: 12px;
+    border: 3px solid #7a1010; background: linear-gradient(180deg, #ff7a4d, #c81d1d);
+    color: #fff; font-size: 1.1rem; font-weight: bold; cursor: pointer;
+    box-shadow: 0 5px 0 #7a1010; animation: frenzyBtnPulse 1s ease-in-out infinite;
+  }
+  .frenzy-retry:active { transform: translateY(4px); box-shadow: none; }
+  .frenzy-exit {
+    padding: 8px 20px; border-radius: 8px; border: 2px solid #555;
+    background: rgba(0,0,0,0.5); color: #ccc; font-size: 0.8rem; cursor: pointer;
+  }
+
   /* ===== Room layout (มุมมองแบบ Eatventure, ล่างขึ้นบน, ทุกอย่าง center แนวนอน) =====
      บน = สถานีผลิต (หลังร้าน) / กลาง = พื้นที่ว่างให้ Blacksmith วิ่งขึ้นลง / ล่าง = เคาน์เตอร์รับออเดอร์ (หน้าร้าน) */
   .stand-booth {
@@ -1298,6 +1459,7 @@
     </div>
     <div class="hud-title">⚒️ Blacksmith Tycoon</div>
     <div class="hud-btn-group">
+      <button class="btn-frenzy" id="btnOpenFrenzy" title="โหมดเตาเดือด — ท้าทายเก็บไฮสกอร์!">🔥 เตาเดือด</button>
       <button class="btn-tertiary" id="btnOpenRewards" title="รางวัล & ความสำเร็จ">🏆<span class="hud-badge" id="rewardsBadge"></span></button>
       <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
     </div>
@@ -1551,6 +1713,10 @@ const EVENTS = {
   RUSH_STARTED:       'rush:started',        // startRush() — {}
   RUSH_ENDED:         'rush:ended',          // endRush() — {}
   ORDER_MISSED:       'order:missed',        // ลูกค้าหมดความอดทนขณะกำลังเสิร์ฟ — { cust } (คอมโบขาด+เสียทิป)
+  FRENZY_STARTED:     'frenzy:started',      // startFrenzy() — {}
+  FRENZY_SERVED:      'frenzy:served',       // serveFrenzyOrder() — { score, combo }
+  FRENZY_MISS:        'frenzy:miss',         // frenzyMiss() — { lives }
+  FRENZY_OVER:        'frenzy:over',         // frenzyGameOver() — { score, best, isNewBest }
 };
 </script>
 <script>
@@ -1969,6 +2135,25 @@ const INSTANT_EFFECTS = {
     apply() { const r = Math.max(20, Math.round(estimateIncomePerMinute() * 0.5)); player.gold += r; player.stats.totalGoldEarned += r; GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: r }); } },
 };
 
+// ===== Forge Frenzy (โหมดเตาเดือด) — score-attack โหดๆ ตายง่าย เก็บไฮสกอร์ เล่นเอาชนะตัวเอง =====
+// ออเดอร์โผล่ทีละอันพร้อมหลอดเวลานับถอยหลังไวมาก — แตะทั่งตีเหล็กรัวๆ ให้ครบก่อนหมดเวลา = เสิร์ฟ +คะแนน
+// พลาด (หมดเวลา) = เสีย 1 หัวใจ | หมดหัวใจ = จบเกม | ยิ่งเสิร์ฟยิ่งเวลาน้อยลง+ต้องตีเยอะขึ้น (เร่งจนตายแน่ๆ)
+const FRENZY_LIVES = 3;
+const FRENZY_ORDER_TIME_START_MS = 2600; // เวลาต่อออเดอร์ตอนเริ่ม
+const FRENZY_ORDER_TIME_MIN_MS = 750;    // เพดานล่าง (โหดสุด)
+const FRENZY_TIME_DECAY_MS = 42;         // เวลาลดลงต่อออเดอร์ที่เสิร์ฟสำเร็จ (เร่งความโหด)
+const FRENZY_FORGE_TAPS_START = 5;       // จำนวนแตะที่ต้องตีให้เต็มตอนเริ่ม
+const FRENZY_FORGE_TAPS_MAX = 15;        // เพดานบน
+const FRENZY_TAPS_PER_STEP = 6;          // ทุกๆ 6 ออเดอร์ ต้องตีเพิ่มอีก 1 แตะ
+const FRENZY_SCORE_BASE = 10;            // คะแนนฐานต่อการเสิร์ฟ (คูณด้วยคอมโบ)
+const FRENZY_COMBO_STEP = 0.5;           // คอมโบ +0.5x ต่อการเสิร์ฟต่อเนื่อง (พลาดแล้วรีเซ็ต)
+// ไอคอนสินค้าที่หมุนเวียนโผล่ในออเดอร์ (ภาพล้วนๆ ให้ไม่จำเจ ใช้สไปรต์จริงที่มีอยู่)
+const FRENZY_ITEM_ICONS = [
+  'assets/blacksmith/sword_bronze.png', 'assets/blacksmith/sword_silver.png',
+  'assets/blacksmith/sword_blue.png', 'assets/blacksmith/shield_wood.png',
+  'assets/blacksmith/potion_red.png', 'assets/blacksmith/potion_blue.png',
+];
+
 const SAVE_KEY = 'blacksmithTycoonSave_v6';
 const SAVE_KEY_V5 = 'blacksmithTycoonSave_v5'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V4 = 'blacksmithTycoonSave_v4'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
@@ -2033,6 +2218,7 @@ let player = {
   daily: { lastClaimDay: null, streak: 0 }, // รางวัลล็อกอินรายวัน (lastClaimDay = 'YYYY-M-D')
   tutorialSeen: false,                   // เคยดูป๊อปอัพสอนเล่นครั้งแรกแล้วหรือยัง
   objectiveIndex: 0,                     // เควสนำทางลำดับที่กำลังทำอยู่ (ดู systems/objectives.js)
+  frenzyBest: 0,                         // ไฮสกอร์โหมดเตาเดือด (ดู features/frenzy.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true, musicEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 },
@@ -2074,6 +2260,7 @@ function saveGame() {
     daily: player.daily,
     tutorialSeen: player.tutorialSeen,
     objectiveIndex: player.objectiveIndex,
+    frenzyBest: player.frenzyBest,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -2217,6 +2404,7 @@ function loadGame() {
     daily: Object.assign({ lastClaimDay: null, streak: 0 }, data.daily || {}),
     tutorialSeen: !!data.tutorialSeen,
     objectiveIndex: Math.max(0, data.objectiveIndex || 0),
+    frenzyBest: Math.max(0, data.frenzyBest || 0),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 }, data.stats || {}),
@@ -2455,6 +2643,8 @@ function playSfxCashRegister() { playTone(1200, 0.05, 'square', 0.08); playTone(
 function playSfxUpgrade() { [523, 659, 784].forEach((f, i) => playTone(f, 0.1, 'triangle', 0.09, i * 0.05)); }
 function playSfxStageComplete() { [523, 659, 784, 1047, 1319].forEach((f, i) => playTone(f, 0.16, 'triangle', 0.11, i * 0.09)); }
 function playSfxTap() { playTone(700, 0.03, 'square', 0.05); }
+// เสียงพลาด (โหมดเตาเดือด) — บัซเซอร์ต่ำหยาบๆ สื่อ "พลาด!" ให้หัวร้อน
+function playSfxError() { playTone(160, 0.18, 'sawtooth', 0.12); playTone(120, 0.22, 'sawtooth', 0.1, 0.05); }
 // เสียงอัปเกรดอุปกรณ์ (buyEquipmentUpgrade) — ทำนองไต่ขึ้น 4 โน้ตแบบ sine ให้ความรู้สึก "วิบวับ/ตีเหล็กเสร็จ"
 // แยกจาก playSfxUpgrade (triangle 3 โน้ต) — คงชื่อ playSfxBuffRoll ไว้เพื่อไม่ต้องแก้จุดเรียกหลายที่
 function playSfxBuffRoll() { [880, 1108, 1318, 1760].forEach((f, i) => playTone(f, 0.09, 'sine', 0.09, i * 0.04)); }
@@ -4905,6 +5095,215 @@ function renderAll() {
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
 </script>
+<!-- ===== Forge Frenzy (โหมดเตาเดือด) overlay ===== -->
+<div class="frenzy-overlay" id="frenzyOverlay">
+  <div class="frenzy-scene" id="frenzyScene">
+    <button class="frenzy-quit" id="frenzyQuit">✕</button>
+    <div class="frenzy-top">
+      <div class="frenzy-score-box">คะแนน<br><span class="pixel-num" id="frenzyScore">0</span></div>
+      <div class="frenzy-best-box">🏆 สูงสุด<br><span class="pixel-num" id="frenzyBest">0</span></div>
+    </div>
+    <div class="frenzy-lives" id="frenzyLives">❤️❤️❤️</div>
+    <div class="frenzy-combo" id="frenzyCombo"></div>
+    <div class="frenzy-order" id="frenzyOrder">
+      <div class="frenzy-timer-bg"><div class="frenzy-timer-fill" id="frenzyTimerFill"></div></div>
+      <img class="frenzy-order-icon" id="frenzyOrderIcon" src="" alt="">
+      <div class="frenzy-forge-bg"><div class="frenzy-forge-fill" id="frenzyForgeFill"></div></div>
+      <div class="frenzy-forge-label pixel-num" id="frenzyForgeLabel">0/5</div>
+    </div>
+    <button class="frenzy-anvil" id="frenzyAnvil"><span class="frenzy-anvil-icon">🔨</span><span class="frenzy-anvil-text">ตี!</span></button>
+    <div class="frenzy-hint">แตะ "ตี!" รัวๆ ให้ครบก่อนหลอดเวลาหมด — พลาด 3 ครั้งจบเกม!</div>
+    <div class="frenzy-gameover" id="frenzyGameover">
+      <div class="frenzy-go-title" id="frenzyGoTitle">จบเกม!</div>
+      <div class="frenzy-go-row">คะแนน <b id="frenzyGoScore">0</b></div>
+      <div class="frenzy-go-row">🏆 สถิติสูงสุด <b id="frenzyGoBest">0</b></div>
+      <button class="frenzy-retry" id="frenzyRetry">🔥 เล่นอีกครั้ง!</button>
+      <button class="frenzy-exit" id="frenzyExit">ออกจากโหมด</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   Forge Frenzy (โหมดเตาเดือด) — score-attack โหดๆ ตายง่าย เก็บไฮสกอร์ เล่นเอาชนะตัวเอง
+   ออเดอร์โผล่ทีละอันพร้อมหลอดเวลานับถอยหลัง — แตะทั่งตีเหล็กรัวๆ ให้ครบก่อนหมดเวลา = เสิร์ฟ +คะแนน
+   พลาด (หมดเวลา) = เสีย 1 หัวใจ | หมดหัวใจ = จบเกม | ยิ่งเสิร์ฟยิ่งเวลาน้อยลง+ต้องตีเยอะขึ้น (เร่งจนตายแน่ๆ)
+   frenzyState เป็น session state ล้วนๆ ไม่ persist (ยกเว้นไฮสกอร์ player.frenzyBest ที่เก็บใน save)
+   ตรรกะอยู่ที่นี่ ส่วน DOM/overlay อยู่ที่ ui/frenzy-ui.js (subscribe อีเวนต์ด้านล่าง)
+   ===================================================================== */
+let frenzyState = { active: false, lives: 0, score: 0, combo: 0, orderCount: 0, order: null };
+
+function frenzyOrderTimeMs() {
+  return Math.max(FRENZY_ORDER_TIME_MIN_MS, FRENZY_ORDER_TIME_START_MS - frenzyState.orderCount * FRENZY_TIME_DECAY_MS);
+}
+function frenzyForgeNeeded() {
+  return Math.min(FRENZY_FORGE_TAPS_MAX, FRENZY_FORGE_TAPS_START + Math.floor(frenzyState.orderCount / FRENZY_TAPS_PER_STEP));
+}
+function frenzyComboMult() { return 1 + frenzyState.combo * FRENZY_COMBO_STEP; }
+
+// สร้างออเดอร์ถัดไป (ไอคอนสุ่ม + หลอดเวลาที่สั้นลงเรื่อยๆ + จำนวนแตะที่มากขึ้นเรื่อยๆ)
+function frenzyNextOrder() {
+  const icon = FRENZY_ITEM_ICONS[Math.floor(Math.random() * FRENZY_ITEM_ICONS.length)];
+  frenzyState.order = {
+    icon,
+    forgeHave: 0,
+    forgeNeeded: frenzyForgeNeeded(),
+    timeMax: frenzyOrderTimeMs(),
+    timeLeft: frenzyOrderTimeMs(),
+  };
+}
+
+function startFrenzy() {
+  frenzyState.active = true;
+  frenzyState.lives = FRENZY_LIVES;
+  frenzyState.score = 0;
+  frenzyState.combo = 0;
+  frenzyState.orderCount = 0;
+  frenzyNextOrder();
+  GameEvents.emit(EVENTS.FRENZY_STARTED, {});
+}
+
+// แตะทั่ง 1 ครั้ง — ตีเหล็ก +1 ถ้าครบตามที่ต้องการ = เสิร์ฟสำเร็จ
+function frenzyTap() {
+  if (!frenzyState.active || !frenzyState.order) return;
+  frenzyState.order.forgeHave += 1;
+  if (frenzyState.order.forgeHave >= frenzyState.order.forgeNeeded) serveFrenzyOrder();
+}
+
+function serveFrenzyOrder() {
+  const gain = Math.round(FRENZY_SCORE_BASE * frenzyComboMult());
+  frenzyState.score += gain;
+  frenzyState.combo += 1;
+  frenzyState.orderCount += 1;
+  GameEvents.emit(EVENTS.FRENZY_SERVED, { score: frenzyState.score, combo: frenzyState.combo, gain });
+  frenzyNextOrder();
+}
+
+function frenzyMiss() {
+  frenzyState.lives -= 1;
+  frenzyState.combo = 0;
+  GameEvents.emit(EVENTS.FRENZY_MISS, { lives: frenzyState.lives });
+  if (frenzyState.lives <= 0) { frenzyGameOver(); return; }
+  frenzyNextOrder(); // ยังไม่ตาย — ออเดอร์ใหม่ (ความยากเท่าเดิม ไม่รีเซ็ต orderCount)
+}
+
+function frenzyGameOver() {
+  frenzyState.active = false;
+  const isNewBest = frenzyState.score > (player.frenzyBest || 0);
+  if (isNewBest) { player.frenzyBest = frenzyState.score; saveGame(); }
+  frenzyState.order = null;
+  GameEvents.emit(EVENTS.FRENZY_OVER, { score: frenzyState.score, best: player.frenzyBest || 0, isNewBest });
+}
+
+function quitFrenzy() {
+  // ออกจากโหมดกลางคัน (ไม่บันทึกเป็นตาย — แค่ปิด) ให้ ui ซ่อน overlay
+  frenzyState.active = false;
+  frenzyState.order = null;
+}
+
+// เรียกทุกเฟรมจาก gameTick เฉพาะตอน active — นับเวลาถอยหลังด้วย dt (deterministic ในเทสต์)
+function tickFrenzy(dt) {
+  if (!frenzyState.active || !frenzyState.order) return;
+  frenzyState.order.timeLeft -= dt;
+  if (frenzyState.order.timeLeft <= 0) frenzyMiss();
+}
+</script>
+<script>
+/* =====================================================================
+   Forge Frenzy UI — overlay เต็มจอของโหมดเตาเดือด (ตรรกะอยู่ที่ features/frenzy.js)
+   โชว์คะแนน/ไฮสกอร์/หัวใจ + ออเดอร์ปัจจุบัน(ไอคอน+หลอดเวลา+หลอดตีเหล็ก) + ปุ่มทั่งตัวโต + หน้าจบเกม
+   ===================================================================== */
+function openFrenzyMode() {
+  document.getElementById('frenzyOverlay').classList.add('show');
+  document.getElementById('frenzyGameover').classList.remove('show');
+  ensureAudioCtx();
+  startFrenzy();
+  renderFrenzy();
+}
+function closeFrenzyMode() {
+  quitFrenzy();
+  document.getElementById('frenzyOverlay').classList.remove('show');
+}
+
+// วาดเต็ม (ตอนเริ่ม/เสิร์ฟ/พลาด) — หัวใจ + คะแนน + ออเดอร์ใหม่
+function renderFrenzy() {
+  document.getElementById('frenzyScore').textContent = formatCompact(frenzyState.score);
+  document.getElementById('frenzyBest').textContent = formatCompact(player.frenzyBest || 0);
+  const livesEl = document.getElementById('frenzyLives');
+  let hearts = '';
+  for (let i = 0; i < FRENZY_LIVES; i++) hearts += (i < frenzyState.lives ? '❤️' : '🖤');
+  livesEl.textContent = hearts;
+  const comboEl = document.getElementById('frenzyCombo');
+  if (frenzyState.combo >= 2) { comboEl.textContent = 'x' + frenzyState.combo + ' COMBO!'; comboEl.classList.add('show'); }
+  else comboEl.classList.remove('show');
+  const o = frenzyState.order;
+  if (o) {
+    document.getElementById('frenzyOrderIcon').src = o.icon;
+    document.getElementById('frenzyForgeLabel').textContent = o.forgeHave + '/' + o.forgeNeeded;
+  }
+  renderFrenzyLive();
+}
+
+// วาดเฉพาะหลอด (เรียกทุกเฟรมจาก gameTick ตอน active) — ลื่นไหลไม่ rebuild ทั้ง overlay
+function renderFrenzyLive() {
+  const o = frenzyState.order;
+  if (!o) return;
+  const tPct = Math.max(0, o.timeLeft / o.timeMax);
+  const tf = document.getElementById('frenzyTimerFill');
+  tf.style.width = (tPct * 100) + '%';
+  tf.classList.toggle('frenzy-timer-danger', tPct <= 0.4); // แดง+กะพริบตอนใกล้หมด
+  document.getElementById('frenzyForgeFill').style.width = Math.min(100, o.forgeHave / o.forgeNeeded * 100) + '%';
+}
+
+function frenzyShake() {
+  const s = document.getElementById('frenzyScene');
+  s.classList.remove('frenzy-shake'); void s.offsetWidth; s.classList.add('frenzy-shake');
+}
+
+// ===== ปุ่มทั่ง: แตะ = ตีเหล็ก + ประกายไฟ + เด้ง =====
+function frenzyAnvilHit() {
+  if (!frenzyState.active) return;
+  frenzyTap();
+  const anvil = document.getElementById('frenzyAnvil');
+  anvil.classList.remove('frenzy-anvil-hit'); void anvil.offsetWidth; anvil.classList.add('frenzy-anvil-hit');
+  playSfxTap();
+  renderFrenzyLive();
+  document.getElementById('frenzyForgeLabel').textContent = frenzyState.order ? (frenzyState.order.forgeHave + '/' + frenzyState.order.forgeNeeded) : '';
+}
+
+// ===== mount: ปุ่ม + อีเวนต์ =====
+document.getElementById('frenzyAnvil').addEventListener('pointerdown', (e) => { e.preventDefault(); frenzyAnvilHit(); });
+document.getElementById('frenzyQuit').addEventListener('click', closeFrenzyMode);
+document.getElementById('frenzyExit').addEventListener('click', closeFrenzyMode);
+document.getElementById('frenzyRetry').addEventListener('click', () => {
+  document.getElementById('frenzyGameover').classList.remove('show');
+  startFrenzy(); renderFrenzy();
+});
+document.getElementById('btnOpenFrenzy').addEventListener('click', openFrenzyMode);
+
+GameEvents.on(EVENTS.FRENZY_SERVED, () => {
+  renderFrenzy();
+  const anvil = document.getElementById('frenzyAnvil');
+  anvil.classList.remove('frenzy-anvil-serve'); void anvil.offsetWidth; anvil.classList.add('frenzy-anvil-serve');
+  playSfxCashRegister();
+});
+GameEvents.on(EVENTS.FRENZY_MISS, () => {
+  frenzyShake();
+  const scene = document.getElementById('frenzyScene');
+  scene.classList.remove('frenzy-flash'); void scene.offsetWidth; scene.classList.add('frenzy-flash');
+  playSfxError();
+  renderFrenzy();
+});
+GameEvents.on(EVENTS.FRENZY_OVER, (e) => {
+  const go = document.getElementById('frenzyGameover');
+  document.getElementById('frenzyGoTitle').textContent = e.isNewBest ? '🏆 สถิติใหม่!' : 'จบเกม!';
+  document.getElementById('frenzyGoTitle').classList.toggle('frenzy-newbest', e.isNewBest);
+  document.getElementById('frenzyGoScore').textContent = formatCompact(e.score);
+  document.getElementById('frenzyGoBest').textContent = formatCompact(e.best);
+  go.classList.add('show');
+  playSfxStageComplete();
+});
+</script>
 <script>
 /* =====================================================================
    Game loop — worker/customer state machines อัปเดตทุกเฟรมผ่าน requestAnimationFrame
@@ -4927,6 +5326,11 @@ function gameTick(ts) {
   let dt = ts - lastTickTime;
   lastTickTime = ts;
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
+  // โหมดเตาเดือด (Forge Frenzy) — ถ้ากำลังเล่นอยู่ นับเวลาถอยหลัง + อัปเดตหลอดแบบลื่นๆ (พักเกม idle ไว้เบื้องหลัง)
+  if (frenzyState.active) {
+    tickFrenzy(dt);
+    renderFrenzyLive();
+  }
   tickFever();
   tickCombo();
   tickRush();

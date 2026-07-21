@@ -53,6 +53,7 @@ let player = {
   daily: { lastClaimDay: null, streak: 0 }, // รางวัลล็อกอินรายวัน (lastClaimDay = 'YYYY-M-D')
   tutorialSeen: false,                   // เคยดูป๊อปอัพสอนเล่นครั้งแรกแล้วหรือยัง
   objectiveIndex: 0,                     // เควสนำทางลำดับที่กำลังทำอยู่ (ดู systems/objectives.js)
+  frenzyBest: 0,                         // ไฮสกอร์โหมดเตาเดือด (ดู features/frenzy.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true, musicEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 },
@@ -94,6 +95,7 @@ function saveGame() {
     daily: player.daily,
     tutorialSeen: player.tutorialSeen,
     objectiveIndex: player.objectiveIndex,
+    frenzyBest: player.frenzyBest,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -237,6 +239,7 @@ function loadGame() {
     daily: Object.assign({ lastClaimDay: null, streak: 0 }, data.daily || {}),
     tutorialSeen: !!data.tutorialSeen,
     objectiveIndex: Math.max(0, data.objectiveIndex || 0),
+    frenzyBest: Math.max(0, data.frenzyBest || 0),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 }, data.stats || {}),

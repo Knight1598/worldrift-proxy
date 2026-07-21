@@ -33,6 +33,7 @@
     </div>
     <div class="hud-title">⚒️ Blacksmith Tycoon</div>
     <div class="hud-btn-group">
+      <button class="btn-frenzy" id="btnOpenFrenzy" title="โหมดเตาเดือด — ท้าทายเก็บไฮสกอร์!">🔥 เตาเดือด</button>
       <button class="btn-tertiary" id="btnOpenRewards" title="รางวัล & ความสำเร็จ">🏆<span class="hud-badge" id="rewardsBadge"></span></button>
       <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
     </div>
@@ -275,6 +276,36 @@
 <script src="js/ui/objective-banner.js"></script>
 <script src="js/ui/tutorial.js"></script>
 <script src="js/render.js"></script>
+<!-- ===== Forge Frenzy (โหมดเตาเดือด) overlay ===== -->
+<div class="frenzy-overlay" id="frenzyOverlay">
+  <div class="frenzy-scene" id="frenzyScene">
+    <button class="frenzy-quit" id="frenzyQuit">✕</button>
+    <div class="frenzy-top">
+      <div class="frenzy-score-box">คะแนน<br><span class="pixel-num" id="frenzyScore">0</span></div>
+      <div class="frenzy-best-box">🏆 สูงสุด<br><span class="pixel-num" id="frenzyBest">0</span></div>
+    </div>
+    <div class="frenzy-lives" id="frenzyLives">❤️❤️❤️</div>
+    <div class="frenzy-combo" id="frenzyCombo"></div>
+    <div class="frenzy-order" id="frenzyOrder">
+      <div class="frenzy-timer-bg"><div class="frenzy-timer-fill" id="frenzyTimerFill"></div></div>
+      <img class="frenzy-order-icon" id="frenzyOrderIcon" src="" alt="">
+      <div class="frenzy-forge-bg"><div class="frenzy-forge-fill" id="frenzyForgeFill"></div></div>
+      <div class="frenzy-forge-label pixel-num" id="frenzyForgeLabel">0/5</div>
+    </div>
+    <button class="frenzy-anvil" id="frenzyAnvil"><span class="frenzy-anvil-icon">🔨</span><span class="frenzy-anvil-text">ตี!</span></button>
+    <div class="frenzy-hint">แตะ "ตี!" รัวๆ ให้ครบก่อนหลอดเวลาหมด — พลาด 3 ครั้งจบเกม!</div>
+    <div class="frenzy-gameover" id="frenzyGameover">
+      <div class="frenzy-go-title" id="frenzyGoTitle">จบเกม!</div>
+      <div class="frenzy-go-row">คะแนน <b id="frenzyGoScore">0</b></div>
+      <div class="frenzy-go-row">🏆 สถิติสูงสุด <b id="frenzyGoBest">0</b></div>
+      <button class="frenzy-retry" id="frenzyRetry">🔥 เล่นอีกครั้ง!</button>
+      <button class="frenzy-exit" id="frenzyExit">ออกจากโหมด</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/features/frenzy.js"></script>
+<script src="js/ui/frenzy-ui.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>
