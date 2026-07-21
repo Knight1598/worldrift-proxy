@@ -15,7 +15,7 @@ function spawnFloatText(x, y, text, variant) {
 function showMilestoneToast(displayName, level, mult) {
   const el = document.createElement('div');
   el.className = 'milestone-toast';
-  el.innerHTML = `🌟 <b>${displayName}</b> ถึงเลเวล ${level}!<br>โบนัสพลังคูณ x${mult} ทันที!`;
+  el.innerHTML = `🌟 <b>${displayName}</b> ถึงเลเวล ${level}!<br>โบนัสพลังคูณ x${mult} +${STATION_STAR_REWARD_GEMS} 💎!`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1900);
 }

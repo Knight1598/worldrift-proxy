@@ -816,6 +816,103 @@
     100% { transform: scale(0.2); opacity: 0; }
   }
 
+  /* ===== Multi-Station: โต๊ะสถานีเสริมซ้าย/ขวา (แบบหลายสถานีในเกมต้นแบบ) =====
+     ตำแหน่ง left เป็น % ตรงกับ STATION_XS ใน scene.js (จุดเดียวกับที่ worker เดินไปยืน)
+     โต๊ะ (z-index:4) วาดทับส่วนเท้าของ worker (z-index:3) ที่ยืนอยู่ "หลัง" โต๊ะ — ภาพลวงตา 2.5D
+     แบบเดียวกับ front-lip ของสถานีหลัก กันตัวละครดูทะลุโต๊ะ */
+  .station-side {
+    position: absolute;
+    top: 8.5%;
+    transform: translateX(-50%);
+    width: 74px;
+    z-index: 4;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .station-side-icon {
+    width: 34px; height: 34px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    display: block;
+    margin: 0 auto -6px;
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 3px 2px rgba(0,0,0,0.35));
+  }
+  .station-side-table {
+    height: 26px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #b07a3e, #7a4f26);
+    border: 3px solid #2c1c0c;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.4);
+  }
+  .station-side-table--ghost { opacity: 0.55; background: linear-gradient(180deg, #8d8d8d, #5f5f5f); }
+  .station-side-level {
+    position: absolute;
+    bottom: -8px; left: 50%; transform: translateX(-50%);
+    background: var(--primary-dark); color: #fff;
+    font-size: 0.55rem; font-weight: bold;
+    border-radius: 999px; padding: 1px 6px;
+    border: 2px solid var(--ui-bg);
+    white-space: nowrap;
+    z-index: 3;
+  }
+  .station-side-lock { font-size: 1.1rem; display: block; margin-bottom: -4px; position: relative; z-index: 2; }
+  .station-side-cost {
+    position: absolute;
+    bottom: -8px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.75); color: #ccc;
+    font-size: 0.55rem; font-weight: bold;
+    border-radius: 999px; padding: 1px 6px;
+    border: 2px solid var(--ui-bg);
+    white-space: nowrap;
+    z-index: 3;
+  }
+  .station-side-cost.ok { color: var(--accent-gold); border-color: var(--accent-gold-dark); }
+  .station-side--locked:active { transform: translateX(-50%) scale(0.95); }
+
+  /* ลูกศรอัปเกรดเด้งบนสถานี (วงกลมลูกศรในคลิป) — โชว์เฉพาะตอนซื้อไหว */
+  .station-arrow {
+    position: absolute;
+    top: 13.5%; /* เกาะขอบล่างโต๊ะสถานี — ไม่มุดเข้าไปใต้ hud-bar ด้านบน */
+    transform: translateX(-50%);
+    z-index: 8;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: var(--danger);
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    animation: arrowBounce 0.8s ease-in-out infinite;
+    padding: 0;
+  }
+  @keyframes arrowBounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(-5px); }
+  }
+
+  /* ===== Mystery Gift Box — กล่องของขวัญเด้งดึ๋ง แตะเปิดรับรางวัลสุ่ม ===== */
+  .gift-box {
+    position: absolute;
+    z-index: 6;
+    font-size: 2rem;
+    cursor: pointer;
+    user-select: none;
+    filter: drop-shadow(0 0 6px rgba(255,215,106,0.8));
+    animation: giftBob 0.7s ease-in-out infinite;
+  }
+  @keyframes giftBob {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50%      { transform: translateY(-7px) rotate(4deg); }
+  }
+  .gift-box.opened { animation: goblinCaughtPop 0.4s ease forwards; }
+
+  /* กองเหรียญหน้าเคาน์เตอร์แตะเก็บได้ */
+  .coin-drop { cursor: pointer; }
+
   /* เอฟเฟกต์เด้งตอน Station เปลี่ยนหน้าตาเมื่อขึ้นด่านใหม่ (Visual Workstation Upgrade) */
   .stand-booth.stage-swap { animation: stationSwapPop 0.5s ease; }
   @keyframes stationSwapPop {

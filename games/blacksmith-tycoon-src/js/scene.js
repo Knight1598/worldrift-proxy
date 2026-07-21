@@ -26,8 +26,14 @@ function workerOffsetX(workerIndex, spacing) {
 }
 const STATION_WORKER_SPACING_PX = 60;
 const IDLE_WORKER_SPACING_PX = 50;
-function stationPos(workerIndex) {
-  return { x: scene.width * ZONES.stationXPct + workerOffsetX(workerIndex, STATION_WORKER_SPACING_PX), y: scene.height * ZONES.stationYPct };
+// Multi-Station: สถานีหลักอยู่กลาง สถานีเสริมซ้าย/ขวา (แนว X เป็น % ของความกว้างฉาก)
+// สถานีเสริมใช้ระยะห่าง worker แคบกว่า + clamp กันหลุดขอบจอบนจอแคบ
+const STATION_XS = [0.5, 0.2, 0.8];
+function stationPos(workerIndex, stationIndex) {
+  const si = stationIndex || 0;
+  const spacing = si === 0 ? STATION_WORKER_SPACING_PX : 34;
+  const x = scene.width * STATION_XS[si] + workerOffsetX(workerIndex, spacing);
+  return { x: Math.max(24, Math.min(scene.width - 24, x)), y: scene.height * ZONES.stationYPct };
 }
 function counterLineY() {
   return scene.height * ZONES.counterYPct;

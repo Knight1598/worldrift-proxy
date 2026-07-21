@@ -11,6 +11,11 @@ function defaultInventory() {
 function defaultIdentity() {
   return { playerId: null, displayName: null }; // เตรียมไว้สำหรับ Leaderboard (ดู systems/leaderboard.js)
 }
+// สถานีเสริม 2 ตัวของด่านปัจจุบัน (Multi-Station) — รีเซ็ตตอน Renovate เหมือน upgradeLevels
+// (สถานีหลักใช้ player.upgradeLevels.portion เป็นเลเวลอยู่แล้ว ไม่ต้องเก็บเพิ่ม)
+function defaultStationsExtra() {
+  return { s1: { unlocked: false, level: 0 }, s2: { unlocked: false, level: 0 } };
+}
 
 let player = {
   gold: 0,
@@ -24,6 +29,7 @@ let player = {
   gems: 0,             // เพชร ได้จาก Order Missions ใช้สุ่มบัพ (ดู systems/missions.js, systems/buffs.js)
   missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
   missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
+  stationsExtra: defaultStationsExtra(), // สถานีเสริมของด่านปัจจุบัน (Multi-Station ดู ui/stations.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
@@ -57,6 +63,7 @@ function saveGame() {
     gems: player.gems,
     missionIndex: player.missionIndex,
     missionProgress: player.missionProgress,
+    stationsExtra: player.stationsExtra,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -101,43 +108,59 @@ function fillV4Defaults(v3Data) {
   });
 }
 
+// เติมฟิลด์ใหม่ของ v5 (stationsExtra — Multi-Station) ให้ข้อมูลทรง v4
+function fillV5Defaults(v4Data) {
+  return Object.assign({}, v4Data, {
+    stationsExtra: defaultStationsExtra(),
+  });
+}
+
 function loadGame() {
   let raw;
   try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
   let data = null;
   if (raw) {
-    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v4 เสีย ลอง fallback ลงไปต่อ */ }
+    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v5 เสีย ลอง fallback ลงไปต่อ */ }
   }
   let needsResave = false;
   const keysToClean = [];
   if (!data) {
-    // ไม่เจอ v4 -- ลอง v3 ตรงๆ ก่อน
-    let rawV3;
-    try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
-    let v3Data = null;
-    if (rawV3) {
-      try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
+    // ไม่เจอ v5 -- ไล่ fallback ทีละรุ่น v4 -> v3 -> v2 -> v1 (แต่ละชั้นเติม default ของรุ่นถัดขึ้นมา)
+    let v4Data = null;
+    let rawV4;
+    try { rawV4 = localStorage.getItem(SAVE_KEY_V4); } catch (e) { rawV4 = null; }
+    if (rawV4) {
+      try { v4Data = JSON.parse(rawV4); keysToClean.push(SAVE_KEY_V4); } catch (e) { v4Data = null; }
     }
-    if (!v3Data) {
-      // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
-      let rawV2;
-      try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
-      let v2Data = null;
-      if (rawV2) {
-        try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
+    if (!v4Data) {
+      let rawV3;
+      try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
+      let v3Data = null;
+      if (rawV3) {
+        try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
       }
-      if (!v2Data) {
-        // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
-        let rawV1;
-        try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
-        if (rawV1) {
-          try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+      if (!v3Data) {
+        // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
+        let rawV2;
+        try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
+        let v2Data = null;
+        if (rawV2) {
+          try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
         }
+        if (!v2Data) {
+          // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
+          let rawV1;
+          try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
+          if (rawV1) {
+            try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+          }
+        }
+        if (v2Data) v3Data = fillV3Defaults(v2Data);
       }
-      if (v2Data) v3Data = fillV3Defaults(v2Data);
+      if (v3Data) v4Data = fillV4Defaults(v3Data);
     }
-    if (v3Data) {
-      data = fillV4Defaults(v3Data);
+    if (v4Data) {
+      data = fillV5Defaults(v4Data);
       needsResave = true;
     }
   }
@@ -154,6 +177,7 @@ function loadGame() {
     gems: Math.max(0, data.gems || 0),
     missionIndex: Math.max(0, data.missionIndex || 0),
     missionProgress: Math.max(0, data.missionProgress || 0),
+    stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),

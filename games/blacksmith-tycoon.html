@@ -824,6 +824,103 @@
     100% { transform: scale(0.2); opacity: 0; }
   }
 
+  /* ===== Multi-Station: โต๊ะสถานีเสริมซ้าย/ขวา (แบบหลายสถานีในเกมต้นแบบ) =====
+     ตำแหน่ง left เป็น % ตรงกับ STATION_XS ใน scene.js (จุดเดียวกับที่ worker เดินไปยืน)
+     โต๊ะ (z-index:4) วาดทับส่วนเท้าของ worker (z-index:3) ที่ยืนอยู่ "หลัง" โต๊ะ — ภาพลวงตา 2.5D
+     แบบเดียวกับ front-lip ของสถานีหลัก กันตัวละครดูทะลุโต๊ะ */
+  .station-side {
+    position: absolute;
+    top: 8.5%;
+    transform: translateX(-50%);
+    width: 74px;
+    z-index: 4;
+    text-align: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .station-side-icon {
+    width: 34px; height: 34px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    display: block;
+    margin: 0 auto -6px;
+    position: relative;
+    z-index: 2;
+    filter: drop-shadow(0 3px 2px rgba(0,0,0,0.35));
+  }
+  .station-side-table {
+    height: 26px;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #b07a3e, #7a4f26);
+    border: 3px solid #2c1c0c;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.4);
+  }
+  .station-side-table--ghost { opacity: 0.55; background: linear-gradient(180deg, #8d8d8d, #5f5f5f); }
+  .station-side-level {
+    position: absolute;
+    bottom: -8px; left: 50%; transform: translateX(-50%);
+    background: var(--primary-dark); color: #fff;
+    font-size: 0.55rem; font-weight: bold;
+    border-radius: 999px; padding: 1px 6px;
+    border: 2px solid var(--ui-bg);
+    white-space: nowrap;
+    z-index: 3;
+  }
+  .station-side-lock { font-size: 1.1rem; display: block; margin-bottom: -4px; position: relative; z-index: 2; }
+  .station-side-cost {
+    position: absolute;
+    bottom: -8px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.75); color: #ccc;
+    font-size: 0.55rem; font-weight: bold;
+    border-radius: 999px; padding: 1px 6px;
+    border: 2px solid var(--ui-bg);
+    white-space: nowrap;
+    z-index: 3;
+  }
+  .station-side-cost.ok { color: var(--accent-gold); border-color: var(--accent-gold-dark); }
+  .station-side--locked:active { transform: translateX(-50%) scale(0.95); }
+
+  /* ลูกศรอัปเกรดเด้งบนสถานี (วงกลมลูกศรในคลิป) — โชว์เฉพาะตอนซื้อไหว */
+  .station-arrow {
+    position: absolute;
+    top: 13.5%; /* เกาะขอบล่างโต๊ะสถานี — ไม่มุดเข้าไปใต้ hud-bar ด้านบน */
+    transform: translateX(-50%);
+    z-index: 8;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: var(--danger);
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    animation: arrowBounce 0.8s ease-in-out infinite;
+    padding: 0;
+  }
+  @keyframes arrowBounce {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50%      { transform: translateX(-50%) translateY(-5px); }
+  }
+
+  /* ===== Mystery Gift Box — กล่องของขวัญเด้งดึ๋ง แตะเปิดรับรางวัลสุ่ม ===== */
+  .gift-box {
+    position: absolute;
+    z-index: 6;
+    font-size: 2rem;
+    cursor: pointer;
+    user-select: none;
+    filter: drop-shadow(0 0 6px rgba(255,215,106,0.8));
+    animation: giftBob 0.7s ease-in-out infinite;
+  }
+  @keyframes giftBob {
+    0%, 100% { transform: translateY(0) rotate(-4deg); }
+    50%      { transform: translateY(-7px) rotate(4deg); }
+  }
+  .gift-box.opened { animation: goblinCaughtPop 0.4s ease forwards; }
+
+  /* กองเหรียญหน้าเคาน์เตอร์แตะเก็บได้ */
+  .coin-drop { cursor: pointer; }
+
   /* เอฟเฟกต์เด้งตอน Station เปลี่ยนหน้าตาเมื่อขึ้นด่านใหม่ (Visual Workstation Upgrade) */
   .stand-booth.stage-swap { animation: stationSwapPop 0.5s ease; }
   @keyframes stationSwapPop {
@@ -889,6 +986,8 @@
   <div class="worker-layer" id="workerLayer"></div>
   <img class="stand-booth" id="standBooth" src="assets/blacksmith/station_stall.png" alt="">
   <img class="stand-booth stand-booth-front" id="standBoothFront" src="assets/blacksmith/station_stall.png" alt="" aria-hidden="true">
+  <div id="sideStations"></div>
+  <div id="stationArrows"></div>
   <button class="product-badge" id="productBadge" title="อัปเกรดสินค้า">
     <img id="productBadgeIcon" src="" alt="">
     <span class="product-badge-level pixel-num" id="productBadgeLevel">0</span>
@@ -1056,6 +1155,9 @@ const EVENTS = {
   MISSION_COMPLETED:  'mission:completed',  // tickMissionProgress() — { missionIndex, reward }
   BUFF_ROLLED:        'buff:rolled',        // rollBuff() — { buff }
   BUFF_ENDED:         'buff:ended',         // tickBuffs() เมื่อ buff แบบ duration หมดเวลา
+  STATION_UNLOCKED:   'station:unlocked',   // buyStationUnlock() — { stationIndex }
+  STATION_UPGRADED:   'station:upgraded',   // buyStationLevel() — { stationIndex, level }
+  GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }
 };
 </script>
 <script>
@@ -1129,7 +1231,7 @@ function getMilestoneMultiplier(level) {
 }
 
 // ผู้เล่น/พนักงานเดิน+ทำของ — ควบคุมโดยอัปเกรด "ความเร็วในการทำงาน"
-const BASE_CRAFT_MS = 3200;
+const BASE_CRAFT_MS = 2600; // ลดจาก 3200 ตามคำขอเดินเกมเร็วขึ้น
 const MIN_CRAFT_MS = 900;
 const SPEED_CRAFT_MS_REDUCTION = 46; // ต่อเลเวล (50 เลเวลไม่มี milestone พอดีแตะพื้น MIN_CRAFT_MS)
 const BASE_MOVE_SPEED_PX = 90;   // px/วินาที
@@ -1137,7 +1239,7 @@ const SPEED_MOVE_BONUS_PX = 4;   // px/วินาที ต่อเลเว�
 const MAX_MOVE_SPEED_PX = 400;   // เพดานกันความเร็วพุ่งเกินจริงตอนรวม Milestone x8 เข้าไปด้วย
 
 // อัตราการเกิดลูกค้า + ความจุคิว — ควบคุมโดยอัปเกรด "ป้ายร้าน"
-const BASE_SPAWN_INTERVAL_MS = 3400;
+const BASE_SPAWN_INTERVAL_MS = 3000; // ลดจาก 3400 ตามคำขอเดินเกมเร็วขึ้น
 const MIN_SPAWN_INTERVAL_MS = 1100;
 const SIGNAGE_SPAWN_MS_REDUCTION = 46; // ต่อเลเวล
 const BASE_MAX_QUEUE = 3;
@@ -1146,14 +1248,48 @@ const MAX_QUEUE_SIZE = 20; // เพดานกันคิวยาวจน�
 
 const CUSTOMER_WALK_SPEED_PX = 70; // ความเร็วเดินของลูกค้า คงที่ ไม่ผูกกับอัปเกรด (สเปกระบุให้อัปเกรดความเร็วมีผลแค่ผู้เล่น/พนักงาน)
 const PATIENCE_DURATION_MS = 9000; // หลอดความอดทนเชิงภาพล้วนๆ ไม่มีผลลงโทษถ้าหมด (ไม่ได้ระบุ fail-state ไว้ในสเปก)
-const APPROX_ORDER_TRAVEL_PX = 320; // ระยะทางเดินโดยประมาณต่อ 1 ออเดอร์ (ไป station + ไปส่งที่คิว + ไปเก็บเหรียญ) ใช้คำนวณ throughput แบบไม่พึ่ง DOM เพื่อให้ deterministic
+const APPROX_ORDER_TRAVEL_PX = 240; // ลดลงหลังตัดขาเดินเก็บเหรียญ (COLLECT) ออกจากรอบงาน // ระยะทางเดินโดยประมาณต่อ 1 ออเดอร์ (ไป station + ไปส่งที่คิว + ไปเก็บเหรียญ) ใช้คำนวณ throughput แบบไม่พึ่ง DOM เพื่อให้ deterministic
 
 // ===== Renovate (ขึ้นด่านแบบ Eatventure) =====
 // เดิมต้องอัปเกรดครบ 4 ชนิด x50 เลเวล (200 ครั้ง) ถึงขึ้นด่านใหม่ได้ — ยืดเกินไปมาก
-// เปลี่ยนเป็นแบบเกมต้นแบบในคลิป: อัปเกรด "สินค้า" (สถานี) ถึงเลเวลที่กำหนดก็กดปุ่ม 🔨 Renovate ได้เลย
-// อัปเกรดตัวอื่นๆ (ความเร็ว/ป้าย/ตกแต่ง) กลายเป็นตัวเสริมให้ฟาร์มเร็วขึ้น ไม่ใช่กำแพงบังคับ
-const RENOVATE_GATE_LEVEL = 25;   // สินค้าต้องถึงเลเวลนี้ก่อนถึงจะ Renovate ได้ (ตรงกับ "level 25 first!" ในคลิป)
+// เปลี่ยนเป็นแบบเกมต้นแบบในคลิป: อัปเกรด "สินค้า" (สถานีหลัก) ถึงเลเวลที่กำหนดก็กดปุ่ม 🔨 Renovate ได้เลย
+// อัปเกรดตัวอื่นๆ (ความเร็ว/ป้าย/ตกแต่ง/สถานีเสริม) กลายเป็นตัวเสริมให้ฟาร์มเร็วขึ้น ไม่ใช่กำแพงบังคับ
+const RENOVATE_GATE_LEVEL = 15;   // ลดจาก 25 -> 15 ตามคำขอ "เดินเกมเร็วขึ้น" (ยังคงคอนเซ็ปต์ gate เดียวแบบคลิป)
 const RENOVATE_REWARD_GEMS = 10;  // รางวัลเพชรตอน Renovate สำเร็จ (คลิปมีช่อง Rewards ในหน้าต่าง Renovate)
+
+// ===== หลายสถานีในด่านเดียว (Multi-Station แบบ Eatventure) =====
+// แต่ละด่านมี 3 สถานี: สถานีหลัก (ปลดล็อกอยู่แล้ว ใช้ระบบเลเวลสินค้าเดิม) + สถานีเสริม 2 ตัว
+// ปลดล็อกด้วย Gold แล้วอัปเลเวลแยกของใครของมัน สินค้าแพงขึ้นตาม revenueMult — จังหวะ "เก็บเงินก้อนปลดล็อกโต๊ะใหม่"
+// แบบเกมต้นแบบ สถานีเสริมรีเซ็ตตอน Renovate (ร้านใหม่ เริ่มปลดล็อกใหม่) เหมือน upgradeLevels
+// icon: null = ใช้ PRODUCT_TIERS ของด่าน (สถานีหลักเปลี่ยนหน้าตาสินค้าตามเลเวลเหมือนเดิม)
+const STATION_SETS = {
+  stall: [
+    { name: 'ของชำ',    icon: null,                                      revenueMult: 1, unlockCostMult: 0 },
+    { name: 'โล่ไม้',    icon: 'assets/blacksmith/shield_wood.png',    revenueMult: 2, unlockCostMult: 80 },
+    { name: 'ดาบสำริด', icon: 'assets/blacksmith/sword_bronze.png',   revenueMult: 4, unlockCostMult: 400 },
+  ],
+  forge: [
+    { name: 'ดาบเหล็ก', icon: null,                                      revenueMult: 1, unlockCostMult: 0 },
+    { name: 'โล่นักรบ',  icon: 'assets/blacksmith/shield_wood.png',    revenueMult: 2, unlockCostMult: 80 },
+    { name: 'ดาบอัศวิน', icon: 'assets/blacksmith/sword_blue.png',     revenueMult: 4, unlockCostMult: 400 },
+  ],
+  alchemy: [
+    { name: 'ยาแดง',    icon: null,                                      revenueMult: 1, unlockCostMult: 0 },
+    { name: 'ยาฟ้า',     icon: 'assets/blacksmith/potion_blue.png',    revenueMult: 2, unlockCostMult: 80 },
+    { name: 'ถุงทองเวท', icon: 'assets/blacksmith/coin.png',           revenueMult: 4, unlockCostMult: 400 },
+  ],
+};
+const STATION_STAR_REWARD_GEMS = 3; // รางวัลเพชรตอนเลเวลสถานี/อัปเกรดแตะดาว milestone (💎 ท้ายแถบในคลิป)
+
+// ===== กองเหรียญหน้าเคาน์เตอร์ (แบบคลิป) =====
+// ส่งของเสร็จเหรียญกองอยู่หน้าเคาน์เตอร์ แตะเก็บเองได้ทันที หรือปล่อยให้บินเข้ากระเป๋าเองหลังหน่วงสั้นๆ
+// (worker ไม่ต้องเดินไปเก็บเหรียญอีกแล้ว — ตัดขา COLLECT ทิ้ง ทำให้รอบงานเร็วขึ้น ~1/3 ด้วย)
+const COIN_AUTO_COLLECT_DELAY_MS = 900;
+
+// ===== กล่องของขวัญปริศนา (Mystery Gift Box แบบ Eatventure) =====
+const GIFTBOX_MIN_INTERVAL_MS = 75000;
+const GIFTBOX_MAX_INTERVAL_MS = 130000;
+const GIFTBOX_LINGER_MS = 12000; // อยู่บนจอนานเท่านี้ก่อนหายไปเองถ้าไม่แตะ
 
 // ===== ออเดอร์หลายชิ้น (ตัวเลขในบับเบิลแบบคลิป) =====
 // ลูกค้าบางคนสั่งมากกว่า 1 ชิ้น — บับเบิลโชว์ x2/x3 และจ่ายเงินคูณตามจำนวน (คราฟต์รอบเดียวได้ทั้งชุด)
@@ -1210,7 +1346,7 @@ const MATERIAL_REGEN_PER_SEC = 0.9;
 // ===== Order Missions — ภารกิจสะสมจำนวนออเดอร์ที่ "เสิร์ฟสำเร็จ" (นับตั้งแต่ภารกิจก่อนหน้าจบ ไม่ใช่สะสมทั้งเกม)
 // ให้รางวัลเป็นเพชร ใช้สูตร growth แบบเดียวกับที่ใช้ทั่วทั้งเกม (cost/milestone) แทนการลิสต์ค่าคงที่ตายตัว =====
 const ORDER_MISSION_BASE_TARGET = 8;      // ภารกิจแรกต้องเสิร์ฟ 8 ออเดอร์
-const ORDER_MISSION_TARGET_GROWTH = 1.35; // แต่ละภารกิจถัดไปต้องเสิร์ฟมากขึ้น
+const ORDER_MISSION_TARGET_GROWTH = 1.28; // แต่ละภารกิจถัดไปต้องเสิร์ฟมากขึ้น (ลดจาก 1.35 ให้เพชรไหลเร็วขึ้น)
 const ORDER_MISSION_BASE_REWARD = 3;      // เพชรรางวัลภารกิจแรก
 const ORDER_MISSION_REWARD_GROWTH = 1.15;
 
@@ -1256,7 +1392,8 @@ const BUFF_DEFS = [
     desc: 'ได้ Gold ก้อนโตทันที (อิงรายได้ต่อนาทีปัจจุบัน)' },
 ];
 
-const SAVE_KEY = 'blacksmithTycoonSave_v4';
+const SAVE_KEY = 'blacksmithTycoonSave_v5';
+const SAVE_KEY_V4 = 'blacksmithTycoonSave_v4'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V3 = 'blacksmithTycoonSave_v3'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V2 = 'blacksmithTycoonSave_v2'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V1 = 'blacksmithTycoonSave_v1'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
@@ -1276,6 +1413,11 @@ function defaultInventory() {
 function defaultIdentity() {
   return { playerId: null, displayName: null }; // เตรียมไว้สำหรับ Leaderboard (ดู systems/leaderboard.js)
 }
+// สถานีเสริม 2 ตัวของด่านปัจจุบัน (Multi-Station) — รีเซ็ตตอน Renovate เหมือน upgradeLevels
+// (สถานีหลักใช้ player.upgradeLevels.portion เป็นเลเวลอยู่แล้ว ไม่ต้องเก็บเพิ่ม)
+function defaultStationsExtra() {
+  return { s1: { unlocked: false, level: 0 }, s2: { unlocked: false, level: 0 } };
+}
 
 let player = {
   gold: 0,
@@ -1289,6 +1431,7 @@ let player = {
   gems: 0,             // เพชร ได้จาก Order Missions ใช้สุ่มบัพ (ดู systems/missions.js, systems/buffs.js)
   missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
   missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
+  stationsExtra: defaultStationsExtra(), // สถานีเสริมของด่านปัจจุบัน (Multi-Station ดู ui/stations.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
@@ -1322,6 +1465,7 @@ function saveGame() {
     gems: player.gems,
     missionIndex: player.missionIndex,
     missionProgress: player.missionProgress,
+    stationsExtra: player.stationsExtra,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -1366,43 +1510,59 @@ function fillV4Defaults(v3Data) {
   });
 }
 
+// เติมฟิลด์ใหม่ของ v5 (stationsExtra — Multi-Station) ให้ข้อมูลทรง v4
+function fillV5Defaults(v4Data) {
+  return Object.assign({}, v4Data, {
+    stationsExtra: defaultStationsExtra(),
+  });
+}
+
 function loadGame() {
   let raw;
   try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
   let data = null;
   if (raw) {
-    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v4 เสีย ลอง fallback ลงไปต่อ */ }
+    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v5 เสีย ลอง fallback ลงไปต่อ */ }
   }
   let needsResave = false;
   const keysToClean = [];
   if (!data) {
-    // ไม่เจอ v4 -- ลอง v3 ตรงๆ ก่อน
-    let rawV3;
-    try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
-    let v3Data = null;
-    if (rawV3) {
-      try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
+    // ไม่เจอ v5 -- ไล่ fallback ทีละรุ่น v4 -> v3 -> v2 -> v1 (แต่ละชั้นเติม default ของรุ่นถัดขึ้นมา)
+    let v4Data = null;
+    let rawV4;
+    try { rawV4 = localStorage.getItem(SAVE_KEY_V4); } catch (e) { rawV4 = null; }
+    if (rawV4) {
+      try { v4Data = JSON.parse(rawV4); keysToClean.push(SAVE_KEY_V4); } catch (e) { v4Data = null; }
     }
-    if (!v3Data) {
-      // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
-      let rawV2;
-      try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
-      let v2Data = null;
-      if (rawV2) {
-        try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
+    if (!v4Data) {
+      let rawV3;
+      try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
+      let v3Data = null;
+      if (rawV3) {
+        try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
       }
-      if (!v2Data) {
-        // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
-        let rawV1;
-        try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
-        if (rawV1) {
-          try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+      if (!v3Data) {
+        // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
+        let rawV2;
+        try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
+        let v2Data = null;
+        if (rawV2) {
+          try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
         }
+        if (!v2Data) {
+          // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
+          let rawV1;
+          try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
+          if (rawV1) {
+            try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+          }
+        }
+        if (v2Data) v3Data = fillV3Defaults(v2Data);
       }
-      if (v2Data) v3Data = fillV3Defaults(v2Data);
+      if (v3Data) v4Data = fillV4Defaults(v3Data);
     }
-    if (v3Data) {
-      data = fillV4Defaults(v3Data);
+    if (v4Data) {
+      data = fillV5Defaults(v4Data);
       needsResave = true;
     }
   }
@@ -1419,6 +1579,7 @@ function loadGame() {
     gems: Math.max(0, data.gems || 0),
     missionIndex: Math.max(0, data.missionIndex || 0),
     missionProgress: Math.max(0, data.missionProgress || 0),
+    stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
@@ -1447,6 +1608,38 @@ function getRevenuePerSale() {
   const level = player.upgradeLevels.portion;
   const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
   return getStage().baseRevenue * (1 + bonus);
+}
+
+/* ===== Multi-Station (3 สถานีต่อด่าน ดู STATION_SETS ใน data.js) =====
+   สถานี 0 = สถานีหลัก ใช้ player.upgradeLevels.portion เป็นเลเวล (ระบบเดิม milestone/mission ทำงานต่อได้หมด)
+   สถานี 1-2 = สถานีเสริม เก็บใน player.stationsExtra ปลดล็อกด้วย Gold แล้วอัปเลเวลแยก */
+function getStationDef(i) { return STATION_SETS[getStage().key][i]; }
+function getStationLevel(i) {
+  return i === 0 ? player.upgradeLevels.portion : player.stationsExtra['s' + i].level;
+}
+function isStationUnlocked(i) {
+  return i === 0 ? true : player.stationsExtra['s' + i].unlocked;
+}
+function getUnlockedStationIndices() {
+  return [0, 1, 2].filter(i => isStationUnlocked(i));
+}
+function getStationRevenue(i) {
+  const level = getStationLevel(i);
+  const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
+  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus);
+}
+function getStationUpgradeCost(i) {
+  if (i === 0) return getUpgradeCost('portion');
+  const base = getStage().baseRevenue * getStationDef(i).revenueMult * 10 * Math.pow(UPGRADE_COST_GROWTH, getStationLevel(i));
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+}
+function getStationUnlockCost(i) {
+  const base = getStage().baseRevenue * getStationDef(i).unlockCostMult;
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+}
+function getStationIcon(i) {
+  const def = getStationDef(i);
+  return def.icon || getProductIcon(); // สถานีหลักใช้ไอคอนสินค้าตาม tier เดิม
 }
 
 function getCraftDurationMs() {
@@ -1604,8 +1797,14 @@ function workerOffsetX(workerIndex, spacing) {
 }
 const STATION_WORKER_SPACING_PX = 60;
 const IDLE_WORKER_SPACING_PX = 50;
-function stationPos(workerIndex) {
-  return { x: scene.width * ZONES.stationXPct + workerOffsetX(workerIndex, STATION_WORKER_SPACING_PX), y: scene.height * ZONES.stationYPct };
+// Multi-Station: สถานีหลักอยู่กลาง สถานีเสริมซ้าย/ขวา (แนว X เป็น % ของความกว้างฉาก)
+// สถานีเสริมใช้ระยะห่าง worker แคบกว่า + clamp กันหลุดขอบจอบนจอแคบ
+const STATION_XS = [0.5, 0.2, 0.8];
+function stationPos(workerIndex, stationIndex) {
+  const si = stationIndex || 0;
+  const spacing = si === 0 ? STATION_WORKER_SPACING_PX : 34;
+  const x = scene.width * STATION_XS[si] + workerOffsetX(workerIndex, spacing);
+  return { x: Math.max(24, Math.min(scene.width - 24, x)), y: scene.height * ZONES.stationYPct };
 }
 function counterLineY() {
   return scene.height * ZONES.counterYPct;
@@ -1650,7 +1849,8 @@ function moveToward(entity, target, speedPxPerSec, dt) {
 <script>
 /* =====================================================================
    Worker (ผู้เล่น + พนักงาน) — State Machine:
-   IDLE -> WALK_TO_STATION -> [WAITING_FOR_STOCK ถ้าวัตถุดิบไม่พอ] -> CRAFTING -> DELIVER -> COLLECT -> IDLE
+   IDLE -> WALK_TO_STATION -> [WAITING_FOR_STOCK ถ้าวัตถุดิบไม่พอ] -> CRAFTING -> DELIVER -> IDLE
+   (ขา COLLECT ถูกตัดออก — เหรียญกองที่เคาน์เตอร์แล้วเก็บอัตโนมัติ/แตะเก็บ ดู entities/economy.js)
    แอนิเมชันเดิน: sprite-sheet จริง 4 เฟรม สลับด้วย background-position ตามทิศทางที่กำลังเดิน
    (หันหลังตอนเดินขึ้นไป Station, หันหน้าตอนเดินลงมาเคาน์เตอร์)
    ===================================================================== */
@@ -1769,7 +1969,11 @@ function tickWorkers(dt) {
       const cust = findAssignableCustomer();
       if (cust) {
         cust.state = 'ORDER_ACTIVE';
-        cust.orderIcon = getProductIcon();
+        // Multi-Station: ลูกค้าสุ่มสั่งจากสถานีที่ปลดล็อกแล้ว — worker คนนี้จะเดินไปคราฟต์ที่สถานีนั้น
+        const unlocked = getUnlockedStationIndices();
+        cust.stationIndex = unlocked[Math.floor(Math.random() * unlocked.length)];
+        w.targetStation = cust.stationIndex;
+        cust.orderIcon = getStationIcon(cust.stationIndex);
         // บัพ "เงินสองเท่า"/"โชคกาชา" — สุ่มโอกาสคูณเงินออเดอร์นี้เพิ่ม (มีได้ทีละบัพเดียวอยู่แล้ว เลยไม่มีทางชนกัน)
         let buffGoldMult = 1;
         if (isBuffActive('double_gold') && Math.random() < getBuffDef('double_gold').chance) buffGoldMult = getBuffDef('double_gold').mult;
@@ -1778,7 +1982,8 @@ function tickWorkers(dt) {
         const qtyRoll = Math.random();
         cust.orderQty = qtyRoll < ORDER_QTY_3_CHANCE ? 3 : qtyRoll < ORDER_QTY_3_CHANCE + ORDER_QTY_2_CHANCE ? 2 : 1;
         // VIP: จ่าย 10 เท่าของราคาปกติ + ทิปการันตี 100% ของยอดออเดอร์ (ลูกค้าทั่วไปสุ่มทิปตามอัปเกรด "ตกแต่งร้าน")
-        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult * cust.orderQty;
+        // ราคาอิงสถานีที่สั่ง (สถานีเสริมขายของแพงกว่าตาม revenueMult)
+        cust.orderRevenue = getStationRevenue(cust.stationIndex) * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult * cust.orderQty;
         cust.orderTip = cust.isVIP
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);
@@ -1795,8 +2000,8 @@ function tickWorkers(dt) {
       return;
     }
     if (w.state === 'WALK_TO_STATION') {
-      // เดินขึ้นไปหา Station (บน) — โดยปกติ dy<0 เด่นชัด จึงได้ walkDir='back' (หันหลังให้กล้อง) ตามที่ระบุ
-      const stTarget = stationPos(w.workerIndex);
+      // เดินขึ้นไปหา Station ของออเดอร์นี้ (Multi-Station: กลาง/ซ้าย/ขวา) — dy<0 เด่นชัด จึงได้ walkDir='back'
+      const stTarget = stationPos(w.workerIndex, w.targetStation);
       w.walkDir = pickWalkDirection(w, stTarget);
       const arrived = moveToward(w, stTarget, speed, dt);
       renderWorkerTransform(w, !arrived, dt);
@@ -1844,22 +2049,10 @@ function tickWorkers(dt) {
       renderWorkerTransform(w, !arrived, dt);
       if (arrived) {
         deliverOrder(cust, w);
-        w.state = 'COLLECT';
-      }
-      return;
-    }
-    if (w.state === 'COLLECT') {
-      const coin = getCoinById(w.pendingCoinId);
-      if (!coin) { w.state = 'IDLE'; w.orderId = null; w.pendingCoinId = null; return; }
-      const coinTarget = { x: coin.x, y: coin.y };
-      w.walkDir = pickWalkDirection(w, coinTarget);
-      const arrived = moveToward(w, coinTarget, speed, dt);
-      renderWorkerTransform(w, !arrived, dt);
-      if (arrived) {
-        pickupCoin(coin, w);
+        // ไม่มีขา COLLECT อีกแล้ว — เหรียญกองที่เคาน์เตอร์แล้วบินเข้ากระเป๋าเอง (หรือผู้เล่นแตะเก็บ)
+        // แบบเกมต้นแบบ worker กลับไปรับงานถัดไปได้ทันที รอบงานเร็วขึ้น ~1/3
         w.state = 'IDLE';
         w.orderId = null;
-        w.pendingCoinId = null;
       }
       return;
     }
@@ -1893,12 +2086,14 @@ function spawnCustomerEntity() {
     '<div class="customer-body"><img class="customer-img" alt=""></div>';
   el.querySelector('.customer-img').src = getRandomCustomerImg();
   document.getElementById('customerLane').appendChild(el);
-  // จุดที่ 1: เกิดจากขอบล่างสุดของ Game Area (นอกจอ) แล้วเดินขึ้น — spawn ตรง X ของคิวที่จะไปยืนไว้เลย
-  // เพื่อให้การเดินเข้าคิวเป็นแนวดิ่งตรงๆ ขึ้นมาหาเคาน์เตอร์ ไม่ใช่เดินเฉียงจากขอบขวาแบบเดิม
-  const spawnX = queueSlotPos(slotIndex).x;
+  // แก้บั๊กตัวละครทะลุพื้นผิว: เดิมลูกค้าเกิดใต้ขอบจอแล้วเดินขึ้น "ทะลุผ่าน" แท่งเคาน์เตอร์ (z-index สูงกว่า)
+  // ให้เห็นตัวโผล่ทะลุโต๊ะชัดๆ ทุกครั้งที่เข้า/ออก — เปลี่ยนเป็นเดินเข้าจากขอบซ้าย/ขวาที่ "ระดับแถวคิวพอดี"
+  // เดินแนวนอนเข้าช่องคิวของตัวเอง ไม่มีการข้ามผ่านผิวเคาน์เตอร์อีก (ออกก็เดินออกด้านข้างเช่นกัน)
+  const targetSlot = queueSlotPos(slotIndex);
+  const fromLeft = targetSlot.x < scene.width / 2;
   const cust = {
     id, el, slotIndex, state: 'QUEUED', facing: 1,
-    x: spawnX, y: scene.height + 40,
+    x: fromLeft ? -50 : scene.width + 50, y: targetSlot.y,
     orderIcon: null, orderRevenue: 0, orderTip: 0, orderQty: 1, patienceStartAt: 0,
     isVIP,
   };
@@ -1944,8 +2139,8 @@ function removeCustomerEl(cust) {
 function tickCustomers(dt) {
   customers.forEach(cust => {
     if (cust.state === 'PAID_LEAVING') {
-      // เดินกลับลงขอบล่างสุด (จุดเดียวกับที่เกิดขึ้นมา) แทนการเดินออกขอบขวาแบบเดิม
-      const target = { x: cust.x, y: scene.height + 40 };
+      // เดินออกขอบข้างที่ใกล้สุด ที่ระดับแถวคิวเดิม — ไม่เดินทะลุเคาน์เตอร์ (ดูคอมเมนต์ตอน spawn)
+      const target = { x: cust.x < scene.width / 2 ? -60 : scene.width + 60, y: cust.y };
       const arrived = moveToward(cust, target, getCustomerWalkSpeed(cust) * 1.3, dt);
       renderCustomerTransform(cust, !arrived);
       if (arrived) removeCustomerEl(cust);
@@ -1974,7 +2169,9 @@ function spawnCoin(x, y, value, tip) {
   // ต่อเข้า standStageView โดยตรง (ไม่ใช่ customerLane) เพราะ customerLane เป็น stacking context ของตัวเอง
   // (z-index:3) ถ้าเหรียญอยู่ในนั้น z-index:4 ของมันจะมีผลแค่ภายใน ไม่สามารถชนะ .shop-counter (z-index:4 ระดับบนสุด) ได้จริง
   document.getElementById('standStageView').appendChild(el);
-  const coin = { id, x, y, value, tip, el };
+  const coin = { id, x, y, value, tip, el, age: 0 };
+  // แตะกองเหรียญเก็บทันทีได้ (แบบคลิป) — ไม่แตะก็บินเข้ากระเป๋าเองหลัง COIN_AUTO_COLLECT_DELAY_MS
+  el.addEventListener('click', () => { if (!coin.flying) pickupCoin(coin); });
   coins.push(coin);
   return coin;
 }
@@ -1982,8 +2179,7 @@ function deliverOrder(cust, worker) {
   hideOrderBubble(cust);
   cust.state = 'PAID_LEAVING';
   reindexQueue();
-  const coin = spawnCoin(cust.x, cust.y - 6, cust.orderRevenue, cust.orderTip);
-  worker.pendingCoinId = coin.id;
+  spawnCoin(cust.x, cust.y - 6, cust.orderRevenue, cust.orderTip);
   // ยิง event แทนเรียก addFeverProgress() ข้ามไฟล์ตรงๆ — fever.js subscribe เอง (ดู features/fever.js)
   GameEvents.emit(EVENTS.ORDER_DELIVERED, { cust, worker });
 }
@@ -1995,7 +2191,8 @@ function deliverOrder(cust, worker) {
 const COIN_FLIGHT_DURATION_MS = 550;
 const COIN_ARC_HEIGHT_PX = 46;
 
-function pickupCoin(coin, worker) {
+function pickupCoin(coin) {
+  if (coin.flying) return; // กันเก็บซ้ำ (แตะรัวๆ ระหว่างกำลังบิน)
   playSfxCashRegister();
   spawnFloatText(
     coin.x, coin.y,
@@ -2025,7 +2222,12 @@ function startCoinFlight(coin) {
 
 function tickFlyingCoins(dt) {
   coins.forEach(coin => {
-    if (!coin.flying) return;
+    if (!coin.flying) {
+      // กองเหรียญหน้าเคาน์เตอร์: นับอายุแบบ dt (deterministic ในเทสต์) ครบกำหนดแล้วบินเข้ากระเป๋าเอง
+      coin.age += dt;
+      if (coin.age >= COIN_AUTO_COLLECT_DELAY_MS) pickupCoin(coin);
+      return;
+    }
     coin.flightElapsed += dt;
     const p = Math.min(1, coin.flightElapsed / COIN_FLIGHT_DURATION_MS);
     const x = coin.startX + (coin.targetX - coin.startX) * p; // แกน X วิ่งแบบ linear ตามที่ระบุ
@@ -2183,6 +2385,70 @@ function catchGoblin(el) {
   setTimeout(() => { if (el.parentNode) el.remove(); }, 500);
 }
 
+</script>
+<script>
+/* =====================================================================
+   Mystery Gift Box — กล่องของขวัญเด้งดึ๋งโผล่บนพื้นร้านเป็นระยะ (แบบกล่อง/หีบใน Eatventure)
+   แตะเปิดได้รางวัลสุ่ม: เงินก้อน (อิงรายได้จริง) / เพชร / เติมของ-เติม Fever ทันที
+   ไม่แตะภายใน GIFTBOX_LINGER_MS ก็หายไปเอง — แพทเทิร์นเดียวกับ Golden Goblin (ใช้อิโมจิ ไม่มี asset ใหม่)
+   ===================================================================== */
+let giftboxTimerId = null;
+function scheduleGiftBox() {
+  if (giftboxTimerId) clearTimeout(giftboxTimerId);
+  const delay = GIFTBOX_MIN_INTERVAL_MS + Math.random() * (GIFTBOX_MAX_INTERVAL_MS - GIFTBOX_MIN_INTERVAL_MS);
+  giftboxTimerId = setTimeout(spawnGiftBox, delay);
+}
+function spawnGiftBox() {
+  updateSceneMetrics();
+  const el = document.createElement('div');
+  el.className = 'gift-box';
+  el.textContent = '🎁';
+  // สุ่มตำแหน่งบนพื้นโซนกลาง (ไม่ทับ station แถวบน / เคาน์เตอร์แถวล่าง)
+  el.style.left = (scene.width * (0.15 + Math.random() * 0.7)) + 'px';
+  el.style.top = (scene.height * (0.42 + Math.random() * 0.25)) + 'px';
+  document.getElementById('standStageView').appendChild(el);
+  const state = { opened: false };
+  el.addEventListener('click', () => {
+    if (state.opened) return;
+    state.opened = true;
+    openGiftBox(el);
+  });
+  setTimeout(() => {
+    if (!state.opened && el.parentNode) el.remove();
+    scheduleGiftBox();
+  }, GIFTBOX_LINGER_MS);
+}
+function openGiftBox(el) {
+  const rect = el.getBoundingClientRect();
+  const stageRect = document.getElementById('standStageView').getBoundingClientRect();
+  const x = rect.left - stageRect.left, y = rect.top - stageRect.top;
+  el.classList.add('opened');
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 400);
+  playSfxUpgrade();
+  const roll = Math.random();
+  let kind;
+  if (roll < 0.5) {
+    kind = 'gold';
+    const reward = Math.max(30, Math.round(estimateIncomePerMinute() * 0.7));
+    player.gold += reward;
+    player.stats.totalGoldEarned += reward;
+    spawnFloatText(x, y, `🎁 +${reward.toLocaleString()} 🪙`, 'gold');
+    GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: reward });
+  } else if (roll < 0.8) {
+    kind = 'gems';
+    player.gems += 2;
+    renderGems();
+    spawnFloatText(x, y, '🎁 +2 💎', 'tip');
+    saveGame();
+  } else {
+    kind = 'instant';
+    // แจกผลบัพแบบ instant ฟรี 1 ครั้ง (เติมคลังเต็ม หรือเติมหลอด Fever เต็ม)
+    const instant = Math.random() < 0.5 ? 'instant_restock' : 'fever_now';
+    applyInstantBuff(getBuffDef(instant));
+    spawnFloatText(x, y, `🎁 ${getBuffDef(instant).name}!`, 'tip');
+  }
+  GameEvents.emit(EVENTS.GIFT_OPENED, { kind });
+}
 </script>
 <script>
 /* =====================================================================
@@ -2374,15 +2640,50 @@ function buyUpgrade(key) {
 }
 
 // Milestone Boosts: เลเวล 10/25/50 ของอัปเกรดไหนก็ตาม โชว์ป๊อปอัพฉลอง 1 ครั้งต่อเลเวล (กันเด้งซ้ำตอนโหลดเซฟ
-// ด้วย player.milestonesShown ที่ persist ผ่าน save)
+// ด้วย player.milestonesShown ที่ persist ผ่าน save) + รางวัลดาว: ได้เพชรทันที (💎 ท้ายแถบดาวในคลิป)
 function checkMilestone(key, level, displayName) {
   if (!MILESTONE_LEVELS.includes(level)) return;
   if (!player.milestonesShown[key]) player.milestonesShown[key] = [];
   if (player.milestonesShown[key].includes(level)) return;
   player.milestonesShown[key].push(level);
   const mult = getMilestoneMultiplier(level);
+  player.gems += STATION_STAR_REWARD_GEMS; // รางวัลดาว milestone
+  renderGems();
   showMilestoneToast(displayName, level, mult); // ui/floating-text.js
   GameEvents.emit(EVENTS.MILESTONE_REACHED, { key, level, mult, displayName });
+}
+
+/* ===== Multi-Station: ปลดล็อก/อัปเลเวลสถานีเสริม (สถานีหลักใช้ buyUpgrade('portion') เดิม) ===== */
+function buyStationUnlock(i) {
+  if (isStationUnlocked(i)) return;
+  const cost = getStationUnlockCost(i);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  player.stationsExtra['s' + i] = { unlocked: true, level: 1 };
+  playSfxStageComplete();
+  spawnConfetti(18);
+  GameEvents.emit(EVENTS.STATION_UNLOCKED, { stationIndex: i });
+  saveGame();
+}
+
+function buyStationLevel(i) {
+  const maxLevel = getUpgradeType('portion').maxLevel;
+  const level = getStationLevel(i);
+  if (level >= maxLevel) return;
+  const cost = getStationUpgradeCost(i);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  const newLevel = level + 1;
+  player.stationsExtra['s' + i].level = newLevel;
+  playSfxUpgrade();
+  if (MILESTONE_LEVELS.includes(newLevel)) {
+    // รางวัลดาวของสถานีเสริม — ไม่ต้องพึ่ง milestonesShown เพราะเลเวลขึ้นทีละ 1 แตะแต่ละ milestone ได้ครั้งเดียวโดยธรรมชาติ
+    player.gems += STATION_STAR_REWARD_GEMS;
+    renderGems();
+    showMilestoneToast(getStationDef(i).name, newLevel, getMilestoneMultiplier(newLevel));
+  }
+  GameEvents.emit(EVENTS.STATION_UPGRADED, { stationIndex: i, level: newLevel });
+  saveGame();
 }
 
 /* =====================================================================
@@ -2431,6 +2732,7 @@ function advanceStage() {
   playSfxStageComplete();
   player.stageIndex += 1;
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
+  player.stationsExtra = defaultStationsExtra(); // ร้านใหม่ สถานีเสริมเริ่มล็อกใหม่ (แบบเกมต้นแบบ)
   // staffCount/vaultLevel เป็นอัปเกรดถาวร ไม่ถูกรีเซ็ตตรงนี้ — คงค่าจากด่านก่อนหน้าไว้ทั้งหมด
   if (wasFirstStage && player.staffCount === 0) {
     player.staffCount = 1; // ปลดล็อกลูกมือคนแรกฟรี + รายได้ตอนไม่อยู่หน้าจอ หลังผ่านร้านแรกสำเร็จ (ตามดีไซน์เดิม)
@@ -2486,7 +2788,7 @@ function spawnFloatText(x, y, text, variant) {
 function showMilestoneToast(displayName, level, mult) {
   const el = document.createElement('div');
   el.className = 'milestone-toast';
-  el.innerHTML = `🌟 <b>${displayName}</b> ถึงเลเวล ${level}!<br>โบนัสพลังคูณ x${mult} ทันที!`;
+  el.innerHTML = `🌟 <b>${displayName}</b> ถึงเลเวล ${level}!<br>โบนัสพลังคูณ x${mult} +${STATION_STAR_REWARD_GEMS} 💎!`;
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1900);
 }
@@ -2531,6 +2833,10 @@ GameEvents.on(EVENTS.FEVER_ACTIVATED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_ENDED, () => renderFeverBar());
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderGems());
 GameEvents.on(EVENTS.BUFF_ROLLED, () => renderGems());
+GameEvents.on(EVENTS.MILESTONE_REACHED, () => renderGems()); // รางวัลดาว milestone = เพชร
+GameEvents.on(EVENTS.GIFT_OPENED, () => { renderGold(); renderGems(); });
+GameEvents.on(EVENTS.STATION_UNLOCKED, () => renderGold()); // จ่าย Gold ปลดล็อกสถานี
+GameEvents.on(EVENTS.STATION_UPGRADED, () => renderGold());
 </script>
 <script>
 /* =====================================================================
@@ -2718,15 +3024,21 @@ function renderProductBadge() {
   document.getElementById('productBadge').classList.toggle('affordable', affordable);
 }
 
-function renderProductLevelModal() {
-  const type = getUpgradeType('portion');
-  const level = player.upgradeLevels.portion;
-  const maxed = level >= type.maxLevel;
-  const cost = maxed ? null : getUpgradeCost('portion');
-  const affordable = !maxed && player.gold >= cost;
+// ป๊อปอัพนี้ใช้ร่วมกันทุกสถานี (Multi-Station): 0 = สถานีหลัก (เลเวล = upgradeLevels.portion เดิม),
+// 1-2 = สถานีเสริม (เลเวลอยู่ใน player.stationsExtra) — เปิดจากการแตะโต๊ะสถานีนั้นๆ ในฉาก
+let currentStationIndex = 0;
 
-  document.getElementById('productLevelTitle').textContent = `ระดับ ${level} — ${getStage().product}`;
-  document.getElementById('productLevelIcon').src = getProductIcon();
+function renderProductLevelModal() {
+  const i = currentStationIndex;
+  const type = getUpgradeType('portion');
+  const level = getStationLevel(i);
+  const maxed = level >= type.maxLevel;
+  const cost = maxed ? null : getStationUpgradeCost(i);
+  const affordable = !maxed && player.gold >= cost;
+  const stationName = i === 0 ? getStage().product : getStationDef(i).name;
+
+  document.getElementById('productLevelTitle').textContent = `ระดับ ${level} — ${stationName}`;
+  document.getElementById('productLevelIcon').src = getStationIcon(i);
 
   // ดาว = milestone 10/25/50 (แบบดาวในหน้าต่าง Level ของเกมต้นแบบ) ไม่ใช่ดาวละเลเวลจนล้นจอแบบเดิม
   const starsEl = document.getElementById('productLevelStars');
@@ -2745,8 +3057,8 @@ function renderProductLevelModal() {
   const pct = nextMs > prevMs ? ((level - prevMs) / (nextMs - prevMs)) * 100 : 100;
   document.getElementById('productLevelProgressFill').style.width = `${Math.min(100, pct)}%`;
 
-  // แถวสถิติแบบคลิป: เงินต่อออเดอร์ (คุมโดยเลเวลสินค้า) + เวลาคราฟต์ (คุมโดยอัปเกรดความเร็ว)
-  document.getElementById('productStatRevenue').textContent = Math.round(getRevenuePerSale()).toLocaleString();
+  // แถวสถิติแบบคลิป: เงินต่อออเดอร์ของสถานีนี้ + เวลาคราฟต์ (คุมโดยอัปเกรดความเร็ว)
+  document.getElementById('productStatRevenue').textContent = Math.round(getStationRevenue(i)).toLocaleString();
   document.getElementById('productStatCraft').textContent = (getCraftDurationMs() / 1000).toFixed(1) + 's';
 
   const btn = document.getElementById('btnBuyProductLevel');
@@ -2755,7 +3067,8 @@ function renderProductLevelModal() {
   btn.className = 'btn-cta-mega' + (maxed ? ' btn-cta-mega--maxed' : '');
 }
 
-function openProductLevelModal() {
+function openProductLevelModal(stationIndex) {
+  currentStationIndex = stationIndex || 0;
   renderProductLevelModal();
   document.getElementById('productLevelModal').classList.add('show');
 }
@@ -2763,15 +3076,19 @@ function closeProductLevelModal() {
   document.getElementById('productLevelModal').classList.remove('show');
 }
 
-document.getElementById('productBadge').addEventListener('click', () => openProductLevelModal());
+document.getElementById('productBadge').addEventListener('click', () => openProductLevelModal(0));
 document.getElementById('btnCloseProductLevel').addEventListener('click', () => closeProductLevelModal());
-document.getElementById('btnBuyProductLevel').addEventListener('click', () => buyUpgrade('portion'));
+document.getElementById('btnBuyProductLevel').addEventListener('click', () => {
+  if (currentStationIndex === 0) buyUpgrade('portion');
+  else buyStationLevel(currentStationIndex);
+});
 
 function refreshProductLevelModalIfOpen() {
   if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
 }
 GameEvents.on(EVENTS.COIN_COLLECTED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
+GameEvents.on(EVENTS.STATION_UPGRADED, () => refreshProductLevelModalIfOpen());
 // บัพ "ลดกระหน่ำ" เปลี่ยนราคาที่ getUpgradeCost('portion') คืนค่าเหมือนกัน -- รีเฟรชตอนเริ่ม/หมดบัพ (ดู upgrade-list.js)
 GameEvents.on(EVENTS.BUFF_ROLLED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 GameEvents.on(EVENTS.BUFF_ENDED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
@@ -2910,6 +3227,7 @@ document.getElementById('btnToggleSound').addEventListener('click', () => {
 document.getElementById('btnResetGame').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  try { localStorage.removeItem(SAVE_KEY_V4); } catch (e) {} // กันเซฟ v4 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V3); } catch (e) {} // กันเซฟ v3 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V2); } catch (e) {} // กันเซฟ v2 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V1); } catch (e) {} // กันเซฟ v1 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
@@ -2947,6 +3265,82 @@ function renderMaterialStockPanel() {
 GameEvents.on(EVENTS.MATERIAL_CONSUMED, () => renderMaterialStockPanel());
 GameEvents.on(EVENTS.MATERIAL_RESTOCKED, () => renderMaterialStockPanel());
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderMaterialStockPanel());
+</script>
+<script>
+/* =====================================================================
+   Side Stations + Upgrade Arrows — Multi-Station แบบเกมต้นแบบ
+   - โต๊ะสถานีเสริม 2 ตัว (ซ้าย/ขวาของสถานีหลัก): ล็อกอยู่ = โชว์ 🔒 + ราคาปลดล็อก แตะเพื่อซื้อ
+     ปลดล็อกแล้ว = โชว์ไอคอนสินค้า + เลเวล แตะเพื่อเปิดป๊อปอัพเลเวลของสถานีนั้น
+   - ลูกศร ⬆️ เด้งบนสถานี (รวมสถานีหลัก) เมื่อ "ซื้อไหว" (ปลดล็อก/อัปเลเวลถัดไป) — แบบ frame ในคลิป
+   ตำแหน่งอิง STATION_XS (scene.js) เป็น % เดียวกับจุดที่ worker เดินไปยืนคราฟต์จริง
+   ===================================================================== */
+function renderSideStations() {
+  const wrap = document.getElementById('sideStations');
+  wrap.innerHTML = '';
+  [1, 2].forEach(i => {
+    const def = getStationDef(i);
+    const unlocked = isStationUnlocked(i);
+    const el = document.createElement('div');
+    el.className = 'station-side' + (unlocked ? '' : ' station-side--locked');
+    el.style.left = (STATION_XS[i] * 100) + '%';
+    if (unlocked) {
+      el.innerHTML =
+        `<img class="station-side-icon" src="${getStationIcon(i)}" alt="">` +
+        `<span class="station-side-level pixel-num">Lv ${getStationLevel(i)}</span>` +
+        `<div class="station-side-table"></div>`;
+      el.title = `${def.name} — แตะเพื่ออัปเกรด`;
+      el.addEventListener('click', () => openProductLevelModal(i));
+    } else {
+      const cost = getStationUnlockCost(i);
+      const affordable = player.gold >= cost;
+      el.innerHTML =
+        `<span class="station-side-lock">🔒</span>` +
+        `<span class="station-side-cost ${affordable ? 'ok' : ''}">${cost.toLocaleString()} 🪙</span>` +
+        `<div class="station-side-table station-side-table--ghost"></div>`;
+      el.title = `ปลดล็อก ${def.name} (${cost.toLocaleString()} Gold)`;
+      el.addEventListener('click', () => buyStationUnlock(i));
+    }
+    wrap.appendChild(el);
+  });
+}
+
+// ลูกศรอัปเกรดลอยบนสถานี (แบบวงกลมลูกศรแดงในคลิป) — โชว์เฉพาะตอนซื้อไหว แตะแล้วทำ action ของสถานีนั้นเลย
+function renderStationArrows() {
+  const wrap = document.getElementById('stationArrows');
+  wrap.innerHTML = '';
+  [0, 1, 2].forEach(i => {
+    let affordable, onTap;
+    if (!isStationUnlocked(i)) {
+      affordable = player.gold >= getStationUnlockCost(i);
+      onTap = () => buyStationUnlock(i);
+    } else {
+      const maxed = getStationLevel(i) >= getUpgradeType('portion').maxLevel;
+      affordable = !maxed && player.gold >= getStationUpgradeCost(i);
+      onTap = () => openProductLevelModal(i);
+    }
+    if (!affordable) return;
+    const arrow = document.createElement('button');
+    arrow.className = 'station-arrow';
+    arrow.textContent = '⬆️';
+    arrow.style.left = (STATION_XS[i] * 100) + '%';
+    arrow.addEventListener('click', onTap);
+    wrap.appendChild(arrow);
+  });
+}
+
+function refreshStationsUi() {
+  renderSideStations();
+  renderStationArrows();
+}
+
+GameEvents.on(EVENTS.COIN_COLLECTED, () => renderStationArrows());
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => refreshStationsUi());
+GameEvents.on(EVENTS.STATION_UNLOCKED, () => refreshStationsUi());
+GameEvents.on(EVENTS.STATION_UPGRADED, () => refreshStationsUi());
+GameEvents.on(EVENTS.STAGE_ADVANCED, () => refreshStationsUi());
+GameEvents.on(EVENTS.BUFF_ROLLED, () => refreshStationsUi());  // discount เปลี่ยนราคาปลดล็อก/อัปเลเวล
+GameEvents.on(EVENTS.BUFF_ENDED, () => refreshStationsUi());
+GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => renderStationArrows());
 </script>
 <script>
 /* =====================================================================
@@ -3058,6 +3452,7 @@ function renderAll() {
   renderActiveBuffChip();
   refreshUpgradesFab();
   refreshRenovateFab();
+  refreshStationsUi();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
@@ -3142,6 +3537,7 @@ renderAll();
 initWorkers();
 scheduleNextCustomer();
 scheduleGoblin();
+scheduleGiftBox();
 rafId = requestAnimationFrame(gameTick);
 </script>
 </body>

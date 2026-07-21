@@ -77,4 +77,5 @@ renderAll();
 initWorkers();
 scheduleNextCustomer();
 scheduleGoblin();
+scheduleGiftBox();
 rafId = requestAnimationFrame(gameTick);

@@ -28,15 +28,50 @@ function buyUpgrade(key) {
 }
 
 // Milestone Boosts: เลเวล 10/25/50 ของอัปเกรดไหนก็ตาม โชว์ป๊อปอัพฉลอง 1 ครั้งต่อเลเวล (กันเด้งซ้ำตอนโหลดเซฟ
-// ด้วย player.milestonesShown ที่ persist ผ่าน save)
+// ด้วย player.milestonesShown ที่ persist ผ่าน save) + รางวัลดาว: ได้เพชรทันที (💎 ท้ายแถบดาวในคลิป)
 function checkMilestone(key, level, displayName) {
   if (!MILESTONE_LEVELS.includes(level)) return;
   if (!player.milestonesShown[key]) player.milestonesShown[key] = [];
   if (player.milestonesShown[key].includes(level)) return;
   player.milestonesShown[key].push(level);
   const mult = getMilestoneMultiplier(level);
+  player.gems += STATION_STAR_REWARD_GEMS; // รางวัลดาว milestone
+  renderGems();
   showMilestoneToast(displayName, level, mult); // ui/floating-text.js
   GameEvents.emit(EVENTS.MILESTONE_REACHED, { key, level, mult, displayName });
+}
+
+/* ===== Multi-Station: ปลดล็อก/อัปเลเวลสถานีเสริม (สถานีหลักใช้ buyUpgrade('portion') เดิม) ===== */
+function buyStationUnlock(i) {
+  if (isStationUnlocked(i)) return;
+  const cost = getStationUnlockCost(i);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  player.stationsExtra['s' + i] = { unlocked: true, level: 1 };
+  playSfxStageComplete();
+  spawnConfetti(18);
+  GameEvents.emit(EVENTS.STATION_UNLOCKED, { stationIndex: i });
+  saveGame();
+}
+
+function buyStationLevel(i) {
+  const maxLevel = getUpgradeType('portion').maxLevel;
+  const level = getStationLevel(i);
+  if (level >= maxLevel) return;
+  const cost = getStationUpgradeCost(i);
+  if (player.gold < cost) return;
+  player.gold -= cost;
+  const newLevel = level + 1;
+  player.stationsExtra['s' + i].level = newLevel;
+  playSfxUpgrade();
+  if (MILESTONE_LEVELS.includes(newLevel)) {
+    // รางวัลดาวของสถานีเสริม — ไม่ต้องพึ่ง milestonesShown เพราะเลเวลขึ้นทีละ 1 แตะแต่ละ milestone ได้ครั้งเดียวโดยธรรมชาติ
+    player.gems += STATION_STAR_REWARD_GEMS;
+    renderGems();
+    showMilestoneToast(getStationDef(i).name, newLevel, getMilestoneMultiplier(newLevel));
+  }
+  GameEvents.emit(EVENTS.STATION_UPGRADED, { stationIndex: i, level: newLevel });
+  saveGame();
 }
 
 /* =====================================================================
@@ -85,6 +120,7 @@ function advanceStage() {
   playSfxStageComplete();
   player.stageIndex += 1;
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
+  player.stationsExtra = defaultStationsExtra(); // ร้านใหม่ สถานีเสริมเริ่มล็อกใหม่ (แบบเกมต้นแบบ)
   // staffCount/vaultLevel เป็นอัปเกรดถาวร ไม่ถูกรีเซ็ตตรงนี้ — คงค่าจากด่านก่อนหน้าไว้ทั้งหมด
   if (wasFirstStage && player.staffCount === 0) {
     player.staffCount = 1; // ปลดล็อกลูกมือคนแรกฟรี + รายได้ตอนไม่อยู่หน้าจอ หลังผ่านร้านแรกสำเร็จ (ตามดีไซน์เดิม)

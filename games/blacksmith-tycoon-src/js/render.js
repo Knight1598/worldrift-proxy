@@ -20,6 +20,7 @@ function renderAll() {
   renderActiveBuffChip();
   refreshUpgradesFab();
   refreshRenovateFab();
+  refreshStationsUi();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());

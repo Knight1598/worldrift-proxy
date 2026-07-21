@@ -1,6 +1,7 @@
 /* =====================================================================
    Worker (ผู้เล่น + พนักงาน) — State Machine:
-   IDLE -> WALK_TO_STATION -> [WAITING_FOR_STOCK ถ้าวัตถุดิบไม่พอ] -> CRAFTING -> DELIVER -> COLLECT -> IDLE
+   IDLE -> WALK_TO_STATION -> [WAITING_FOR_STOCK ถ้าวัตถุดิบไม่พอ] -> CRAFTING -> DELIVER -> IDLE
+   (ขา COLLECT ถูกตัดออก — เหรียญกองที่เคาน์เตอร์แล้วเก็บอัตโนมัติ/แตะเก็บ ดู entities/economy.js)
    แอนิเมชันเดิน: sprite-sheet จริง 4 เฟรม สลับด้วย background-position ตามทิศทางที่กำลังเดิน
    (หันหลังตอนเดินขึ้นไป Station, หันหน้าตอนเดินลงมาเคาน์เตอร์)
    ===================================================================== */
@@ -119,7 +120,11 @@ function tickWorkers(dt) {
       const cust = findAssignableCustomer();
       if (cust) {
         cust.state = 'ORDER_ACTIVE';
-        cust.orderIcon = getProductIcon();
+        // Multi-Station: ลูกค้าสุ่มสั่งจากสถานีที่ปลดล็อกแล้ว — worker คนนี้จะเดินไปคราฟต์ที่สถานีนั้น
+        const unlocked = getUnlockedStationIndices();
+        cust.stationIndex = unlocked[Math.floor(Math.random() * unlocked.length)];
+        w.targetStation = cust.stationIndex;
+        cust.orderIcon = getStationIcon(cust.stationIndex);
         // บัพ "เงินสองเท่า"/"โชคกาชา" — สุ่มโอกาสคูณเงินออเดอร์นี้เพิ่ม (มีได้ทีละบัพเดียวอยู่แล้ว เลยไม่มีทางชนกัน)
         let buffGoldMult = 1;
         if (isBuffActive('double_gold') && Math.random() < getBuffDef('double_gold').chance) buffGoldMult = getBuffDef('double_gold').mult;
@@ -128,7 +133,8 @@ function tickWorkers(dt) {
         const qtyRoll = Math.random();
         cust.orderQty = qtyRoll < ORDER_QTY_3_CHANCE ? 3 : qtyRoll < ORDER_QTY_3_CHANCE + ORDER_QTY_2_CHANCE ? 2 : 1;
         // VIP: จ่าย 10 เท่าของราคาปกติ + ทิปการันตี 100% ของยอดออเดอร์ (ลูกค้าทั่วไปสุ่มทิปตามอัปเกรด "ตกแต่งร้าน")
-        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult * cust.orderQty;
+        // ราคาอิงสถานีที่สั่ง (สถานีเสริมขายของแพงกว่าตาม revenueMult)
+        cust.orderRevenue = getStationRevenue(cust.stationIndex) * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult * cust.orderQty;
         cust.orderTip = cust.isVIP
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);
@@ -145,8 +151,8 @@ function tickWorkers(dt) {
       return;
     }
     if (w.state === 'WALK_TO_STATION') {
-      // เดินขึ้นไปหา Station (บน) — โดยปกติ dy<0 เด่นชัด จึงได้ walkDir='back' (หันหลังให้กล้อง) ตามที่ระบุ
-      const stTarget = stationPos(w.workerIndex);
+      // เดินขึ้นไปหา Station ของออเดอร์นี้ (Multi-Station: กลาง/ซ้าย/ขวา) — dy<0 เด่นชัด จึงได้ walkDir='back'
+      const stTarget = stationPos(w.workerIndex, w.targetStation);
       w.walkDir = pickWalkDirection(w, stTarget);
       const arrived = moveToward(w, stTarget, speed, dt);
       renderWorkerTransform(w, !arrived, dt);
@@ -194,22 +200,10 @@ function tickWorkers(dt) {
       renderWorkerTransform(w, !arrived, dt);
       if (arrived) {
         deliverOrder(cust, w);
-        w.state = 'COLLECT';
-      }
-      return;
-    }
-    if (w.state === 'COLLECT') {
-      const coin = getCoinById(w.pendingCoinId);
-      if (!coin) { w.state = 'IDLE'; w.orderId = null; w.pendingCoinId = null; return; }
-      const coinTarget = { x: coin.x, y: coin.y };
-      w.walkDir = pickWalkDirection(w, coinTarget);
-      const arrived = moveToward(w, coinTarget, speed, dt);
-      renderWorkerTransform(w, !arrived, dt);
-      if (arrived) {
-        pickupCoin(coin, w);
+        // ไม่มีขา COLLECT อีกแล้ว — เหรียญกองที่เคาน์เตอร์แล้วบินเข้ากระเป๋าเอง (หรือผู้เล่นแตะเก็บ)
+        // แบบเกมต้นแบบ worker กลับไปรับงานถัดไปได้ทันที รอบงานเร็วขึ้น ~1/3
         w.state = 'IDLE';
         w.orderId = null;
-        w.pendingCoinId = null;
       }
       return;
     }

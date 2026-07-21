@@ -14,15 +14,21 @@ function renderProductBadge() {
   document.getElementById('productBadge').classList.toggle('affordable', affordable);
 }
 
-function renderProductLevelModal() {
-  const type = getUpgradeType('portion');
-  const level = player.upgradeLevels.portion;
-  const maxed = level >= type.maxLevel;
-  const cost = maxed ? null : getUpgradeCost('portion');
-  const affordable = !maxed && player.gold >= cost;
+// ป๊อปอัพนี้ใช้ร่วมกันทุกสถานี (Multi-Station): 0 = สถานีหลัก (เลเวล = upgradeLevels.portion เดิม),
+// 1-2 = สถานีเสริม (เลเวลอยู่ใน player.stationsExtra) — เปิดจากการแตะโต๊ะสถานีนั้นๆ ในฉาก
+let currentStationIndex = 0;
 
-  document.getElementById('productLevelTitle').textContent = `ระดับ ${level} — ${getStage().product}`;
-  document.getElementById('productLevelIcon').src = getProductIcon();
+function renderProductLevelModal() {
+  const i = currentStationIndex;
+  const type = getUpgradeType('portion');
+  const level = getStationLevel(i);
+  const maxed = level >= type.maxLevel;
+  const cost = maxed ? null : getStationUpgradeCost(i);
+  const affordable = !maxed && player.gold >= cost;
+  const stationName = i === 0 ? getStage().product : getStationDef(i).name;
+
+  document.getElementById('productLevelTitle').textContent = `ระดับ ${level} — ${stationName}`;
+  document.getElementById('productLevelIcon').src = getStationIcon(i);
 
   // ดาว = milestone 10/25/50 (แบบดาวในหน้าต่าง Level ของเกมต้นแบบ) ไม่ใช่ดาวละเลเวลจนล้นจอแบบเดิม
   const starsEl = document.getElementById('productLevelStars');
@@ -41,8 +47,8 @@ function renderProductLevelModal() {
   const pct = nextMs > prevMs ? ((level - prevMs) / (nextMs - prevMs)) * 100 : 100;
   document.getElementById('productLevelProgressFill').style.width = `${Math.min(100, pct)}%`;
 
-  // แถวสถิติแบบคลิป: เงินต่อออเดอร์ (คุมโดยเลเวลสินค้า) + เวลาคราฟต์ (คุมโดยอัปเกรดความเร็ว)
-  document.getElementById('productStatRevenue').textContent = Math.round(getRevenuePerSale()).toLocaleString();
+  // แถวสถิติแบบคลิป: เงินต่อออเดอร์ของสถานีนี้ + เวลาคราฟต์ (คุมโดยอัปเกรดความเร็ว)
+  document.getElementById('productStatRevenue').textContent = Math.round(getStationRevenue(i)).toLocaleString();
   document.getElementById('productStatCraft').textContent = (getCraftDurationMs() / 1000).toFixed(1) + 's';
 
   const btn = document.getElementById('btnBuyProductLevel');
@@ -51,7 +57,8 @@ function renderProductLevelModal() {
   btn.className = 'btn-cta-mega' + (maxed ? ' btn-cta-mega--maxed' : '');
 }
 
-function openProductLevelModal() {
+function openProductLevelModal(stationIndex) {
+  currentStationIndex = stationIndex || 0;
   renderProductLevelModal();
   document.getElementById('productLevelModal').classList.add('show');
 }
@@ -59,15 +66,19 @@ function closeProductLevelModal() {
   document.getElementById('productLevelModal').classList.remove('show');
 }
 
-document.getElementById('productBadge').addEventListener('click', () => openProductLevelModal());
+document.getElementById('productBadge').addEventListener('click', () => openProductLevelModal(0));
 document.getElementById('btnCloseProductLevel').addEventListener('click', () => closeProductLevelModal());
-document.getElementById('btnBuyProductLevel').addEventListener('click', () => buyUpgrade('portion'));
+document.getElementById('btnBuyProductLevel').addEventListener('click', () => {
+  if (currentStationIndex === 0) buyUpgrade('portion');
+  else buyStationLevel(currentStationIndex);
+});
 
 function refreshProductLevelModalIfOpen() {
   if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
 }
 GameEvents.on(EVENTS.COIN_COLLECTED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
+GameEvents.on(EVENTS.STATION_UPGRADED, () => refreshProductLevelModalIfOpen());
 // บัพ "ลดกระหน่ำ" เปลี่ยนราคาที่ getUpgradeCost('portion') คืนค่าเหมือนกัน -- รีเฟรชตอนเริ่ม/หมดบัพ (ดู upgrade-list.js)
 GameEvents.on(EVENTS.BUFF_ROLLED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 GameEvents.on(EVENTS.BUFF_ENDED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });

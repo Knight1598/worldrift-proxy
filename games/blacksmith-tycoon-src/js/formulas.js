@@ -17,6 +17,38 @@ function getRevenuePerSale() {
   return getStage().baseRevenue * (1 + bonus);
 }
 
+/* ===== Multi-Station (3 สถานีต่อด่าน ดู STATION_SETS ใน data.js) =====
+   สถานี 0 = สถานีหลัก ใช้ player.upgradeLevels.portion เป็นเลเวล (ระบบเดิม milestone/mission ทำงานต่อได้หมด)
+   สถานี 1-2 = สถานีเสริม เก็บใน player.stationsExtra ปลดล็อกด้วย Gold แล้วอัปเลเวลแยก */
+function getStationDef(i) { return STATION_SETS[getStage().key][i]; }
+function getStationLevel(i) {
+  return i === 0 ? player.upgradeLevels.portion : player.stationsExtra['s' + i].level;
+}
+function isStationUnlocked(i) {
+  return i === 0 ? true : player.stationsExtra['s' + i].unlocked;
+}
+function getUnlockedStationIndices() {
+  return [0, 1, 2].filter(i => isStationUnlocked(i));
+}
+function getStationRevenue(i) {
+  const level = getStationLevel(i);
+  const bonus = level * PORTION_LEVEL_BONUS * getMilestoneMultiplier(level);
+  return getStage().baseRevenue * getStationDef(i).revenueMult * (1 + bonus);
+}
+function getStationUpgradeCost(i) {
+  if (i === 0) return getUpgradeCost('portion');
+  const base = getStage().baseRevenue * getStationDef(i).revenueMult * 10 * Math.pow(UPGRADE_COST_GROWTH, getStationLevel(i));
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+}
+function getStationUnlockCost(i) {
+  const base = getStage().baseRevenue * getStationDef(i).unlockCostMult;
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
+}
+function getStationIcon(i) {
+  const def = getStationDef(i);
+  return def.icon || getProductIcon(); // สถานีหลักใช้ไอคอนสินค้าตาม tier เดิม
+}
+
 function getCraftDurationMs() {
   if (isFeverActive()) return FEVER_CRAFT_MS; // Fever Mode: แทบจะทำเสร็จทันที
   const level = player.upgradeLevels.speed;

@@ -68,7 +68,7 @@ function getMilestoneMultiplier(level) {
 }
 
 // ผู้เล่น/พนักงานเดิน+ทำของ — ควบคุมโดยอัปเกรด "ความเร็วในการทำงาน"
-const BASE_CRAFT_MS = 3200;
+const BASE_CRAFT_MS = 2600; // ลดจาก 3200 ตามคำขอเดินเกมเร็วขึ้น
 const MIN_CRAFT_MS = 900;
 const SPEED_CRAFT_MS_REDUCTION = 46; // ต่อเลเวล (50 เลเวลไม่มี milestone พอดีแตะพื้น MIN_CRAFT_MS)
 const BASE_MOVE_SPEED_PX = 90;   // px/วินาที
@@ -76,7 +76,7 @@ const SPEED_MOVE_BONUS_PX = 4;   // px/วินาที ต่อเลเว�
 const MAX_MOVE_SPEED_PX = 400;   // เพดานกันความเร็วพุ่งเกินจริงตอนรวม Milestone x8 เข้าไปด้วย
 
 // อัตราการเกิดลูกค้า + ความจุคิว — ควบคุมโดยอัปเกรด "ป้ายร้าน"
-const BASE_SPAWN_INTERVAL_MS = 3400;
+const BASE_SPAWN_INTERVAL_MS = 3000; // ลดจาก 3400 ตามคำขอเดินเกมเร็วขึ้น
 const MIN_SPAWN_INTERVAL_MS = 1100;
 const SIGNAGE_SPAWN_MS_REDUCTION = 46; // ต่อเลเวล
 const BASE_MAX_QUEUE = 3;
@@ -85,14 +85,48 @@ const MAX_QUEUE_SIZE = 20; // เพดานกันคิวยาวจน�
 
 const CUSTOMER_WALK_SPEED_PX = 70; // ความเร็วเดินของลูกค้า คงที่ ไม่ผูกกับอัปเกรด (สเปกระบุให้อัปเกรดความเร็วมีผลแค่ผู้เล่น/พนักงาน)
 const PATIENCE_DURATION_MS = 9000; // หลอดความอดทนเชิงภาพล้วนๆ ไม่มีผลลงโทษถ้าหมด (ไม่ได้ระบุ fail-state ไว้ในสเปก)
-const APPROX_ORDER_TRAVEL_PX = 320; // ระยะทางเดินโดยประมาณต่อ 1 ออเดอร์ (ไป station + ไปส่งที่คิว + ไปเก็บเหรียญ) ใช้คำนวณ throughput แบบไม่พึ่ง DOM เพื่อให้ deterministic
+const APPROX_ORDER_TRAVEL_PX = 240; // ลดลงหลังตัดขาเดินเก็บเหรียญ (COLLECT) ออกจากรอบงาน // ระยะทางเดินโดยประมาณต่อ 1 ออเดอร์ (ไป station + ไปส่งที่คิว + ไปเก็บเหรียญ) ใช้คำนวณ throughput แบบไม่พึ่ง DOM เพื่อให้ deterministic
 
 // ===== Renovate (ขึ้นด่านแบบ Eatventure) =====
 // เดิมต้องอัปเกรดครบ 4 ชนิด x50 เลเวล (200 ครั้ง) ถึงขึ้นด่านใหม่ได้ — ยืดเกินไปมาก
-// เปลี่ยนเป็นแบบเกมต้นแบบในคลิป: อัปเกรด "สินค้า" (สถานี) ถึงเลเวลที่กำหนดก็กดปุ่ม 🔨 Renovate ได้เลย
-// อัปเกรดตัวอื่นๆ (ความเร็ว/ป้าย/ตกแต่ง) กลายเป็นตัวเสริมให้ฟาร์มเร็วขึ้น ไม่ใช่กำแพงบังคับ
-const RENOVATE_GATE_LEVEL = 25;   // สินค้าต้องถึงเลเวลนี้ก่อนถึงจะ Renovate ได้ (ตรงกับ "level 25 first!" ในคลิป)
+// เปลี่ยนเป็นแบบเกมต้นแบบในคลิป: อัปเกรด "สินค้า" (สถานีหลัก) ถึงเลเวลที่กำหนดก็กดปุ่ม 🔨 Renovate ได้เลย
+// อัปเกรดตัวอื่นๆ (ความเร็ว/ป้าย/ตกแต่ง/สถานีเสริม) กลายเป็นตัวเสริมให้ฟาร์มเร็วขึ้น ไม่ใช่กำแพงบังคับ
+const RENOVATE_GATE_LEVEL = 15;   // ลดจาก 25 -> 15 ตามคำขอ "เดินเกมเร็วขึ้น" (ยังคงคอนเซ็ปต์ gate เดียวแบบคลิป)
 const RENOVATE_REWARD_GEMS = 10;  // รางวัลเพชรตอน Renovate สำเร็จ (คลิปมีช่อง Rewards ในหน้าต่าง Renovate)
+
+// ===== หลายสถานีในด่านเดียว (Multi-Station แบบ Eatventure) =====
+// แต่ละด่านมี 3 สถานี: สถานีหลัก (ปลดล็อกอยู่แล้ว ใช้ระบบเลเวลสินค้าเดิม) + สถานีเสริม 2 ตัว
+// ปลดล็อกด้วย Gold แล้วอัปเลเวลแยกของใครของมัน สินค้าแพงขึ้นตาม revenueMult — จังหวะ "เก็บเงินก้อนปลดล็อกโต๊ะใหม่"
+// แบบเกมต้นแบบ สถานีเสริมรีเซ็ตตอน Renovate (ร้านใหม่ เริ่มปลดล็อกใหม่) เหมือน upgradeLevels
+// icon: null = ใช้ PRODUCT_TIERS ของด่าน (สถานีหลักเปลี่ยนหน้าตาสินค้าตามเลเวลเหมือนเดิม)
+const STATION_SETS = {
+  stall: [
+    { name: 'ของชำ',    icon: null,                                      revenueMult: 1, unlockCostMult: 0 },
+    { name: 'โล่ไม้',    icon: '../assets/blacksmith/shield_wood.png',    revenueMult: 2, unlockCostMult: 80 },
+    { name: 'ดาบสำริด', icon: '../assets/blacksmith/sword_bronze.png',   revenueMult: 4, unlockCostMult: 400 },
+  ],
+  forge: [
+    { name: 'ดาบเหล็ก', icon: null,                                      revenueMult: 1, unlockCostMult: 0 },
+    { name: 'โล่นักรบ',  icon: '../assets/blacksmith/shield_wood.png',    revenueMult: 2, unlockCostMult: 80 },
+    { name: 'ดาบอัศวิน', icon: '../assets/blacksmith/sword_blue.png',     revenueMult: 4, unlockCostMult: 400 },
+  ],
+  alchemy: [
+    { name: 'ยาแดง',    icon: null,                                      revenueMult: 1, unlockCostMult: 0 },
+    { name: 'ยาฟ้า',     icon: '../assets/blacksmith/potion_blue.png',    revenueMult: 2, unlockCostMult: 80 },
+    { name: 'ถุงทองเวท', icon: '../assets/blacksmith/coin.png',           revenueMult: 4, unlockCostMult: 400 },
+  ],
+};
+const STATION_STAR_REWARD_GEMS = 3; // รางวัลเพชรตอนเลเวลสถานี/อัปเกรดแตะดาว milestone (💎 ท้ายแถบในคลิป)
+
+// ===== กองเหรียญหน้าเคาน์เตอร์ (แบบคลิป) =====
+// ส่งของเสร็จเหรียญกองอยู่หน้าเคาน์เตอร์ แตะเก็บเองได้ทันที หรือปล่อยให้บินเข้ากระเป๋าเองหลังหน่วงสั้นๆ
+// (worker ไม่ต้องเดินไปเก็บเหรียญอีกแล้ว — ตัดขา COLLECT ทิ้ง ทำให้รอบงานเร็วขึ้น ~1/3 ด้วย)
+const COIN_AUTO_COLLECT_DELAY_MS = 900;
+
+// ===== กล่องของขวัญปริศนา (Mystery Gift Box แบบ Eatventure) =====
+const GIFTBOX_MIN_INTERVAL_MS = 75000;
+const GIFTBOX_MAX_INTERVAL_MS = 130000;
+const GIFTBOX_LINGER_MS = 12000; // อยู่บนจอนานเท่านี้ก่อนหายไปเองถ้าไม่แตะ
 
 // ===== ออเดอร์หลายชิ้น (ตัวเลขในบับเบิลแบบคลิป) =====
 // ลูกค้าบางคนสั่งมากกว่า 1 ชิ้น — บับเบิลโชว์ x2/x3 และจ่ายเงินคูณตามจำนวน (คราฟต์รอบเดียวได้ทั้งชุด)
@@ -149,7 +183,7 @@ const MATERIAL_REGEN_PER_SEC = 0.9;
 // ===== Order Missions — ภารกิจสะสมจำนวนออเดอร์ที่ "เสิร์ฟสำเร็จ" (นับตั้งแต่ภารกิจก่อนหน้าจบ ไม่ใช่สะสมทั้งเกม)
 // ให้รางวัลเป็นเพชร ใช้สูตร growth แบบเดียวกับที่ใช้ทั่วทั้งเกม (cost/milestone) แทนการลิสต์ค่าคงที่ตายตัว =====
 const ORDER_MISSION_BASE_TARGET = 8;      // ภารกิจแรกต้องเสิร์ฟ 8 ออเดอร์
-const ORDER_MISSION_TARGET_GROWTH = 1.35; // แต่ละภารกิจถัดไปต้องเสิร์ฟมากขึ้น
+const ORDER_MISSION_TARGET_GROWTH = 1.28; // แต่ละภารกิจถัดไปต้องเสิร์ฟมากขึ้น (ลดจาก 1.35 ให้เพชรไหลเร็วขึ้น)
 const ORDER_MISSION_BASE_REWARD = 3;      // เพชรรางวัลภารกิจแรก
 const ORDER_MISSION_REWARD_GROWTH = 1.15;
 
@@ -195,7 +229,8 @@ const BUFF_DEFS = [
     desc: 'ได้ Gold ก้อนโตทันที (อิงรายได้ต่อนาทีปัจจุบัน)' },
 ];
 
-const SAVE_KEY = 'blacksmithTycoonSave_v4';
+const SAVE_KEY = 'blacksmithTycoonSave_v5';
+const SAVE_KEY_V4 = 'blacksmithTycoonSave_v4'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V3 = 'blacksmithTycoonSave_v3'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V2 = 'blacksmithTycoonSave_v2'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V1 = 'blacksmithTycoonSave_v1'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก

@@ -19,4 +19,7 @@ const EVENTS = {
   MISSION_COMPLETED:  'mission:completed',  // tickMissionProgress() — { missionIndex, reward }
   BUFF_ROLLED:        'buff:rolled',        // rollBuff() — { buff }
   BUFF_ENDED:         'buff:ended',         // tickBuffs() เมื่อ buff แบบ duration หมดเวลา
+  STATION_UNLOCKED:   'station:unlocked',   // buyStationUnlock() — { stationIndex }
+  STATION_UPGRADED:   'station:upgraded',   // buyStationLevel() — { stationIndex, level }
+  GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }
 };

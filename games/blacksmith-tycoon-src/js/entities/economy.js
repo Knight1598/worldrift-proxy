@@ -11,7 +11,9 @@ function spawnCoin(x, y, value, tip) {
   // ต่อเข้า standStageView โดยตรง (ไม่ใช่ customerLane) เพราะ customerLane เป็น stacking context ของตัวเอง
   // (z-index:3) ถ้าเหรียญอยู่ในนั้น z-index:4 ของมันจะมีผลแค่ภายใน ไม่สามารถชนะ .shop-counter (z-index:4 ระดับบนสุด) ได้จริง
   document.getElementById('standStageView').appendChild(el);
-  const coin = { id, x, y, value, tip, el };
+  const coin = { id, x, y, value, tip, el, age: 0 };
+  // แตะกองเหรียญเก็บทันทีได้ (แบบคลิป) — ไม่แตะก็บินเข้ากระเป๋าเองหลัง COIN_AUTO_COLLECT_DELAY_MS
+  el.addEventListener('click', () => { if (!coin.flying) pickupCoin(coin); });
   coins.push(coin);
   return coin;
 }
@@ -19,8 +21,7 @@ function deliverOrder(cust, worker) {
   hideOrderBubble(cust);
   cust.state = 'PAID_LEAVING';
   reindexQueue();
-  const coin = spawnCoin(cust.x, cust.y - 6, cust.orderRevenue, cust.orderTip);
-  worker.pendingCoinId = coin.id;
+  spawnCoin(cust.x, cust.y - 6, cust.orderRevenue, cust.orderTip);
   // ยิง event แทนเรียก addFeverProgress() ข้ามไฟล์ตรงๆ — fever.js subscribe เอง (ดู features/fever.js)
   GameEvents.emit(EVENTS.ORDER_DELIVERED, { cust, worker });
 }
@@ -32,7 +33,8 @@ function deliverOrder(cust, worker) {
 const COIN_FLIGHT_DURATION_MS = 550;
 const COIN_ARC_HEIGHT_PX = 46;
 
-function pickupCoin(coin, worker) {
+function pickupCoin(coin) {
+  if (coin.flying) return; // กันเก็บซ้ำ (แตะรัวๆ ระหว่างกำลังบิน)
   playSfxCashRegister();
   spawnFloatText(
     coin.x, coin.y,
@@ -62,7 +64,12 @@ function startCoinFlight(coin) {
 
 function tickFlyingCoins(dt) {
   coins.forEach(coin => {
-    if (!coin.flying) return;
+    if (!coin.flying) {
+      // กองเหรียญหน้าเคาน์เตอร์: นับอายุแบบ dt (deterministic ในเทสต์) ครบกำหนดแล้วบินเข้ากระเป๋าเอง
+      coin.age += dt;
+      if (coin.age >= COIN_AUTO_COLLECT_DELAY_MS) pickupCoin(coin);
+      return;
+    }
     coin.flightElapsed += dt;
     const p = Math.min(1, coin.flightElapsed / COIN_FLIGHT_DURATION_MS);
     const x = coin.startX + (coin.targetX - coin.startX) * p; // แกน X วิ่งแบบ linear ตามที่ระบุ
