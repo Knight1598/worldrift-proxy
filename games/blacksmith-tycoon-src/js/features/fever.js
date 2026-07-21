@@ -15,26 +15,16 @@ function activateFever() {
   feverState.active = true;
   feverState.progress = 0;
   feverState.endsAt = performance.now() + FEVER_DURATION_MS;
-  renderFeverBar();
   playSfxStageComplete(); // ยืมเสียงรัวเดิมมาใช้แทนเสียง Fever โดยเฉพาะ (ไม่ได้เพิ่มเสียงใหม่ในสโคปนี้)
+  // ไม่เรียก renderFeverBar() ตรงๆ ที่นี่ -- ui/hud.js subscribe FEVER_ACTIVATED ไว้แล้ว กันรีเฟรชซ้ำ
   GameEvents.emit(EVENTS.FEVER_ACTIVATED, {});
 }
 function tickFever() {
   if (feverState.active && performance.now() >= feverState.endsAt) {
     feverState.active = false;
-    renderFeverBar();
+    // ไม่เรียก renderFeverBar() ตรงๆ ที่นี่ -- ui/hud.js subscribe FEVER_ENDED ไว้แล้ว กันรีเฟรชซ้ำ
     GameEvents.emit(EVENTS.FEVER_ENDED, {});
   }
-}
-function renderFeverBar() {
-  const wrap = document.getElementById('feverBarWrap');
-  const fill = document.getElementById('feverBarFill');
-  const label = document.getElementById('feverBarLabel');
-  const ready = feverState.progress >= 1 && !feverState.active;
-  fill.style.width = (feverState.progress * 100) + '%';
-  wrap.classList.toggle('ready', ready);
-  wrap.classList.toggle('active', feverState.active);
-  label.textContent = feverState.active ? 'FEVER!!' : ready ? 'แตะเลย!' : 'FEVER';
 }
 
 // รับ event จาก economy.js (deliverOrder) แทนถูกเรียกตรงๆ ข้ามไฟล์ — decouple ให้ economy.js

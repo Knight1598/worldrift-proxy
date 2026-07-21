@@ -1515,16 +1515,6 @@ function spawnCoin(x, y, value, tip) {
   coins.push(coin);
   return coin;
 }
-function spawnFloatText(x, y, text, variant) {
-  const el = document.createElement('div');
-  el.className = 'float-text float-text--' + variant;
-  el.textContent = text;
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-  document.getElementById('standStageView').appendChild(el);
-  setTimeout(() => el.remove(), 1000);
-}
-
 function deliverOrder(cust, worker) {
   hideOrderBubble(cust);
   cust.state = 'PAID_LEAVING';
@@ -1582,13 +1572,6 @@ function tickFlyingCoins(dt) {
   });
 }
 
-function bumpGoldCounter() {
-  const el = document.querySelector('.gold-counter');
-  el.classList.remove('bump');
-  void el.offsetWidth; // force reflow กัน class เดิมค้าง เล่นแอนิเมชันซ้ำไม่ได้ถ้ากดรัวๆ
-  el.classList.add('bump');
-}
-
 function finishCoinFlight(coin) {
   const total = coin.value + coin.tip;
   player.gold += total;
@@ -1625,26 +1608,16 @@ function activateFever() {
   feverState.active = true;
   feverState.progress = 0;
   feverState.endsAt = performance.now() + FEVER_DURATION_MS;
-  renderFeverBar();
   playSfxStageComplete(); // ยืมเสียงรัวเดิมมาใช้แทนเสียง Fever โดยเฉพาะ (ไม่ได้เพิ่มเสียงใหม่ในสโคปนี้)
+  // ไม่เรียก renderFeverBar() ตรงๆ ที่นี่ -- ui/hud.js subscribe FEVER_ACTIVATED ไว้แล้ว กันรีเฟรชซ้ำ
   GameEvents.emit(EVENTS.FEVER_ACTIVATED, {});
 }
 function tickFever() {
   if (feverState.active && performance.now() >= feverState.endsAt) {
     feverState.active = false;
-    renderFeverBar();
+    // ไม่เรียก renderFeverBar() ตรงๆ ที่นี่ -- ui/hud.js subscribe FEVER_ENDED ไว้แล้ว กันรีเฟรชซ้ำ
     GameEvents.emit(EVENTS.FEVER_ENDED, {});
   }
-}
-function renderFeverBar() {
-  const wrap = document.getElementById('feverBarWrap');
-  const fill = document.getElementById('feverBarFill');
-  const label = document.getElementById('feverBarLabel');
-  const ready = feverState.progress >= 1 && !feverState.active;
-  fill.style.width = (feverState.progress * 100) + '%';
-  wrap.classList.toggle('ready', ready);
-  wrap.classList.toggle('active', feverState.active);
-  label.textContent = feverState.active ? 'FEVER!!' : ready ? 'แตะเลย!' : 'FEVER';
 }
 
 // รับ event จาก economy.js (deliverOrder) แทนถูกเรียกตรงๆ ข้ามไฟล์ — decouple ให้ economy.js
@@ -1741,15 +1714,8 @@ function checkMilestone(key, level, displayName) {
   if (player.milestonesShown[key].includes(level)) return;
   player.milestonesShown[key].push(level);
   const mult = getMilestoneMultiplier(level);
-  showMilestoneToast(displayName, level, mult);
+  showMilestoneToast(displayName, level, mult); // ui/floating-text.js
   GameEvents.emit(EVENTS.MILESTONE_REACHED, { key, level, mult, displayName });
-}
-function showMilestoneToast(displayName, level, mult) {
-  const el = document.createElement('div');
-  el.className = 'milestone-toast';
-  el.innerHTML = `🌟 <b>${displayName}</b> ถึงเลเวล ${level}!<br>โบนัสพลังคูณ x${mult} ทันที!`;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 1900);
 }
 
 /* =====================================================================
@@ -1777,38 +1743,6 @@ function buyVaultLevel() {
   playSfxUpgrade();
   GameEvents.emit(EVENTS.VAULT_UPGRADED, { vaultLevel: player.vaultLevel });
   saveGame();
-}
-
-function showStageCompleteModal() {
-  const stage = getStage();
-  const isLast = player.stageIndex >= STAGES.length - 1;
-  document.getElementById('stageCompleteTitle').textContent = `${stage.name} เต็มขั้นแล้ว!`;
-  if (isLast) {
-    document.getElementById('stageCompleteText').textContent = 'คุณอัปเกรดร้านสุดท้ายจนเต็มขั้นแล้ว! กดเพื่อรับรางวัลปิดท้าย';
-    document.getElementById('btnAdvanceStage').textContent = 'รับรางวัล!';
-  } else {
-    const next = STAGES[player.stageIndex + 1];
-    document.getElementById('stageCompleteText').textContent = `พร้อมขยับไปเปิด "${next.name}" ขาย${next.product}แล้ว! Gold ที่มีอยู่ไม่หายไปไหน เอาไปต่อยอดร้านใหม่ได้เลย`;
-    document.getElementById('btnAdvanceStage').textContent = `ไปกันเลย! (${next.name})`;
-  }
-  playSfxStageComplete();
-  document.getElementById('stageCompleteModal').classList.add('show');
-  spawnConfetti();
-}
-
-const CONFETTI_COLORS = ['#ff9f45', '#6bbf6b', '#5aa9e6', '#e35d5d', '#ffd76a', '#c77dff'];
-function spawnConfetti(count) {
-  const n = count || 40;
-  for (let i = 0; i < n; i++) {
-    const piece = document.createElement('div');
-    piece.className = 'confetti-piece';
-    piece.style.left = Math.random() * 100 + 'vw';
-    piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
-    piece.style.animationDuration = (1.6 + Math.random() * 1.2) + 's';
-    piece.style.animationDelay = (Math.random() * 0.4) + 's';
-    document.body.appendChild(piece);
-    setTimeout(() => piece.remove(), 3200);
-  }
 }
 
 function advanceStage() {
@@ -1856,12 +1790,67 @@ function applyOfflineEarnings() {
 </script>
 <script>
 /* =====================================================================
-   Rendering
+   Floating Text overlays — ตัวเลขลอยตอนเก็บเหรียญ + ป๊อปอัพฉลอง Milestone
+   ทั้งคู่เป็น "overlay ชั่วคราว" เหมือนกัน: append เข้า DOM แล้วลบตัวเองทิ้งผ่าน setTimeout
+   ===================================================================== */
+function spawnFloatText(x, y, text, variant) {
+  const el = document.createElement('div');
+  el.className = 'float-text float-text--' + variant;
+  el.textContent = text;
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  document.getElementById('standStageView').appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+
+function showMilestoneToast(displayName, level, mult) {
+  const el = document.createElement('div');
+  el.className = 'milestone-toast';
+  el.innerHTML = `🌟 <b>${displayName}</b> ถึงเลเวล ${level}!<br>โบนัสพลังคูณ x${mult} ทันที!`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1900);
+}
+</script>
+<script>
+/* =====================================================================
+   HUD — กล่อง Gold บนสุด + แถบ Combo/Fever Mode
    ===================================================================== */
 function renderGold() {
   document.getElementById('goldValue').textContent = Math.floor(player.gold).toLocaleString();
 }
+function bumpGoldCounter() {
+  const el = document.querySelector('.gold-counter');
+  el.classList.remove('bump');
+  void el.offsetWidth; // force reflow กัน class เดิมค้าง เล่นแอนิเมชันซ้ำไม่ได้ถ้ากดรัวๆ
+  el.classList.add('bump');
+}
+function renderFeverBar() {
+  const wrap = document.getElementById('feverBarWrap');
+  const fill = document.getElementById('feverBarFill');
+  const label = document.getElementById('feverBarLabel');
+  const ready = feverState.progress >= 1 && !feverState.active;
+  fill.style.width = (feverState.progress * 100) + '%';
+  wrap.classList.toggle('ready', ready);
+  wrap.classList.toggle('active', feverState.active);
+  label.textContent = feverState.active ? 'FEVER!!' : ready ? 'แตะเลย!' : 'FEVER';
+}
 
+document.getElementById('feverBarWrap').addEventListener('click', () => activateFever());
+
+// "mount ตัวเอง" ผ่าน GameEvents.on(...) ตอนโหลด แทนที่จะรอ orchestrator เรียก mount แยก —
+// ไฟล์อื่น (economy.js/progression.js/goblin.js/fever.js) แค่ emit event โดยไม่ต้องรู้จัก HUD เลย
+GameEvents.on(EVENTS.COIN_COLLECTED, () => { renderGold(); bumpGoldCounter(); });
+GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => { renderGold(); bumpGoldCounter(); });
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderGold());
+GameEvents.on(EVENTS.STAFF_HIRED, () => renderGold());
+GameEvents.on(EVENTS.VAULT_UPGRADED, () => renderGold());
+GameEvents.on(EVENTS.FEVER_ACTIVATED, () => renderFeverBar());
+GameEvents.on(EVENTS.FEVER_ENDED, () => renderFeverBar());
+</script>
+<script>
+/* =====================================================================
+   Stage Status — ชื่อด่าน/สินค้าปัจจุบัน + progress dots ของอัปเกรด + ภาพ Station ในฉาก
+   ===================================================================== */
 function renderStageView() {
   const stage = getStage();
   document.getElementById('stageName').textContent = stage.name;
@@ -1885,6 +1874,14 @@ function renderStageProgress() {
   });
 }
 
+// STAGE_ADVANCED ไม่ต้อง subscribe ที่นี่ซ้ำ -- render.js's renderAll() (subscribe STAGE_ADVANCED)
+// เรียก renderStageView()/renderStageProgress() อยู่แล้ว กันรีเฟรชซ้ำสองรอบ
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderStageProgress());
+</script>
+<script>
+/* =====================================================================
+   Upgrade List — การ์ดอัปเกรดของด่านปัจจุบัน (Speed/Signage/Decor ฯลฯ)
+   ===================================================================== */
 function renderUpgradeList() {
   const listEl = document.getElementById('upgradeList');
   listEl.innerHTML = '';
@@ -1925,6 +1922,13 @@ function renderUpgradeList() {
   });
 }
 
+GameEvents.on(EVENTS.COIN_COLLECTED, () => renderUpgradeList());
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderUpgradeList());
+</script>
+<script>
+/* =====================================================================
+   Permanent Upgrades — การ์ด "จ้างลูกมือ" / "คลังเก็บของออฟไลน์" ไม่รีเซ็ตตอนขึ้นด่านใหม่
+   ===================================================================== */
 function renderPermUpgradeList() {
   const listEl = document.getElementById('permUpgradeList');
   listEl.innerHTML = '';
@@ -2002,11 +2006,15 @@ function buildVaultCard() {
   return card;
 }
 
-function renderStatsFooter() {
-  document.getElementById('statsFooter').textContent =
-    `เสิร์ฟลูกค้าไปแล้ว ${player.stats.totalCustomersServed.toLocaleString()} คน | รายได้สะสมทั้งหมด ${Math.floor(player.stats.totalGoldEarned).toLocaleString()} Gold`;
-}
-
+GameEvents.on(EVENTS.COIN_COLLECTED, () => renderPermUpgradeList());
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderPermUpgradeList());
+GameEvents.on(EVENTS.STAFF_HIRED, () => renderPermUpgradeList());
+GameEvents.on(EVENTS.VAULT_UPGRADED, () => renderPermUpgradeList());
+</script>
+<script>
+/* =====================================================================
+   Product Badge + Level-up Modal — ป้ายสินค้าแตะเพื่อเลเวลอัพแยกจากลิสต์อัปเกรดทั่วไป
+   ===================================================================== */
 function renderProductBadge() {
   const type = getUpgradeType('portion');
   const level = player.upgradeLevels.portion;
@@ -2052,6 +2060,94 @@ function closeProductLevelModal() {
   document.getElementById('productLevelModal').classList.remove('show');
 }
 
+document.getElementById('productBadge').addEventListener('click', () => openProductLevelModal());
+document.getElementById('btnCloseProductLevel').addEventListener('click', () => closeProductLevelModal());
+document.getElementById('btnBuyProductLevel').addEventListener('click', () => buyUpgrade('portion'));
+
+function refreshProductLevelModalIfOpen() {
+  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
+}
+GameEvents.on(EVENTS.COIN_COLLECTED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
+</script>
+<script>
+/* =====================================================================
+   Stage Complete Modal + Confetti — โผล่ตอนอัปเกรดครบทุกตัวของด่านปัจจุบัน
+   ===================================================================== */
+function showStageCompleteModal() {
+  const stage = getStage();
+  const isLast = player.stageIndex >= STAGES.length - 1;
+  document.getElementById('stageCompleteTitle').textContent = `${stage.name} เต็มขั้นแล้ว!`;
+  if (isLast) {
+    document.getElementById('stageCompleteText').textContent = 'คุณอัปเกรดร้านสุดท้ายจนเต็มขั้นแล้ว! กดเพื่อรับรางวัลปิดท้าย';
+    document.getElementById('btnAdvanceStage').textContent = 'รับรางวัล!';
+  } else {
+    const next = STAGES[player.stageIndex + 1];
+    document.getElementById('stageCompleteText').textContent = `พร้อมขยับไปเปิด "${next.name}" ขาย${next.product}แล้ว! Gold ที่มีอยู่ไม่หายไปไหน เอาไปต่อยอดร้านใหม่ได้เลย`;
+    document.getElementById('btnAdvanceStage').textContent = `ไปกันเลย! (${next.name})`;
+  }
+  playSfxStageComplete();
+  document.getElementById('stageCompleteModal').classList.add('show');
+  spawnConfetti();
+}
+
+const CONFETTI_COLORS = ['#ff9f45', '#6bbf6b', '#5aa9e6', '#e35d5d', '#ffd76a', '#c77dff'];
+function spawnConfetti(count) {
+  const n = count || 40;
+  for (let i = 0; i < n; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + 'vw';
+    piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+    piece.style.animationDuration = (1.6 + Math.random() * 1.2) + 's';
+    piece.style.animationDelay = (Math.random() * 0.4) + 's';
+    document.body.appendChild(piece);
+    setTimeout(() => piece.remove(), 3200);
+  }
+}
+
+document.getElementById('btnAdvanceStage').addEventListener('click', () => advanceStage());
+</script>
+<script>
+/* =====================================================================
+   Settings Modal — เปิด/ปิดเสียง, รีเซ็ตเกม
+   ===================================================================== */
+document.getElementById('btnOpenSettings').addEventListener('click', () => {
+  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+  document.getElementById('settingsModal').classList.add('show');
+});
+document.getElementById('btnCloseSettings').addEventListener('click', () => {
+  document.getElementById('settingsModal').classList.remove('show');
+});
+document.getElementById('btnToggleSound').addEventListener('click', () => {
+  player.settings.soundEnabled = !player.settings.soundEnabled;
+  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+  saveGame();
+});
+document.getElementById('btnResetGame').addEventListener('click', () => {
+  if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;
+  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  try { localStorage.removeItem(SAVE_KEY_V1); } catch (e) {} // กันเซฟ v1 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
+  location.reload();
+});
+</script>
+<script>
+/* =====================================================================
+   Stats Footer — สรุปยอดเสิร์ฟลูกค้า/รายได้สะสมทั้งหมด
+   ===================================================================== */
+function renderStatsFooter() {
+  document.getElementById('statsFooter').textContent =
+    `เสิร์ฟลูกค้าไปแล้ว ${player.stats.totalCustomersServed.toLocaleString()} คน | รายได้สะสมทั้งหมด ${Math.floor(player.stats.totalGoldEarned).toLocaleString()} Gold`;
+}
+</script>
+<script>
+/* =====================================================================
+   Rendering orchestrator — renderAll() คือจุดเดียวที่ compose การรีเฟรชทั้งจอ
+   (ตอนโหลดเกม/ขึ้นด่านใหม่) ฟังก์ชัน render ย่อยแต่ละตัวถูกย้ายไปอยู่ใน ui/*.js
+   ตามหน้าที่ของมันแล้ว (hud.js, stage-status-bar.js, upgrade-list.js, ...) —
+   แต่ละไฟล์ "mount ตัวเอง" ผ่าน GameEvents.on(...) ที่ระดับบนสุดของไฟล์ตอนโหลด
+   จึงไม่ต้องมี mountAllComponents() แยกมาเรียกจาก main.js
+   ===================================================================== */
 function renderAll() {
   renderGold();
   renderStageView();
@@ -2063,30 +2159,6 @@ function renderAll() {
   renderFeverBar();
 }
 
-/* =====================================================================
-   Event Bus subscriptions — render.js รับ event ที่ economy.js/progression.js/
-   features/* ยิงออกมา แทนที่ไฟล์เหล่านั้นจะต้องเรียก render*() ข้ามไฟล์ตรงๆ เอง
-   (เดิม finishCoinFlight/buyUpgrade/hireHelper/... เรียกฟังก์ชันพวกนี้ตรงๆ ทุกจุด)
-   ===================================================================== */
-GameEvents.on(EVENTS.COIN_COLLECTED, () => {
-  renderGold();
-  bumpGoldCounter();
-  renderUpgradeList();
-  renderPermUpgradeList();
-  renderProductBadge();
-  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
-});
-GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => {
-  renderGold();
-  renderUpgradeList();
-  renderPermUpgradeList();
-  renderStageProgress();
-  renderProductBadge();
-  if (document.getElementById('productLevelModal').classList.contains('show')) renderProductLevelModal();
-});
-GameEvents.on(EVENTS.STAFF_HIRED, () => { renderGold(); renderPermUpgradeList(); });
-GameEvents.on(EVENTS.VAULT_UPGRADED, () => { renderGold(); renderPermUpgradeList(); });
-GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => { renderGold(); bumpGoldCounter(); });
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
 </script>
 <script>
@@ -2138,37 +2210,15 @@ document.getElementById('standBooth').addEventListener('click', (e) => {
   playSfxTap();
 });
 
-document.getElementById('productBadge').addEventListener('click', () => openProductLevelModal());
-document.getElementById('btnCloseProductLevel').addEventListener('click', () => closeProductLevelModal());
-document.getElementById('btnBuyProductLevel').addEventListener('click', () => buyUpgrade('portion'));
-
-document.getElementById('btnAdvanceStage').addEventListener('click', () => advanceStage());
-document.getElementById('feverBarWrap').addEventListener('click', () => activateFever());
+// หมายเหตุ: listener ของ productBadge/btnAdvanceStage/feverBarWrap/settings ทั้งหมดถูกย้ายไปอยู่
+// ในไฟล์ ui/*.js ที่เป็นเจ้าของ component นั้นๆ แล้ว (product-modal.js, stage-complete-modal.js, hud.js,
+// settings-modal.js) เหลือแค่ตัวที่ไม่มีไฟล์ ui/ เฉพาะของตัวเอง (welcome-back/game-complete โมดัลเล็กๆ) ไว้ที่นี่
 document.getElementById('btnCloseWelcomeBack').addEventListener('click', () => {
   document.getElementById('welcomeBackModal').classList.remove('show');
   renderGold();
 });
 document.getElementById('btnCloseGameComplete').addEventListener('click', () => {
   document.getElementById('gameCompleteModal').classList.remove('show');
-});
-
-document.getElementById('btnOpenSettings').addEventListener('click', () => {
-  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
-  document.getElementById('settingsModal').classList.add('show');
-});
-document.getElementById('btnCloseSettings').addEventListener('click', () => {
-  document.getElementById('settingsModal').classList.remove('show');
-});
-document.getElementById('btnToggleSound').addEventListener('click', () => {
-  player.settings.soundEnabled = !player.settings.soundEnabled;
-  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
-  saveGame();
-});
-document.getElementById('btnResetGame').addEventListener('click', () => {
-  if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;
-  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
-  try { localStorage.removeItem(SAVE_KEY_V1); } catch (e) {} // กันเซฟ v1 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
-  location.reload();
 });
 
 /* =====================================================================

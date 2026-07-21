@@ -46,37 +46,15 @@ document.getElementById('standBooth').addEventListener('click', (e) => {
   playSfxTap();
 });
 
-document.getElementById('productBadge').addEventListener('click', () => openProductLevelModal());
-document.getElementById('btnCloseProductLevel').addEventListener('click', () => closeProductLevelModal());
-document.getElementById('btnBuyProductLevel').addEventListener('click', () => buyUpgrade('portion'));
-
-document.getElementById('btnAdvanceStage').addEventListener('click', () => advanceStage());
-document.getElementById('feverBarWrap').addEventListener('click', () => activateFever());
+// หมายเหตุ: listener ของ productBadge/btnAdvanceStage/feverBarWrap/settings ทั้งหมดถูกย้ายไปอยู่
+// ในไฟล์ ui/*.js ที่เป็นเจ้าของ component นั้นๆ แล้ว (product-modal.js, stage-complete-modal.js, hud.js,
+// settings-modal.js) เหลือแค่ตัวที่ไม่มีไฟล์ ui/ เฉพาะของตัวเอง (welcome-back/game-complete โมดัลเล็กๆ) ไว้ที่นี่
 document.getElementById('btnCloseWelcomeBack').addEventListener('click', () => {
   document.getElementById('welcomeBackModal').classList.remove('show');
   renderGold();
 });
 document.getElementById('btnCloseGameComplete').addEventListener('click', () => {
   document.getElementById('gameCompleteModal').classList.remove('show');
-});
-
-document.getElementById('btnOpenSettings').addEventListener('click', () => {
-  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
-  document.getElementById('settingsModal').classList.add('show');
-});
-document.getElementById('btnCloseSettings').addEventListener('click', () => {
-  document.getElementById('settingsModal').classList.remove('show');
-});
-document.getElementById('btnToggleSound').addEventListener('click', () => {
-  player.settings.soundEnabled = !player.settings.soundEnabled;
-  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
-  saveGame();
-});
-document.getElementById('btnResetGame').addEventListener('click', () => {
-  if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;
-  try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
-  try { localStorage.removeItem(SAVE_KEY_V1); } catch (e) {} // กันเซฟ v1 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
-  location.reload();
 });
 
 /* =====================================================================

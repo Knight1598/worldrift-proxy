@@ -15,16 +15,6 @@ function spawnCoin(x, y, value, tip) {
   coins.push(coin);
   return coin;
 }
-function spawnFloatText(x, y, text, variant) {
-  const el = document.createElement('div');
-  el.className = 'float-text float-text--' + variant;
-  el.textContent = text;
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-  document.getElementById('standStageView').appendChild(el);
-  setTimeout(() => el.remove(), 1000);
-}
-
 function deliverOrder(cust, worker) {
   hideOrderBubble(cust);
   cust.state = 'PAID_LEAVING';
@@ -80,13 +70,6 @@ function tickFlyingCoins(dt) {
     coin.el.style.transform = `translate(${x}px, ${y}px) scale(${1 - p * 0.45})`;
     if (p >= 1) finishCoinFlight(coin);
   });
-}
-
-function bumpGoldCounter() {
-  const el = document.querySelector('.gold-counter');
-  el.classList.remove('bump');
-  void el.offsetWidth; // force reflow กัน class เดิมค้าง เล่นแอนิเมชันซ้ำไม่ได้ถ้ากดรัวๆ
-  el.classList.add('bump');
 }
 
 function finishCoinFlight(coin) {
