@@ -1,23 +1,8 @@
 /* =====================================================================
-   Stage Complete Modal + Confetti — โผล่ตอนอัปเกรดครบทุกตัวของด่านปัจจุบัน
+   Confetti — ใช้ตอน Renovate สำเร็จ (หน้าต่าง stage-complete เดิมถูกแทนด้วย
+   Renovate flow ใน ui/renovate-modal.js ตามแบบเกมต้นแบบแล้ว เหลือไว้แค่คอนเฟตตี้
+   ที่ยังยิงฉลองตอนขึ้นด่านเหมือนเดิม)
    ===================================================================== */
-function showStageCompleteModal() {
-  const stage = getStage();
-  const isLast = player.stageIndex >= STAGES.length - 1;
-  document.getElementById('stageCompleteTitle').textContent = `${stage.name} เต็มขั้นแล้ว!`;
-  if (isLast) {
-    document.getElementById('stageCompleteText').textContent = 'คุณอัปเกรดร้านสุดท้ายจนเต็มขั้นแล้ว! กดเพื่อรับรางวัลปิดท้าย';
-    document.getElementById('btnAdvanceStage').textContent = 'รับรางวัล!';
-  } else {
-    const next = STAGES[player.stageIndex + 1];
-    document.getElementById('stageCompleteText').textContent = `พร้อมขยับไปเปิด "${next.name}" ขาย${next.product}แล้ว! Gold ที่มีอยู่ไม่หายไปไหน เอาไปต่อยอดร้านใหม่ได้เลย`;
-    document.getElementById('btnAdvanceStage').textContent = `ไปกันเลย! (${next.name})`;
-  }
-  playSfxStageComplete();
-  document.getElementById('stageCompleteModal').classList.add('show');
-  spawnConfetti();
-}
-
 const CONFETTI_COLORS = ['#ff9f45', '#6bbf6b', '#5aa9e6', '#e35d5d', '#ffd76a', '#c77dff'];
 function spawnConfetti(count) {
   const n = count || 40;
@@ -32,5 +17,3 @@ function spawnConfetti(count) {
     setTimeout(() => piece.remove(), 3200);
   }
 }
-
-document.getElementById('btnAdvanceStage').addEventListener('click', () => advanceStage());

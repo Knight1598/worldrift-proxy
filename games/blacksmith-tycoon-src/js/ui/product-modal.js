@@ -1,5 +1,7 @@
 /* =====================================================================
-   Product Badge + Level-up Modal — ป้ายสินค้าแตะเพื่อเลเวลอัพแยกจากลิสต์อัปเกรดทั่วไป
+   Station Level Popup — แตะโต๊ะสถานี (หรือป้ายสินค้า) เพื่อเปิด ตามหน้าต่าง "Level N" ในเกมต้นแบบ:
+   ชื่อระดับ+สินค้า / ดาว milestone (10/25/50) / แถบความคืบหน้าสู่ดาวถัดไป /
+   แถวสถิติ (🪙 เงินต่อออเดอร์ + ⏱️ เวลาคราฟต์) / ปุ่มซื้อใหญ่กดรัวได้
    ===================================================================== */
 function renderProductBadge() {
   const type = getUpgradeType('portion');
@@ -22,15 +24,26 @@ function renderProductLevelModal() {
   document.getElementById('productLevelTitle').textContent = `ระดับ ${level} — ${getStage().product}`;
   document.getElementById('productLevelIcon').src = getProductIcon();
 
+  // ดาว = milestone 10/25/50 (แบบดาวในหน้าต่าง Level ของเกมต้นแบบ) ไม่ใช่ดาวละเลเวลจนล้นจอแบบเดิม
   const starsEl = document.getElementById('productLevelStars');
   starsEl.innerHTML = '';
-  for (let i = 0; i < type.maxLevel; i++) {
+  MILESTONE_LEVELS.forEach(ms => {
     const star = document.createElement('span');
     star.textContent = '★';
-    star.className = i < level ? 'star-filled' : '';
+    star.className = level >= ms ? 'star-filled' : '';
+    star.title = `เลเวล ${ms}`;
     starsEl.appendChild(star);
-  }
-  document.getElementById('productLevelProgressFill').style.width = `${(level / type.maxLevel) * 100}%`;
+  });
+
+  // แถบความคืบหน้า: ช่วงระหว่าง milestone ก่อนหน้า -> milestone ถัดไป
+  const prevMs = MILESTONE_LEVELS.filter(ms => level >= ms).pop() || 0;
+  const nextMs = MILESTONE_LEVELS.find(ms => level < ms) || type.maxLevel;
+  const pct = nextMs > prevMs ? ((level - prevMs) / (nextMs - prevMs)) * 100 : 100;
+  document.getElementById('productLevelProgressFill').style.width = `${Math.min(100, pct)}%`;
+
+  // แถวสถิติแบบคลิป: เงินต่อออเดอร์ (คุมโดยเลเวลสินค้า) + เวลาคราฟต์ (คุมโดยอัปเกรดความเร็ว)
+  document.getElementById('productStatRevenue').textContent = Math.round(getRevenuePerSale()).toLocaleString();
+  document.getElementById('productStatCraft').textContent = (getCraftDurationMs() / 1000).toFixed(1) + 's';
 
   const btn = document.getElementById('btnBuyProductLevel');
   btn.textContent = maxed ? 'เต็มขั้นแล้ว ✓' : `อัปเกรด (${cost.toLocaleString()})`;

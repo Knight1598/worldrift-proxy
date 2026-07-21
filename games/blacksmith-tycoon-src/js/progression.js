@@ -15,7 +15,16 @@ function buyUpgrade(key) {
   // ยิง event แทนเรียก render*() 5-6 ฟังก์ชันข้ามไฟล์ตรงๆ — render.js subscribe เอง (ดู render.js ท้ายไฟล์)
   GameEvents.emit(EVENTS.UPGRADE_PURCHASED, { key, level: newLevel });
   saveGame();
-  if (isStageMaxed()) showStageCompleteModal();
+  // ผ่านเงื่อนไข Renovate (สินค้าถึงเลเวล 25) ครั้งแรกของด่านนี้ -- ฉลอง + ชี้ไปที่ปุ่ม 🔨
+  // (แทน stage-complete modal เดิมที่เด้งเองตอนอัปเกรดครบทุกชนิด ซึ่งถูกแทนด้วย Renovate flow แล้ว)
+  if (key === 'portion' && newLevel === RENOVATE_GATE_LEVEL) {
+    playSfxStageComplete();
+    const toast = document.createElement('div');
+    toast.className = 'milestone-toast';
+    toast.innerHTML = `🔨 <b>${getStage().name}</b> พร้อมขยับขยายแล้ว!<br>กดปุ่มค้อนซ้ายล่างเพื่อ Renovate!`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 1900);
+  }
 }
 
 // Milestone Boosts: เลเวล 10/25/50 ของอัปเกรดไหนก็ตาม โชว์ป๊อปอัพฉลอง 1 ครั้งต่อเลเวล (กันเด้งซ้ำตอนโหลดเซฟ
@@ -58,18 +67,22 @@ function buyVaultLevel() {
 }
 
 function advanceStage() {
-  document.getElementById('stageCompleteModal').classList.remove('show');
   const wasFirstStage = player.stageIndex === 0;
   if (player.stageIndex >= STAGES.length - 1) {
-    // ด่านสุดท้ายไม่มี "ด่านถัดไป" ให้ขยับไป แต่ stage-complete-modal.js สัญญาไว้ว่ากดแล้ว "รับรางวัลปิดท้าย"
-    // -- ให้เพชรจริงตามที่พูดไว้ แทนที่จะแค่โชว์ modal เฉยๆ โดยไม่มีอะไรเกิดขึ้นจริง
+    // ด่านสุดท้ายไม่มี "ด่านถัดไป" ให้ขยับไป -- Renovate ครั้งสุดท้าย = รับรางวัลปิดท้าย + จบเกม
     player.gems += FINAL_STAGE_REWARD_GEMS;
     renderGems();
     document.getElementById('gameCompleteRewardText').textContent = `🎁 ได้รับรางวัลปิดท้าย +${FINAL_STAGE_REWARD_GEMS} 💎 เพชร!`;
     document.getElementById('gameCompleteModal').classList.add('show');
+    spawnConfetti();
     saveGame();
     return;
   }
+  // รางวัล Renovate (ช่อง Rewards ในหน้าต่าง Renovate สัญญาไว้ ดู ui/renovate-modal.js)
+  player.gems += RENOVATE_REWARD_GEMS;
+  renderGems();
+  spawnConfetti();
+  playSfxStageComplete();
   player.stageIndex += 1;
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
   // staffCount/vaultLevel เป็นอัปเกรดถาวร ไม่ถูกรีเซ็ตตรงนี้ — คงค่าจากด่านก่อนหน้าไว้ทั้งหมด

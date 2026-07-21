@@ -17,6 +17,9 @@ function renderAll() {
   renderFeverBar();
   renderMaterialStockPanel();
   renderBuffPanel();
+  renderActiveBuffChip();
+  refreshUpgradesFab();
+  refreshRenovateFab();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());

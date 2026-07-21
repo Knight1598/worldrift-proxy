@@ -42,11 +42,13 @@ function scheduleNextCustomer() {
 /* =====================================================================
    Event listeners
    ===================================================================== */
+// แตะโต๊ะสถานีเปิดป๊อปอัพเลเวลสินค้าโดยตรง (แบบแตะสถานีในเกมต้นแบบ) — ป้ายสินค้าวงกลมก็ยังเปิดได้เหมือนเดิม
 document.getElementById('standBooth').addEventListener('click', (e) => {
   e.currentTarget.classList.remove('tap-bump');
   void e.currentTarget.offsetWidth;
   e.currentTarget.classList.add('tap-bump');
   playSfxTap();
+  openProductLevelModal();
 });
 
 // หมายเหตุ: listener ของ productBadge/btnAdvanceStage/feverBarWrap/settings ทั้งหมดถูกย้ายไปอยู่

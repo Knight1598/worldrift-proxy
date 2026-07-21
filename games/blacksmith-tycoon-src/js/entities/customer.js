@@ -19,7 +19,7 @@ function spawnCustomerEntity() {
   el.className = 'customer' + (isVIP ? ' vip' : '');
   el.innerHTML =
     '<div class="customer-patience-bg"><div class="customer-patience-fill"></div></div>' +
-    '<div class="customer-bubble"><img alt=""></div>' +
+    '<div class="customer-bubble"><img alt=""><span class="customer-bubble-qty"></span></div>' +
     '<div class="customer-body"><img class="customer-img" alt=""></div>';
   el.querySelector('.customer-img').src = getRandomCustomerImg();
   document.getElementById('customerLane').appendChild(el);
@@ -29,7 +29,7 @@ function spawnCustomerEntity() {
   const cust = {
     id, el, slotIndex, state: 'QUEUED', facing: 1,
     x: spawnX, y: scene.height + 40,
-    orderIcon: null, orderRevenue: 0, orderTip: 0, patienceStartAt: 0,
+    orderIcon: null, orderRevenue: 0, orderTip: 0, orderQty: 1, patienceStartAt: 0,
     isVIP,
   };
   customers.push(cust);
@@ -48,6 +48,10 @@ function renderCustomerTransform(cust, moving) {
 function showOrderBubble(cust) {
   const bubble = cust.el.querySelector('.customer-bubble');
   bubble.querySelector('img').src = cust.orderIcon;
+  // ป้าย x2/x3 ตอนสั่งมากกว่า 1 ชิ้น (แบบตัวเลขในบับเบิลของเกมต้นแบบ)
+  const qtyEl = bubble.querySelector('.customer-bubble-qty');
+  qtyEl.textContent = 'x' + (cust.orderQty || 1);
+  qtyEl.classList.toggle('show', (cust.orderQty || 1) > 1);
   bubble.classList.add('show');
   cust.el.querySelector('.customer-patience-bg').classList.add('show');
 }

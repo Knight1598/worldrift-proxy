@@ -28,15 +28,80 @@
   .pixel-num { font-family: 'Press Start 2P', 'Courier New', monospace; letter-spacing: -0.5px; }
 
   /* =====================================================================
-     Game Area — โซนฉากเกม กิน flex:6 ของความสูงจอ (≈60%) ให้พื้นที่เดินไปมาเพียงพอ
+     Game Area — เต็มจอทั้งใบแบบเกมต้นแบบ (Eatventure) ไม่แบ่งครึ่งจอกับลิสต์อัปเกรดอีกแล้ว
+     ลิสต์อัปเกรดย้ายไปอยู่ใน modal ที่เปิดจากปุ่มลอย ⬆️ ขวาล่างแทน (ดู ui/upgrades-modal.js)
      ===================================================================== */
   .game-area {
     position: relative;
-    flex: 6;
+    flex: 1;
     overflow: hidden;
     image-rendering: pixelated;
     background: #8a6b3f; /* กันโหว่ขาว ถ้ามีช่องว่างเล็กน้อยระหว่างเลเยอร์พื้นหลังก็จะกลืนเป็นสีไม้แทน ไม่โผล่ขาว */
   }
+
+  /* ปุ่มลอย (FAB) แบบเกมต้นแบบ: 🔨 Renovate ซ้ายล่าง / ⬆️ Upgrades ขวาล่าง */
+  .fab {
+    position: absolute;
+    bottom: 44px;
+    z-index: 20;
+    width: 54px; height: 54px;
+    border-radius: 12px;
+    border: 3px solid var(--panel-border);
+    background: linear-gradient(180deg, #5aa9e6, #2d6da8);
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .fab:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,0.5); }
+  .fab--left { left: 10px; }
+  .fab--right { right: 10px; background: linear-gradient(180deg, #ffe08a, var(--primary)); }
+  /* กระตุ้นให้กด: เด้ง+เรืองแสงตอนมีของที่ซื้อไหว (⬆️) หรือ Renovate พร้อมแล้ว (🔨) */
+  .fab--attention { animation: fabAttention 1s ease-in-out infinite; }
+  @keyframes fabAttention {
+    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 8px 2px rgba(255,215,106,0.55); transform: translateY(0); }
+    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 16px 5px rgba(255,215,106,0.85); transform: translateY(-3px); }
+  }
+
+  /* แถบชื่อด่าน + ความคืบหน้า Renovate — แถบบางลอยล่างสุดของฉาก ระหว่างปุ่ม FAB สองข้าง */
+  .stage-strip {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 74px 8px; /* เผื่อที่ให้ FAB สองข้างไม่ทับข้อความ */
+    background: linear-gradient(0deg, rgba(15,10,5,0.85), rgba(15,10,5,0));
+    font-size: 0.68rem;
+    pointer-events: none;
+    text-align: center;
+  }
+  .stage-strip-name { color: var(--accent-gold); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stage-strip-progress { color: var(--text-main); font-size: 0.6rem; flex-shrink: 0; }
+  .stage-strip-progress.gate-met { color: var(--success); }
+
+  /* บัพที่กำลัง active — ชิปเล็กลอยบนฉาก (ลิสต์สุ่มบัพเต็มๆ ย้ายเข้า modal อัปเกรดแล้ว
+     แต่ตัวนับถอยหลังบัพต้องมองเห็นตลอดเวลาโดยไม่ต้องเปิด modal) */
+  .active-buff-chip {
+    position: absolute;
+    top: 92px; right: 8px; /* ใต้ product-badge (top:48 สูง 38px) ไม่ทับกัน */
+    z-index: 9;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    background: rgba(30,20,56,0.85);
+    border: 2px solid #6a4fc9;
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 0.62rem;
+    font-weight: bold;
+    color: #d8bfff;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+  .active-buff-chip.show { display: inline-flex; }
   /* พื้นหลังฉาก แยกเป็น 2 เลเยอร์ div ต่างหาก (ไม่ใช้ multi background-image บน element เดียวแบบเดิม)
      เดิมใช้ background-size เป็น % ของความสูง container ที่เป็นเลขทศนิยม (เช่น 489.59375px) ทำให้ pattern
      ไม่ลงตัวพอดีพิกเซล เกิดเป็นเส้นตะเข็บสีอ่อนพาดกลางจอทั้งแนวตั้ง (รอยต่อระหว่างการ repeat) และแนวนอน
@@ -234,15 +299,23 @@
     filter: drop-shadow(0 3px 2px rgba(0,0,0,0.3));
   }
   .worker.staff .worker-sprite { filter: drop-shadow(0 3px 2px rgba(0,0,0,0.3)) hue-rotate(150deg) saturate(1.3); }
+  /* Progress ตอน Crafting — วงกลม pie เหนือหัวแบบเกมต้นแบบ (เดิมเป็นแถบนอน) ใช้ conic-gradient
+     อัปเดตผ่านตัวแปร --craft-pct (ดู updateCraftBar ใน entities/worker.js) คง class name เดิมไว้
+     เพื่อไม่ต้องรื้อ show/hide logic */
   .worker-craft-bar-bg {
-    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
-    width: 62px; height: 8px;
-    background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden;
+    position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,0,0,0.55);
+    background: rgba(0,0,0,0.35);
     opacity: 0; transition: opacity 0.15s ease;
   }
   .worker-craft-bar-bg.show { opacity: 1; }
-  /* Progress bar ตอน Crafting — เขียว→ฟ้า ตามที่ระบุ (แยกโทนจากปุ่ม/แถบอื่นในเกมที่เป็นโทนทอง/ส้ม) */
-  .worker-craft-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #6bbf6b, #4fa9e8); }
+  .worker-craft-bar-fill {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(#7ed957 calc(var(--craft-pct, 0) * 1%), transparent 0);
+  }
   @keyframes walkBob { 0% { transform: translateY(0); } 100% { transform: translateY(-3px); } }
 
   /* ป้ายสินค้าแตะเพื่อเลเวลอัพแยก (ตามแพทเทิร์นเกมต้นแบบที่แยก "อัปเกรดสินค้า" ออกจากลิสต์อัปเกรดทั่วไป) */
@@ -282,8 +355,18 @@
   .product-level-icon { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; margin: 4px auto 10px; display: block; }
   .product-level-stars { font-size: 1.3rem; letter-spacing: 3px; margin-bottom: 10px; color: #e0d8c5; }
   .product-level-stars .star-filled { color: var(--accent-gold-dark); }
-  .product-level-progress-bg { background: #e5dcc5; border-radius: 999px; height: 14px; overflow: hidden; margin-bottom: 16px; }
+  .product-level-progress-bg { background: #e5dcc5; border-radius: 999px; height: 14px; overflow: hidden; margin-bottom: 10px; }
   .product-level-progress-fill { background: linear-gradient(90deg, #6bbf6b, #4fa9e8); height: 100%; transition: width 0.3s ease; }
+  /* แถวสถิติในป๊อปอัพสถานี (🪙 เงิน/ออเดอร์ + ⏱️ เวลาคราฟต์) แบบหน้าต่าง Level ในคลิป */
+  .product-level-stats {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    margin-bottom: 14px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: #4a3728;
+  }
   .btn-cta-mega--maxed { background: var(--success); animation: none; }
 
   /* คอนเฟตตี้ตอนจบด่าน */
@@ -329,6 +412,20 @@
   }
   .customer-bubble img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
   .customer-bubble.show { opacity: 1; top: -48px; }
+  /* ป้ายจำนวนชิ้นในออเดอร์ (x2/x3) แบบตัวเลขในบับเบิลของเกมต้นแบบ — โชว์เฉพาะตอนสั่งมากกว่า 1 ชิ้น */
+  .customer-bubble-qty {
+    position: absolute;
+    bottom: -4px; right: -8px;
+    background: var(--primary-dark);
+    color: #fff;
+    font-size: 0.58rem;
+    font-weight: bold;
+    border-radius: 999px;
+    padding: 1px 5px;
+    border: 2px solid #fff;
+    display: none;
+  }
+  .customer-bubble-qty.show { display: block; }
   .customer-patience-bg {
     position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
     width: 58px; height: 8px;
@@ -399,43 +496,64 @@
   }
 
   /* =====================================================================
-     UI Area — โซนปุ่มอัปเกรด กิน flex:4 ปัดขึ้นลงได้ พื้นทึบสไตล์ 8-bit
+     Upgrades Modal — ลิสต์อัปเกรดทั้งหมดย้ายมาอยู่ในนี้ (เปิดจากปุ่ม ⬆️) แบบเกมต้นแบบ
+     พื้นในกล่องใช้โทนมืดเดิมของ ui-area เดิม ให้การ์ดอัปเกรดหน้าตาเดิมใช้ต่อได้เลย
      ===================================================================== */
-  .ui-area {
-    flex: 4;
+  .upgrades-box {
+    position: relative;
+    padding: 30px 10px 10px;
+    background: var(--ui-bg);
+    border-color: var(--panel-border);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .upgrades-box h2 { color: var(--accent-gold); font-size: 1rem; margin: 0 0 8px; }
+  .upgrades-scroll {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
-    background: var(--ui-bg);
-    border-top: 4px solid var(--panel-border);
-    padding: 8px 8px 16px;
+    padding: 0 2px 6px;
+    text-align: left;
   }
 
-  .stage-status-bar {
+  /* ===== Renovate Modal — Before/After แบบหน้าต่าง Renovate ในคลิป ===== */
+  .renovate-box { position: relative; padding-top: 30px; }
+  .renovate-subtitle { margin-top: -6px !important; }
+  .renovate-compare {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    background: var(--ui-bg-alt);
-    border: 3px solid var(--panel-border);
-    border-radius: 3px;
-    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    align-items: stretch;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .renovate-side {
+    flex: 1;
+    background: #f1e8d5;
+    border-radius: 10px;
+    padding: 8px 6px;
+    max-width: 130px;
+  }
+  .renovate-side-label { font-size: 0.62rem; color: #8a7a60; font-weight: bold; margin-bottom: 4px; }
+  .renovate-side img { width: 64px; height: 64px; object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto 4px; }
+  .renovate-side-name { font-size: 0.7rem; font-weight: bold; color: #4a3728; }
+  .renovate-arrow { align-self: center; font-size: 1.2rem; color: var(--primary-dark); flex-shrink: 0; }
+  .renovate-rewards {
+    background: #f1e8d5;
+    border-radius: 8px;
     padding: 6px 8px;
-    margin-bottom: 8px;
-    font-size: 0.68rem;
+    font-size: 0.72rem;
+    color: #4a3728;
+    margin-bottom: 12px;
   }
-  .stage-status-text { color: var(--text-main); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .stage-status-text b { color: var(--accent-gold); }
-  .stage-status-sep { color: var(--text-dim); margin: 0 3px; }
-  .stage-status-progress { display: flex; align-items: center; gap: 6px; flex-shrink: 0; color: var(--text-dim); }
-  .stage-progress-dots { display: flex; gap: 3px; }
-  .stage-progress-dot {
-    width: 8px; height: 8px;
-    border-radius: 1px;
-    background: #5a4a34;
-    border: 1px solid #000;
+  .renovate-gate-text { font-size: 0.72rem !important; color: var(--primary-dark) !important; font-weight: bold; margin: 10px 0 0 !important; }
+  .btn-cta-mega:disabled {
+    background: #c9c2b2;
+    color: #8a8070;
+    cursor: not-allowed;
+    animation: none;
+    box-shadow: none;
   }
-  .stage-progress-dot.done { background: var(--success); }
 
   /* ===== Upgrade cards — กะทัดรัด ขอบหนา hard-shadow แบบเกม ===== */
   .upgrade-list { display: flex; flex-direction: column; gap: 6px; }

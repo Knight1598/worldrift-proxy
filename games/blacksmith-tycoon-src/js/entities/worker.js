@@ -95,7 +95,8 @@ function renderWorkerTransform(w, moving, dt) {
 }
 function showCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.add('show'); }
 function hideCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.remove('show'); }
-function updateCraftBar(w, pct) { w.el.querySelector('.worker-craft-bar-fill').style.width = (pct * 100) + '%'; }
+// วงกลม pie เหนือหัวแบบเกมต้นแบบ (conic-gradient คุมด้วยตัวแปร --craft-pct ดู CSS .worker-craft-bar-fill)
+function updateCraftBar(w, pct) { w.el.querySelector('.worker-craft-bar-fill').style.setProperty('--craft-pct', (pct * 100).toFixed(1)); }
 
 // จุดเดียวที่เริ่มสถานะ CRAFTING จริง -- เรียกได้ทั้งจาก WALK_TO_STATION (วัตถุดิบพอตั้งแต่มาถึง)
 // และจาก WAITING_FOR_STOCK (เพิ่งเติมวัตถุดิบพอระหว่างรอ) กันโค้ดซ้ำสองที่
@@ -123,8 +124,11 @@ function tickWorkers(dt) {
         let buffGoldMult = 1;
         if (isBuffActive('double_gold') && Math.random() < getBuffDef('double_gold').chance) buffGoldMult = getBuffDef('double_gold').mult;
         else if (isBuffActive('crit_gold') && Math.random() < getBuffDef('crit_gold').chance) buffGoldMult = getBuffDef('crit_gold').mult;
+        // ออเดอร์หลายชิ้น (x2/x3) แบบตัวเลขในบับเบิลของเกมต้นแบบ — จ่ายคูณตามจำนวน คราฟต์รอบเดียวได้ทั้งชุด
+        const qtyRoll = Math.random();
+        cust.orderQty = qtyRoll < ORDER_QTY_3_CHANCE ? 3 : qtyRoll < ORDER_QTY_3_CHANCE + ORDER_QTY_2_CHANCE ? 2 : 1;
         // VIP: จ่าย 10 เท่าของราคาปกติ + ทิปการันตี 100% ของยอดออเดอร์ (ลูกค้าทั่วไปสุ่มทิปตามอัปเกรด "ตกแต่งร้าน")
-        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult;
+        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult * cust.orderQty;
         cust.orderTip = cust.isVIP
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);

@@ -36,15 +36,80 @@
   .pixel-num { font-family: 'Press Start 2P', 'Courier New', monospace; letter-spacing: -0.5px; }
 
   /* =====================================================================
-     Game Area — โซนฉากเกม กิน flex:6 ของความสูงจอ (≈60%) ให้พื้นที่เดินไปมาเพียงพอ
+     Game Area — เต็มจอทั้งใบแบบเกมต้นแบบ (Eatventure) ไม่แบ่งครึ่งจอกับลิสต์อัปเกรดอีกแล้ว
+     ลิสต์อัปเกรดย้ายไปอยู่ใน modal ที่เปิดจากปุ่มลอย ⬆️ ขวาล่างแทน (ดู ui/upgrades-modal.js)
      ===================================================================== */
   .game-area {
     position: relative;
-    flex: 6;
+    flex: 1;
     overflow: hidden;
     image-rendering: pixelated;
     background: #8a6b3f; /* กันโหว่ขาว ถ้ามีช่องว่างเล็กน้อยระหว่างเลเยอร์พื้นหลังก็จะกลืนเป็นสีไม้แทน ไม่โผล่ขาว */
   }
+
+  /* ปุ่มลอย (FAB) แบบเกมต้นแบบ: 🔨 Renovate ซ้ายล่าง / ⬆️ Upgrades ขวาล่าง */
+  .fab {
+    position: absolute;
+    bottom: 44px;
+    z-index: 20;
+    width: 54px; height: 54px;
+    border-radius: 12px;
+    border: 3px solid var(--panel-border);
+    background: linear-gradient(180deg, #5aa9e6, #2d6da8);
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .fab:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(0,0,0,0.5); }
+  .fab--left { left: 10px; }
+  .fab--right { right: 10px; background: linear-gradient(180deg, #ffe08a, var(--primary)); }
+  /* กระตุ้นให้กด: เด้ง+เรืองแสงตอนมีของที่ซื้อไหว (⬆️) หรือ Renovate พร้อมแล้ว (🔨) */
+  .fab--attention { animation: fabAttention 1s ease-in-out infinite; }
+  @keyframes fabAttention {
+    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 8px 2px rgba(255,215,106,0.55); transform: translateY(0); }
+    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 16px 5px rgba(255,215,106,0.85); transform: translateY(-3px); }
+  }
+
+  /* แถบชื่อด่าน + ความคืบหน้า Renovate — แถบบางลอยล่างสุดของฉาก ระหว่างปุ่ม FAB สองข้าง */
+  .stage-strip {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 6px 74px 8px; /* เผื่อที่ให้ FAB สองข้างไม่ทับข้อความ */
+    background: linear-gradient(0deg, rgba(15,10,5,0.85), rgba(15,10,5,0));
+    font-size: 0.68rem;
+    pointer-events: none;
+    text-align: center;
+  }
+  .stage-strip-name { color: var(--accent-gold); font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .stage-strip-progress { color: var(--text-main); font-size: 0.6rem; flex-shrink: 0; }
+  .stage-strip-progress.gate-met { color: var(--success); }
+
+  /* บัพที่กำลัง active — ชิปเล็กลอยบนฉาก (ลิสต์สุ่มบัพเต็มๆ ย้ายเข้า modal อัปเกรดแล้ว
+     แต่ตัวนับถอยหลังบัพต้องมองเห็นตลอดเวลาโดยไม่ต้องเปิด modal) */
+  .active-buff-chip {
+    position: absolute;
+    top: 92px; right: 8px; /* ใต้ product-badge (top:48 สูง 38px) ไม่ทับกัน */
+    z-index: 9;
+    display: none;
+    align-items: center;
+    gap: 4px;
+    background: rgba(30,20,56,0.85);
+    border: 2px solid #6a4fc9;
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 0.62rem;
+    font-weight: bold;
+    color: #d8bfff;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    pointer-events: none;
+  }
+  .active-buff-chip.show { display: inline-flex; }
   /* พื้นหลังฉาก แยกเป็น 2 เลเยอร์ div ต่างหาก (ไม่ใช้ multi background-image บน element เดียวแบบเดิม)
      เดิมใช้ background-size เป็น % ของความสูง container ที่เป็นเลขทศนิยม (เช่น 489.59375px) ทำให้ pattern
      ไม่ลงตัวพอดีพิกเซล เกิดเป็นเส้นตะเข็บสีอ่อนพาดกลางจอทั้งแนวตั้ง (รอยต่อระหว่างการ repeat) และแนวนอน
@@ -242,15 +307,23 @@
     filter: drop-shadow(0 3px 2px rgba(0,0,0,0.3));
   }
   .worker.staff .worker-sprite { filter: drop-shadow(0 3px 2px rgba(0,0,0,0.3)) hue-rotate(150deg) saturate(1.3); }
+  /* Progress ตอน Crafting — วงกลม pie เหนือหัวแบบเกมต้นแบบ (เดิมเป็นแถบนอน) ใช้ conic-gradient
+     อัปเดตผ่านตัวแปร --craft-pct (ดู updateCraftBar ใน entities/worker.js) คง class name เดิมไว้
+     เพื่อไม่ต้องรื้อ show/hide logic */
   .worker-craft-bar-bg {
-    position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
-    width: 62px; height: 8px;
-    background: rgba(0,0,0,0.3); border-radius: 4px; overflow: hidden;
+    position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid rgba(0,0,0,0.55);
+    background: rgba(0,0,0,0.35);
     opacity: 0; transition: opacity 0.15s ease;
   }
   .worker-craft-bar-bg.show { opacity: 1; }
-  /* Progress bar ตอน Crafting — เขียว→ฟ้า ตามที่ระบุ (แยกโทนจากปุ่ม/แถบอื่นในเกมที่เป็นโทนทอง/ส้ม) */
-  .worker-craft-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #6bbf6b, #4fa9e8); }
+  .worker-craft-bar-fill {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(#7ed957 calc(var(--craft-pct, 0) * 1%), transparent 0);
+  }
   @keyframes walkBob { 0% { transform: translateY(0); } 100% { transform: translateY(-3px); } }
 
   /* ป้ายสินค้าแตะเพื่อเลเวลอัพแยก (ตามแพทเทิร์นเกมต้นแบบที่แยก "อัปเกรดสินค้า" ออกจากลิสต์อัปเกรดทั่วไป) */
@@ -290,8 +363,18 @@
   .product-level-icon { width: 56px; height: 56px; object-fit: contain; image-rendering: pixelated; margin: 4px auto 10px; display: block; }
   .product-level-stars { font-size: 1.3rem; letter-spacing: 3px; margin-bottom: 10px; color: #e0d8c5; }
   .product-level-stars .star-filled { color: var(--accent-gold-dark); }
-  .product-level-progress-bg { background: #e5dcc5; border-radius: 999px; height: 14px; overflow: hidden; margin-bottom: 16px; }
+  .product-level-progress-bg { background: #e5dcc5; border-radius: 999px; height: 14px; overflow: hidden; margin-bottom: 10px; }
   .product-level-progress-fill { background: linear-gradient(90deg, #6bbf6b, #4fa9e8); height: 100%; transition: width 0.3s ease; }
+  /* แถวสถิติในป๊อปอัพสถานี (🪙 เงิน/ออเดอร์ + ⏱️ เวลาคราฟต์) แบบหน้าต่าง Level ในคลิป */
+  .product-level-stats {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    margin-bottom: 14px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: #4a3728;
+  }
   .btn-cta-mega--maxed { background: var(--success); animation: none; }
 
   /* คอนเฟตตี้ตอนจบด่าน */
@@ -337,6 +420,20 @@
   }
   .customer-bubble img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; }
   .customer-bubble.show { opacity: 1; top: -48px; }
+  /* ป้ายจำนวนชิ้นในออเดอร์ (x2/x3) แบบตัวเลขในบับเบิลของเกมต้นแบบ — โชว์เฉพาะตอนสั่งมากกว่า 1 ชิ้น */
+  .customer-bubble-qty {
+    position: absolute;
+    bottom: -4px; right: -8px;
+    background: var(--primary-dark);
+    color: #fff;
+    font-size: 0.58rem;
+    font-weight: bold;
+    border-radius: 999px;
+    padding: 1px 5px;
+    border: 2px solid #fff;
+    display: none;
+  }
+  .customer-bubble-qty.show { display: block; }
   .customer-patience-bg {
     position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
     width: 58px; height: 8px;
@@ -407,43 +504,64 @@
   }
 
   /* =====================================================================
-     UI Area — โซนปุ่มอัปเกรด กิน flex:4 ปัดขึ้นลงได้ พื้นทึบสไตล์ 8-bit
+     Upgrades Modal — ลิสต์อัปเกรดทั้งหมดย้ายมาอยู่ในนี้ (เปิดจากปุ่ม ⬆️) แบบเกมต้นแบบ
+     พื้นในกล่องใช้โทนมืดเดิมของ ui-area เดิม ให้การ์ดอัปเกรดหน้าตาเดิมใช้ต่อได้เลย
      ===================================================================== */
-  .ui-area {
-    flex: 4;
+  .upgrades-box {
+    position: relative;
+    padding: 30px 10px 10px;
+    background: var(--ui-bg);
+    border-color: var(--panel-border);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+  .upgrades-box h2 { color: var(--accent-gold); font-size: 1rem; margin: 0 0 8px; }
+  .upgrades-scroll {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
-    background: var(--ui-bg);
-    border-top: 4px solid var(--panel-border);
-    padding: 8px 8px 16px;
+    padding: 0 2px 6px;
+    text-align: left;
   }
 
-  .stage-status-bar {
+  /* ===== Renovate Modal — Before/After แบบหน้าต่าง Renovate ในคลิป ===== */
+  .renovate-box { position: relative; padding-top: 30px; }
+  .renovate-subtitle { margin-top: -6px !important; }
+  .renovate-compare {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    background: var(--ui-bg-alt);
-    border: 3px solid var(--panel-border);
-    border-radius: 3px;
-    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+    align-items: stretch;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .renovate-side {
+    flex: 1;
+    background: #f1e8d5;
+    border-radius: 10px;
+    padding: 8px 6px;
+    max-width: 130px;
+  }
+  .renovate-side-label { font-size: 0.62rem; color: #8a7a60; font-weight: bold; margin-bottom: 4px; }
+  .renovate-side img { width: 64px; height: 64px; object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto 4px; }
+  .renovate-side-name { font-size: 0.7rem; font-weight: bold; color: #4a3728; }
+  .renovate-arrow { align-self: center; font-size: 1.2rem; color: var(--primary-dark); flex-shrink: 0; }
+  .renovate-rewards {
+    background: #f1e8d5;
+    border-radius: 8px;
     padding: 6px 8px;
-    margin-bottom: 8px;
-    font-size: 0.68rem;
+    font-size: 0.72rem;
+    color: #4a3728;
+    margin-bottom: 12px;
   }
-  .stage-status-text { color: var(--text-main); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .stage-status-text b { color: var(--accent-gold); }
-  .stage-status-sep { color: var(--text-dim); margin: 0 3px; }
-  .stage-status-progress { display: flex; align-items: center; gap: 6px; flex-shrink: 0; color: var(--text-dim); }
-  .stage-progress-dots { display: flex; gap: 3px; }
-  .stage-progress-dot {
-    width: 8px; height: 8px;
-    border-radius: 1px;
-    background: #5a4a34;
-    border: 1px solid #000;
+  .renovate-gate-text { font-size: 0.72rem !important; color: var(--primary-dark) !important; font-weight: bold; margin: 10px 0 0 !important; }
+  .btn-cta-mega:disabled {
+    background: #c9c2b2;
+    color: #8a8070;
+    cursor: not-allowed;
+    animation: none;
+    box-shadow: none;
   }
-  .stage-progress-dot.done { background: var(--success); }
 
   /* ===== Upgrade cards — กะทัดรัด ขอบหนา hard-shadow แบบเกม ===== */
   .upgrade-list { display: flex; flex-direction: column; gap: 6px; }
@@ -789,26 +907,57 @@
     <span class="fever-bar-label" id="feverBarLabel">FEVER</span>
   </div>
   <div class="material-stock-panel" id="materialStockPanel"></div>
-</div>
+  <div class="active-buff-chip" id="activeBuffChip"></div>
 
-<div class="ui-area" id="uiArea">
-  <div class="stage-status-bar">
-    <div class="stage-status-text"><b id="stageName">แผงขายของริมทาง</b><span class="stage-status-sep">•</span><span id="stageProduct">ขาย ของกินของใช้ทั่วไป</span></div>
-    <div class="stage-status-progress">
-      <span class="pixel-num"><span id="stageProgressCount">0</span>/<span id="stageProgressTotal">4</span></span>
-      <div class="stage-progress-dots" id="stageProgressDots"></div>
-    </div>
+  <!-- แถบชื่อด่าน + ความคืบหน้า Renovate แบบบางๆ ลอยล่างสุดของฉาก (ไม่กินพื้นที่ scene) -->
+  <div class="stage-strip">
+    <span class="stage-strip-name" id="stageName">แผงขายของริมทาง</span>
+    <span class="stage-strip-progress pixel-num" id="stageRenovateProgress">Lv 0/25</span>
   </div>
 
-  <div class="section-label section-label--buff">สุ่มบัพ (ใช้เพชร ช่วยเร่งจบด่านเร็วขึ้น)</div>
-  <div class="buff-panel" id="buffPanel"></div>
+  <!-- ปุ่มลอยแบบเกมต้นแบบ: 🔨 Renovate ซ้ายล่าง / ⬆️ Upgrades ขวาล่าง -->
+  <button class="fab fab--left" id="btnOpenRenovate" title="Renovate — ขยับขยายร้าน">🔨</button>
+  <button class="fab fab--right" id="btnOpenUpgrades" title="อัปเกรดร้าน">⬆️</button>
+</div>
 
-  <div class="upgrade-list" id="upgradeList"></div>
+<div class="modal-overlay" id="upgradesModal">
+  <div class="modal-box upgrades-box">
+    <button class="modal-close-x" id="btnCloseUpgrades">✕</button>
+    <h2>อัปเกรดร้าน</h2>
+    <div class="upgrades-scroll">
+      <div class="section-label section-label--buff">สุ่มบัพ (ใช้เพชร ช่วยเร่งจบด่านเร็วขึ้น)</div>
+      <div class="buff-panel" id="buffPanel"></div>
+      <div class="section-label">อัปเกรดด่านนี้</div>
+      <div class="upgrade-list" id="upgradeList"></div>
+      <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
+      <div class="upgrade-list" id="permUpgradeList"></div>
+      <div class="stats-footer" id="statsFooter"></div>
+    </div>
+  </div>
+</div>
 
-  <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
-  <div class="upgrade-list" id="permUpgradeList"></div>
-
-  <div class="stats-footer" id="statsFooter"></div>
+<div class="modal-overlay" id="renovateModal">
+  <div class="modal-box renovate-box">
+    <button class="modal-close-x" id="btnCloseRenovate">✕</button>
+    <h2>🔨 Renovate</h2>
+    <p class="renovate-subtitle">ขยับขยายร้านของคุณ!</p>
+    <div class="renovate-compare">
+      <div class="renovate-side">
+        <div class="renovate-side-label">ตอนนี้</div>
+        <img id="renovateBeforeImg" src="" alt="">
+        <div class="renovate-side-name" id="renovateBeforeName"></div>
+      </div>
+      <div class="renovate-arrow">➜</div>
+      <div class="renovate-side">
+        <div class="renovate-side-label">ถัดไป</div>
+        <img id="renovateAfterImg" src="" alt="">
+        <div class="renovate-side-name" id="renovateAfterName"></div>
+      </div>
+    </div>
+    <div class="renovate-rewards" id="renovateRewards"></div>
+    <button class="btn-cta-mega" id="btnConfirmRenovate">Renovate!</button>
+    <p class="renovate-gate-text" id="renovateGateText"></p>
+  </div>
 </div>
 
 <div class="modal-overlay" id="productLevelModal">
@@ -818,16 +967,11 @@
     <img class="product-level-icon" id="productLevelIcon" src="" alt="">
     <div class="product-level-stars" id="productLevelStars"></div>
     <div class="product-level-progress-bg"><div class="product-level-progress-fill" id="productLevelProgressFill"></div></div>
+    <div class="product-level-stats">
+      <span class="product-stat" title="เงินต่อออเดอร์">🪙 <span class="pixel-num" id="productStatRevenue">0</span></span>
+      <span class="product-stat" title="เวลาคราฟต์ต่อชิ้น">⏱️ <span class="pixel-num" id="productStatCraft">0s</span></span>
+    </div>
     <button class="btn-cta-mega" id="btnBuyProductLevel">อัปเกรด</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="stageCompleteModal">
-  <div class="modal-box">
-    <div class="modal-emoji-big">🎉</div>
-    <h2 id="stageCompleteTitle">ร้านเต็มขั้นแล้ว!</h2>
-    <p id="stageCompleteText"></p>
-    <button class="btn-cta-mega" id="btnAdvanceStage">ไปกันเลย!</button>
   </div>
 </div>
 
@@ -1003,6 +1147,18 @@ const MAX_QUEUE_SIZE = 20; // เพดานกันคิวยาวจน�
 const CUSTOMER_WALK_SPEED_PX = 70; // ความเร็วเดินของลูกค้า คงที่ ไม่ผูกกับอัปเกรด (สเปกระบุให้อัปเกรดความเร็วมีผลแค่ผู้เล่น/พนักงาน)
 const PATIENCE_DURATION_MS = 9000; // หลอดความอดทนเชิงภาพล้วนๆ ไม่มีผลลงโทษถ้าหมด (ไม่ได้ระบุ fail-state ไว้ในสเปก)
 const APPROX_ORDER_TRAVEL_PX = 320; // ระยะทางเดินโดยประมาณต่อ 1 ออเดอร์ (ไป station + ไปส่งที่คิว + ไปเก็บเหรียญ) ใช้คำนวณ throughput แบบไม่พึ่ง DOM เพื่อให้ deterministic
+
+// ===== Renovate (ขึ้นด่านแบบ Eatventure) =====
+// เดิมต้องอัปเกรดครบ 4 ชนิด x50 เลเวล (200 ครั้ง) ถึงขึ้นด่านใหม่ได้ — ยืดเกินไปมาก
+// เปลี่ยนเป็นแบบเกมต้นแบบในคลิป: อัปเกรด "สินค้า" (สถานี) ถึงเลเวลที่กำหนดก็กดปุ่ม 🔨 Renovate ได้เลย
+// อัปเกรดตัวอื่นๆ (ความเร็ว/ป้าย/ตกแต่ง) กลายเป็นตัวเสริมให้ฟาร์มเร็วขึ้น ไม่ใช่กำแพงบังคับ
+const RENOVATE_GATE_LEVEL = 25;   // สินค้าต้องถึงเลเวลนี้ก่อนถึงจะ Renovate ได้ (ตรงกับ "level 25 first!" ในคลิป)
+const RENOVATE_REWARD_GEMS = 10;  // รางวัลเพชรตอน Renovate สำเร็จ (คลิปมีช่อง Rewards ในหน้าต่าง Renovate)
+
+// ===== ออเดอร์หลายชิ้น (ตัวเลขในบับเบิลแบบคลิป) =====
+// ลูกค้าบางคนสั่งมากกว่า 1 ชิ้น — บับเบิลโชว์ x2/x3 และจ่ายเงินคูณตามจำนวน (คราฟต์รอบเดียวได้ทั้งชุด)
+const ORDER_QTY_2_CHANCE = 0.18;
+const ORDER_QTY_3_CHANCE = 0.06;
 
 // ===== Multi-Staff System =====
 const MAX_STAFF_COUNT = 4; // จ้างลูกมือได้สูงสุด 4 คน (รวมผู้เล่นเอง = 5 คนพร้อมกันในร้าน)
@@ -1336,13 +1492,8 @@ function getVipChance() {
   return VIP_CHANCE * (isBuffActive('vip_magnet') ? 3 : 1);
 }
 
-function isStageMaxed() {
-  return UPGRADE_TYPES.every(u => player.upgradeLevels[u.key] >= u.maxLevel);
-}
-
-function getStageProgressCount() {
-  return UPGRADE_TYPES.filter(u => player.upgradeLevels[u.key] >= u.maxLevel).length;
-}
+// เงื่อนไขขึ้นด่านย้ายไปอยู่ที่ isRenovateReady() (ui/renovate-modal.js) แบบเกมต้นแบบ:
+// สินค้าถึงเลเวล RENOVATE_GATE_LEVEL ก็พอ ไม่ต้องอัปครบทุกชนิดจนเต็มขั้นอีกแล้ว
 
 // Game Logic Improvement: ตัดสินใจให้ Station "รองรับงานพร้อมกันได้" (ไม่มี Wait-state คั่นคิว) แทนการบังคับ
 // worker คนที่ 2/3/4/5 ต้องรอสถานีว่าง — เพราะ workerIndex ของแต่ละคนถูกใช้คำนวณตำแหน่งยืนที่ station/idle
@@ -1594,7 +1745,8 @@ function renderWorkerTransform(w, moving, dt) {
 }
 function showCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.add('show'); }
 function hideCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.remove('show'); }
-function updateCraftBar(w, pct) { w.el.querySelector('.worker-craft-bar-fill').style.width = (pct * 100) + '%'; }
+// วงกลม pie เหนือหัวแบบเกมต้นแบบ (conic-gradient คุมด้วยตัวแปร --craft-pct ดู CSS .worker-craft-bar-fill)
+function updateCraftBar(w, pct) { w.el.querySelector('.worker-craft-bar-fill').style.setProperty('--craft-pct', (pct * 100).toFixed(1)); }
 
 // จุดเดียวที่เริ่มสถานะ CRAFTING จริง -- เรียกได้ทั้งจาก WALK_TO_STATION (วัตถุดิบพอตั้งแต่มาถึง)
 // และจาก WAITING_FOR_STOCK (เพิ่งเติมวัตถุดิบพอระหว่างรอ) กันโค้ดซ้ำสองที่
@@ -1622,8 +1774,11 @@ function tickWorkers(dt) {
         let buffGoldMult = 1;
         if (isBuffActive('double_gold') && Math.random() < getBuffDef('double_gold').chance) buffGoldMult = getBuffDef('double_gold').mult;
         else if (isBuffActive('crit_gold') && Math.random() < getBuffDef('crit_gold').chance) buffGoldMult = getBuffDef('crit_gold').mult;
+        // ออเดอร์หลายชิ้น (x2/x3) แบบตัวเลขในบับเบิลของเกมต้นแบบ — จ่ายคูณตามจำนวน คราฟต์รอบเดียวได้ทั้งชุด
+        const qtyRoll = Math.random();
+        cust.orderQty = qtyRoll < ORDER_QTY_3_CHANCE ? 3 : qtyRoll < ORDER_QTY_3_CHANCE + ORDER_QTY_2_CHANCE ? 2 : 1;
         // VIP: จ่าย 10 เท่าของราคาปกติ + ทิปการันตี 100% ของยอดออเดอร์ (ลูกค้าทั่วไปสุ่มทิปตามอัปเกรด "ตกแต่งร้าน")
-        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult;
+        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult * cust.orderQty;
         cust.orderTip = cust.isVIP
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);
@@ -1734,7 +1889,7 @@ function spawnCustomerEntity() {
   el.className = 'customer' + (isVIP ? ' vip' : '');
   el.innerHTML =
     '<div class="customer-patience-bg"><div class="customer-patience-fill"></div></div>' +
-    '<div class="customer-bubble"><img alt=""></div>' +
+    '<div class="customer-bubble"><img alt=""><span class="customer-bubble-qty"></span></div>' +
     '<div class="customer-body"><img class="customer-img" alt=""></div>';
   el.querySelector('.customer-img').src = getRandomCustomerImg();
   document.getElementById('customerLane').appendChild(el);
@@ -1744,7 +1899,7 @@ function spawnCustomerEntity() {
   const cust = {
     id, el, slotIndex, state: 'QUEUED', facing: 1,
     x: spawnX, y: scene.height + 40,
-    orderIcon: null, orderRevenue: 0, orderTip: 0, patienceStartAt: 0,
+    orderIcon: null, orderRevenue: 0, orderTip: 0, orderQty: 1, patienceStartAt: 0,
     isVIP,
   };
   customers.push(cust);
@@ -1763,6 +1918,10 @@ function renderCustomerTransform(cust, moving) {
 function showOrderBubble(cust) {
   const bubble = cust.el.querySelector('.customer-bubble');
   bubble.querySelector('img').src = cust.orderIcon;
+  // ป้าย x2/x3 ตอนสั่งมากกว่า 1 ชิ้น (แบบตัวเลขในบับเบิลของเกมต้นแบบ)
+  const qtyEl = bubble.querySelector('.customer-bubble-qty');
+  qtyEl.textContent = 'x' + (cust.orderQty || 1);
+  qtyEl.classList.toggle('show', (cust.orderQty || 1) > 1);
   bubble.classList.add('show');
   cust.el.querySelector('.customer-patience-bg').classList.add('show');
 }
@@ -2202,7 +2361,16 @@ function buyUpgrade(key) {
   // ยิง event แทนเรียก render*() 5-6 ฟังก์ชันข้ามไฟล์ตรงๆ — render.js subscribe เอง (ดู render.js ท้ายไฟล์)
   GameEvents.emit(EVENTS.UPGRADE_PURCHASED, { key, level: newLevel });
   saveGame();
-  if (isStageMaxed()) showStageCompleteModal();
+  // ผ่านเงื่อนไข Renovate (สินค้าถึงเลเวล 25) ครั้งแรกของด่านนี้ -- ฉลอง + ชี้ไปที่ปุ่ม 🔨
+  // (แทน stage-complete modal เดิมที่เด้งเองตอนอัปเกรดครบทุกชนิด ซึ่งถูกแทนด้วย Renovate flow แล้ว)
+  if (key === 'portion' && newLevel === RENOVATE_GATE_LEVEL) {
+    playSfxStageComplete();
+    const toast = document.createElement('div');
+    toast.className = 'milestone-toast';
+    toast.innerHTML = `🔨 <b>${getStage().name}</b> พร้อมขยับขยายแล้ว!<br>กดปุ่มค้อนซ้ายล่างเพื่อ Renovate!`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 1900);
+  }
 }
 
 // Milestone Boosts: เลเวล 10/25/50 ของอัปเกรดไหนก็ตาม โชว์ป๊อปอัพฉลอง 1 ครั้งต่อเลเวล (กันเด้งซ้ำตอนโหลดเซฟ
@@ -2245,18 +2413,22 @@ function buyVaultLevel() {
 }
 
 function advanceStage() {
-  document.getElementById('stageCompleteModal').classList.remove('show');
   const wasFirstStage = player.stageIndex === 0;
   if (player.stageIndex >= STAGES.length - 1) {
-    // ด่านสุดท้ายไม่มี "ด่านถัดไป" ให้ขยับไป แต่ stage-complete-modal.js สัญญาไว้ว่ากดแล้ว "รับรางวัลปิดท้าย"
-    // -- ให้เพชรจริงตามที่พูดไว้ แทนที่จะแค่โชว์ modal เฉยๆ โดยไม่มีอะไรเกิดขึ้นจริง
+    // ด่านสุดท้ายไม่มี "ด่านถัดไป" ให้ขยับไป -- Renovate ครั้งสุดท้าย = รับรางวัลปิดท้าย + จบเกม
     player.gems += FINAL_STAGE_REWARD_GEMS;
     renderGems();
     document.getElementById('gameCompleteRewardText').textContent = `🎁 ได้รับรางวัลปิดท้าย +${FINAL_STAGE_REWARD_GEMS} 💎 เพชร!`;
     document.getElementById('gameCompleteModal').classList.add('show');
+    spawnConfetti();
     saveGame();
     return;
   }
+  // รางวัล Renovate (ช่อง Rewards ในหน้าต่าง Renovate สัญญาไว้ ดู ui/renovate-modal.js)
+  player.gems += RENOVATE_REWARD_GEMS;
+  renderGems();
+  spawnConfetti();
+  playSfxStageComplete();
   player.stageIndex += 1;
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
   // staffCount/vaultLevel เป็นอัปเกรดถาวร ไม่ถูกรีเซ็ตตรงนี้ — คงค่าจากด่านก่อนหน้าไว้ทั้งหมด
@@ -2362,33 +2534,31 @@ GameEvents.on(EVENTS.BUFF_ROLLED, () => renderGems());
 </script>
 <script>
 /* =====================================================================
-   Stage Status — ชื่อด่าน/สินค้าปัจจุบัน + progress dots ของอัปเกรด + ภาพ Station ในฉาก
+   Stage Strip — ชื่อด่าน + ความคืบหน้าสู่ Renovate (Lv สินค้า X/25) ลอยล่างสุดของฉาก
+   แทน stage-status-bar เดิมที่อยู่หัวลิสต์อัปเกรด (ลิสต์ย้ายเข้า modal แล้ว)
+   + ภาพ Station ในฉาก (tint/รูปตามด่าน)
    ===================================================================== */
 function renderStageView() {
   const stage = getStage();
   document.getElementById('stageName').textContent = stage.name;
-  document.getElementById('stageProduct').textContent = `ขาย ${stage.product}`;
   document.getElementById('standTintOverlay').style.background = stage.color;
   document.getElementById('standBooth').src = stage.stationImg;
   document.getElementById('standBoothFront').src = stage.stationImg;
 }
 
 function renderStageProgress() {
-  const total = UPGRADE_TYPES.length;
-  const done = getStageProgressCount();
-  document.getElementById('stageProgressCount').textContent = done;
-  document.getElementById('stageProgressTotal').textContent = total;
-  const dotsEl = document.getElementById('stageProgressDots');
-  dotsEl.innerHTML = '';
-  UPGRADE_TYPES.forEach(u => {
-    const dot = document.createElement('div');
-    dot.className = 'stage-progress-dot' + (player.upgradeLevels[u.key] >= u.maxLevel ? ' done' : '');
-    dotsEl.appendChild(dot);
-  });
+  const el = document.getElementById('stageRenovateProgress');
+  const level = player.upgradeLevels.portion;
+  const isLast = player.stageIndex >= STAGES.length - 1;
+  if (isLast && level >= RENOVATE_GATE_LEVEL) {
+    el.textContent = `Lv ${level} 👑`;
+    el.classList.add('gate-met');
+    return;
+  }
+  el.textContent = `🔨 Lv ${Math.min(level, RENOVATE_GATE_LEVEL)}/${RENOVATE_GATE_LEVEL}`;
+  el.classList.toggle('gate-met', level >= RENOVATE_GATE_LEVEL);
 }
 
-// STAGE_ADVANCED ไม่ต้อง subscribe ที่นี่ซ้ำ -- render.js's renderAll() (subscribe STAGE_ADVANCED)
-// เรียก renderStageView()/renderStageProgress() อยู่แล้ว กันรีเฟรชซ้ำสองรอบ
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderStageProgress());
 </script>
 <script>
@@ -2533,7 +2703,9 @@ GameEvents.on(EVENTS.BUFF_ENDED, () => renderPermUpgradeList());
 </script>
 <script>
 /* =====================================================================
-   Product Badge + Level-up Modal — ป้ายสินค้าแตะเพื่อเลเวลอัพแยกจากลิสต์อัปเกรดทั่วไป
+   Station Level Popup — แตะโต๊ะสถานี (หรือป้ายสินค้า) เพื่อเปิด ตามหน้าต่าง "Level N" ในเกมต้นแบบ:
+   ชื่อระดับ+สินค้า / ดาว milestone (10/25/50) / แถบความคืบหน้าสู่ดาวถัดไป /
+   แถวสถิติ (🪙 เงินต่อออเดอร์ + ⏱️ เวลาคราฟต์) / ปุ่มซื้อใหญ่กดรัวได้
    ===================================================================== */
 function renderProductBadge() {
   const type = getUpgradeType('portion');
@@ -2556,15 +2728,26 @@ function renderProductLevelModal() {
   document.getElementById('productLevelTitle').textContent = `ระดับ ${level} — ${getStage().product}`;
   document.getElementById('productLevelIcon').src = getProductIcon();
 
+  // ดาว = milestone 10/25/50 (แบบดาวในหน้าต่าง Level ของเกมต้นแบบ) ไม่ใช่ดาวละเลเวลจนล้นจอแบบเดิม
   const starsEl = document.getElementById('productLevelStars');
   starsEl.innerHTML = '';
-  for (let i = 0; i < type.maxLevel; i++) {
+  MILESTONE_LEVELS.forEach(ms => {
     const star = document.createElement('span');
     star.textContent = '★';
-    star.className = i < level ? 'star-filled' : '';
+    star.className = level >= ms ? 'star-filled' : '';
+    star.title = `เลเวล ${ms}`;
     starsEl.appendChild(star);
-  }
-  document.getElementById('productLevelProgressFill').style.width = `${(level / type.maxLevel) * 100}%`;
+  });
+
+  // แถบความคืบหน้า: ช่วงระหว่าง milestone ก่อนหน้า -> milestone ถัดไป
+  const prevMs = MILESTONE_LEVELS.filter(ms => level >= ms).pop() || 0;
+  const nextMs = MILESTONE_LEVELS.find(ms => level < ms) || type.maxLevel;
+  const pct = nextMs > prevMs ? ((level - prevMs) / (nextMs - prevMs)) * 100 : 100;
+  document.getElementById('productLevelProgressFill').style.width = `${Math.min(100, pct)}%`;
+
+  // แถวสถิติแบบคลิป: เงินต่อออเดอร์ (คุมโดยเลเวลสินค้า) + เวลาคราฟต์ (คุมโดยอัปเกรดความเร็ว)
+  document.getElementById('productStatRevenue').textContent = Math.round(getRevenuePerSale()).toLocaleString();
+  document.getElementById('productStatCraft').textContent = (getCraftDurationMs() / 1000).toFixed(1) + 's';
 
   const btn = document.getElementById('btnBuyProductLevel');
   btn.textContent = maxed ? 'เต็มขั้นแล้ว ✓' : `อัปเกรด (${cost.toLocaleString()})`;
@@ -2595,25 +2778,104 @@ GameEvents.on(EVENTS.BUFF_ENDED, () => { renderProductBadge(); refreshProductLev
 </script>
 <script>
 /* =====================================================================
-   Stage Complete Modal + Confetti — โผล่ตอนอัปเกรดครบทุกตัวของด่านปัจจุบัน
+   Upgrades Modal — ลิสต์อัปเกรดทั้งหมด (สุ่มบัพ/อัปเกรดด่าน/อัปเกรดถาวร/สถิติ) ย้ายมา
+   อยู่ใน modal ที่เปิดจากปุ่มลอย ⬆️ ขวาล่าง แบบเกมต้นแบบ — ฉากเกมได้พื้นที่เต็มจอ
+   ปุ่ม ⬆️ เด้งเรียกความสนใจเมื่อมีอะไรที่ซื้อไหวอย่างน้อย 1 อย่าง
    ===================================================================== */
-function showStageCompleteModal() {
-  const stage = getStage();
-  const isLast = player.stageIndex >= STAGES.length - 1;
-  document.getElementById('stageCompleteTitle').textContent = `${stage.name} เต็มขั้นแล้ว!`;
-  if (isLast) {
-    document.getElementById('stageCompleteText').textContent = 'คุณอัปเกรดร้านสุดท้ายจนเต็มขั้นแล้ว! กดเพื่อรับรางวัลปิดท้าย';
-    document.getElementById('btnAdvanceStage').textContent = 'รับรางวัล!';
-  } else {
-    const next = STAGES[player.stageIndex + 1];
-    document.getElementById('stageCompleteText').textContent = `พร้อมขยับไปเปิด "${next.name}" ขาย${next.product}แล้ว! Gold ที่มีอยู่ไม่หายไปไหน เอาไปต่อยอดร้านใหม่ได้เลย`;
-    document.getElementById('btnAdvanceStage').textContent = `ไปกันเลย! (${next.name})`;
-  }
-  playSfxStageComplete();
-  document.getElementById('stageCompleteModal').classList.add('show');
-  spawnConfetti();
+function openUpgradesModal() {
+  renderUpgradeList();
+  renderPermUpgradeList();
+  renderBuffPanel();
+  renderStatsFooter();
+  document.getElementById('upgradesModal').classList.add('show');
 }
 
+function anyUpgradeAffordable() {
+  const stageUpgradeOk = UPGRADE_TYPES.some(u =>
+    !u.hiddenFromList && player.upgradeLevels[u.key] < u.maxLevel && player.gold >= getUpgradeCost(u.key));
+  const hireOk = player.staffCount < MAX_STAFF_COUNT && player.gold >= getHireHelperCost();
+  const vaultOk = player.vaultLevel < MAX_VAULT_LEVEL && player.gold >= getVaultUpgradeCost();
+  const rollOk = player.gems >= BUFF_ROLL_COST_GEMS;
+  return stageUpgradeOk || hireOk || vaultOk || rollOk;
+}
+
+function refreshUpgradesFab() {
+  document.getElementById('btnOpenUpgrades').classList.toggle('fab--attention', anyUpgradeAffordable());
+}
+
+document.getElementById('btnOpenUpgrades').addEventListener('click', () => openUpgradesModal());
+document.getElementById('btnCloseUpgrades').addEventListener('click', () => {
+  document.getElementById('upgradesModal').classList.remove('show');
+});
+
+GameEvents.on(EVENTS.COIN_COLLECTED, () => refreshUpgradesFab());
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => refreshUpgradesFab());
+GameEvents.on(EVENTS.STAFF_HIRED, () => refreshUpgradesFab());
+GameEvents.on(EVENTS.VAULT_UPGRADED, () => refreshUpgradesFab());
+GameEvents.on(EVENTS.MISSION_COMPLETED, () => refreshUpgradesFab());
+GameEvents.on(EVENTS.BUFF_ROLLED, () => refreshUpgradesFab());
+GameEvents.on(EVENTS.GOBLIN_CAUGHT, () => refreshUpgradesFab());
+</script>
+<script>
+/* =====================================================================
+   Renovate Modal — ขึ้นด่านแบบเกมต้นแบบ: ปุ่ม 🔨 ซ้ายล่างเปิดหน้าต่าง Before/After
+   เงื่อนไข: อัปเกรด "สินค้า" (สถานี) ถึง RENOVATE_GATE_LEVEL ก่อน ("level 25 first!")
+   ผ่านเงื่อนไขแล้วกด Renovate ได้เลย ไม่ต้องรออัปเกรดชนิดอื่นครบอีกต่อไป
+   ===================================================================== */
+function isRenovateReady() {
+  return player.upgradeLevels.portion >= RENOVATE_GATE_LEVEL;
+}
+
+function renderRenovateModal() {
+  const stage = getStage();
+  const isLast = player.stageIndex >= STAGES.length - 1;
+  const next = isLast ? null : STAGES[player.stageIndex + 1];
+  document.getElementById('renovateBeforeImg').src = stage.stationImg;
+  document.getElementById('renovateBeforeName').textContent = stage.name;
+  document.getElementById('renovateAfterImg').src = isLast ? stage.stationImg : next.stationImg;
+  document.getElementById('renovateAfterName').textContent = isLast ? 'จบเกม 👑' : next.name;
+  document.getElementById('renovateRewards').textContent = isLast
+    ? `🎁 รางวัล: +${FINAL_STAGE_REWARD_GEMS} 💎 เพชร (รางวัลปิดท้าย)`
+    : `🎁 รางวัล: +${RENOVATE_REWARD_GEMS} 💎 เพชร | Gold ที่มีอยู่ไม่หายไปไหน`;
+
+  const ready = isRenovateReady();
+  const btn = document.getElementById('btnConfirmRenovate');
+  btn.disabled = !ready;
+  btn.textContent = isLast ? 'รับรางวัลปิดท้าย!' : `Renovate เป็น "${next.name}"!`;
+  document.getElementById('renovateGateText').textContent = ready
+    ? ''
+    : `อัปเกรดสินค้า (แตะโต๊ะสถานี) ให้ถึงเลเวล ${RENOVATE_GATE_LEVEL} ก่อน! (ตอนนี้ ${player.upgradeLevels.portion})`;
+}
+
+function openRenovateModal() {
+  renderRenovateModal();
+  document.getElementById('renovateModal').classList.add('show');
+}
+
+// ปุ่ม 🔨 เด้งเรียกความสนใจเมื่อผ่านเงื่อนไขแล้ว (แบบลูกศรชี้ปุ่มในคลิป)
+function refreshRenovateFab() {
+  document.getElementById('btnOpenRenovate').classList.toggle('fab--attention', isRenovateReady());
+}
+
+document.getElementById('btnOpenRenovate').addEventListener('click', () => openRenovateModal());
+document.getElementById('btnCloseRenovate').addEventListener('click', () => {
+  document.getElementById('renovateModal').classList.remove('show');
+});
+document.getElementById('btnConfirmRenovate').addEventListener('click', () => {
+  if (!isRenovateReady()) return;
+  document.getElementById('renovateModal').classList.remove('show');
+  advanceStage();
+});
+
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => refreshRenovateFab());
+GameEvents.on(EVENTS.STAGE_ADVANCED, () => refreshRenovateFab());
+</script>
+<script>
+/* =====================================================================
+   Confetti — ใช้ตอน Renovate สำเร็จ (หน้าต่าง stage-complete เดิมถูกแทนด้วย
+   Renovate flow ใน ui/renovate-modal.js ตามแบบเกมต้นแบบแล้ว เหลือไว้แค่คอนเฟตตี้
+   ที่ยังยิงฉลองตอนขึ้นด่านเหมือนเดิม)
+   ===================================================================== */
 const CONFETTI_COLORS = ['#ff9f45', '#6bbf6b', '#5aa9e6', '#e35d5d', '#ffd76a', '#c77dff'];
 function spawnConfetti(count) {
   const n = count || 40;
@@ -2628,8 +2890,6 @@ function spawnConfetti(count) {
     setTimeout(() => piece.remove(), 3200);
   }
 }
-
-document.getElementById('btnAdvanceStage').addEventListener('click', () => advanceStage());
 </script>
 <script>
 /* =====================================================================
@@ -2739,12 +2999,28 @@ function formatBuffCountdown() {
   return `เหลือ ${secLeft} วินาที`;
 }
 
+// ชิปบัพลอยบนฉาก — ลิสต์สุ่มบัพอยู่ใน modal อัปเกรดแล้ว แต่ตัวนับถอยหลังของบัพที่กำลังทำงาน
+// ต้องมองเห็นได้ตลอดโดยไม่ต้องเปิด modal (แบบไอคอนบัฟลอยในเกมแนวเดียวกัน)
+function renderActiveBuffChip() {
+  const chip = document.getElementById('activeBuffChip');
+  if (!activeBuff) {
+    chip.classList.remove('show');
+    return;
+  }
+  const def = getBuffDef(activeBuff.key);
+  chip.innerHTML = `${def.icon} <span id="buffChipCountdown">${formatBuffCountdown()}</span>`;
+  chip.classList.add('show');
+  chip.title = `${def.name} — ${def.desc}`;
+}
+
 // เรียกทุกเฟรมจาก gameTick แค่ตอนมีบัพ active เท่านั้น -- อัปเดตแค่ textContent ของตัวนับถอยหลัง
-// ไม่ rebuild การ์ดทั้งใบทุกเฟรม (ประหยัดกว่า renderBuffPanel() เต็มรูปแบบมาก)
+// ไม่ rebuild การ์ด/ชิปทั้งใบทุกเฟรม (ประหยัดกว่า renderBuffPanel() เต็มรูปแบบมาก)
 function tickBuffCountdownDisplay() {
   if (!activeBuff) return;
   const el = document.getElementById('buffCountdownText');
   if (el) el.textContent = formatBuffCountdown();
+  const chipEl = document.getElementById('buffChipCountdown');
+  if (chipEl) chipEl.textContent = formatBuffCountdown();
 }
 
 function showBuffResultToast(buff) {
@@ -2756,8 +3032,8 @@ function showBuffResultToast(buff) {
 }
 
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderBuffPanel()); // เพชรเพิ่ม อาจพอสุ่มได้แล้ว
-GameEvents.on(EVENTS.BUFF_ROLLED, () => renderBuffPanel());
-GameEvents.on(EVENTS.BUFF_ENDED, () => renderBuffPanel());
+GameEvents.on(EVENTS.BUFF_ROLLED, () => { renderBuffPanel(); renderActiveBuffChip(); });
+GameEvents.on(EVENTS.BUFF_ENDED, () => { renderBuffPanel(); renderActiveBuffChip(); });
 </script>
 <script>
 /* =====================================================================
@@ -2779,6 +3055,9 @@ function renderAll() {
   renderFeverBar();
   renderMaterialStockPanel();
   renderBuffPanel();
+  renderActiveBuffChip();
+  refreshUpgradesFab();
+  refreshRenovateFab();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
@@ -2828,11 +3107,13 @@ function scheduleNextCustomer() {
 /* =====================================================================
    Event listeners
    ===================================================================== */
+// แตะโต๊ะสถานีเปิดป๊อปอัพเลเวลสินค้าโดยตรง (แบบแตะสถานีในเกมต้นแบบ) — ป้ายสินค้าวงกลมก็ยังเปิดได้เหมือนเดิม
 document.getElementById('standBooth').addEventListener('click', (e) => {
   e.currentTarget.classList.remove('tap-bump');
   void e.currentTarget.offsetWidth;
   e.currentTarget.classList.add('tap-bump');
   playSfxTap();
+  openProductLevelModal();
 });
 
 // หมายเหตุ: listener ของ productBadge/btnAdvanceStage/feverBarWrap/settings ทั้งหมดถูกย้ายไปอยู่

@@ -36,26 +36,57 @@
     <span class="fever-bar-label" id="feverBarLabel">FEVER</span>
   </div>
   <div class="material-stock-panel" id="materialStockPanel"></div>
-</div>
+  <div class="active-buff-chip" id="activeBuffChip"></div>
 
-<div class="ui-area" id="uiArea">
-  <div class="stage-status-bar">
-    <div class="stage-status-text"><b id="stageName">แผงขายของริมทาง</b><span class="stage-status-sep">•</span><span id="stageProduct">ขาย ของกินของใช้ทั่วไป</span></div>
-    <div class="stage-status-progress">
-      <span class="pixel-num"><span id="stageProgressCount">0</span>/<span id="stageProgressTotal">4</span></span>
-      <div class="stage-progress-dots" id="stageProgressDots"></div>
-    </div>
+  <!-- แถบชื่อด่าน + ความคืบหน้า Renovate แบบบางๆ ลอยล่างสุดของฉาก (ไม่กินพื้นที่ scene) -->
+  <div class="stage-strip">
+    <span class="stage-strip-name" id="stageName">แผงขายของริมทาง</span>
+    <span class="stage-strip-progress pixel-num" id="stageRenovateProgress">Lv 0/25</span>
   </div>
 
-  <div class="section-label section-label--buff">สุ่มบัพ (ใช้เพชร ช่วยเร่งจบด่านเร็วขึ้น)</div>
-  <div class="buff-panel" id="buffPanel"></div>
+  <!-- ปุ่มลอยแบบเกมต้นแบบ: 🔨 Renovate ซ้ายล่าง / ⬆️ Upgrades ขวาล่าง -->
+  <button class="fab fab--left" id="btnOpenRenovate" title="Renovate — ขยับขยายร้าน">🔨</button>
+  <button class="fab fab--right" id="btnOpenUpgrades" title="อัปเกรดร้าน">⬆️</button>
+</div>
 
-  <div class="upgrade-list" id="upgradeList"></div>
+<div class="modal-overlay" id="upgradesModal">
+  <div class="modal-box upgrades-box">
+    <button class="modal-close-x" id="btnCloseUpgrades">✕</button>
+    <h2>อัปเกรดร้าน</h2>
+    <div class="upgrades-scroll">
+      <div class="section-label section-label--buff">สุ่มบัพ (ใช้เพชร ช่วยเร่งจบด่านเร็วขึ้น)</div>
+      <div class="buff-panel" id="buffPanel"></div>
+      <div class="section-label">อัปเกรดด่านนี้</div>
+      <div class="upgrade-list" id="upgradeList"></div>
+      <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
+      <div class="upgrade-list" id="permUpgradeList"></div>
+      <div class="stats-footer" id="statsFooter"></div>
+    </div>
+  </div>
+</div>
 
-  <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
-  <div class="upgrade-list" id="permUpgradeList"></div>
-
-  <div class="stats-footer" id="statsFooter"></div>
+<div class="modal-overlay" id="renovateModal">
+  <div class="modal-box renovate-box">
+    <button class="modal-close-x" id="btnCloseRenovate">✕</button>
+    <h2>🔨 Renovate</h2>
+    <p class="renovate-subtitle">ขยับขยายร้านของคุณ!</p>
+    <div class="renovate-compare">
+      <div class="renovate-side">
+        <div class="renovate-side-label">ตอนนี้</div>
+        <img id="renovateBeforeImg" src="" alt="">
+        <div class="renovate-side-name" id="renovateBeforeName"></div>
+      </div>
+      <div class="renovate-arrow">➜</div>
+      <div class="renovate-side">
+        <div class="renovate-side-label">ถัดไป</div>
+        <img id="renovateAfterImg" src="" alt="">
+        <div class="renovate-side-name" id="renovateAfterName"></div>
+      </div>
+    </div>
+    <div class="renovate-rewards" id="renovateRewards"></div>
+    <button class="btn-cta-mega" id="btnConfirmRenovate">Renovate!</button>
+    <p class="renovate-gate-text" id="renovateGateText"></p>
+  </div>
 </div>
 
 <div class="modal-overlay" id="productLevelModal">
@@ -65,16 +96,11 @@
     <img class="product-level-icon" id="productLevelIcon" src="" alt="">
     <div class="product-level-stars" id="productLevelStars"></div>
     <div class="product-level-progress-bg"><div class="product-level-progress-fill" id="productLevelProgressFill"></div></div>
+    <div class="product-level-stats">
+      <span class="product-stat" title="เงินต่อออเดอร์">🪙 <span class="pixel-num" id="productStatRevenue">0</span></span>
+      <span class="product-stat" title="เวลาคราฟต์ต่อชิ้น">⏱️ <span class="pixel-num" id="productStatCraft">0s</span></span>
+    </div>
     <button class="btn-cta-mega" id="btnBuyProductLevel">อัปเกรด</button>
-  </div>
-</div>
-
-<div class="modal-overlay" id="stageCompleteModal">
-  <div class="modal-box">
-    <div class="modal-emoji-big">🎉</div>
-    <h2 id="stageCompleteTitle">ร้านเต็มขั้นแล้ว!</h2>
-    <p id="stageCompleteText"></p>
-    <button class="btn-cta-mega" id="btnAdvanceStage">ไปกันเลย!</button>
   </div>
 </div>
 
@@ -136,6 +162,8 @@
 <script src="js/ui/upgrade-list.js"></script>
 <script src="js/ui/perm-upgrade-list.js"></script>
 <script src="js/ui/product-modal.js"></script>
+<script src="js/ui/upgrades-modal.js"></script>
+<script src="js/ui/renovate-modal.js"></script>
 <script src="js/ui/stage-complete-modal.js"></script>
 <script src="js/ui/settings-modal.js"></script>
 <script src="js/ui/stats-footer.js"></script>

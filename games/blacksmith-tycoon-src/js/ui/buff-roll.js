@@ -48,12 +48,28 @@ function formatBuffCountdown() {
   return `เหลือ ${secLeft} วินาที`;
 }
 
+// ชิปบัพลอยบนฉาก — ลิสต์สุ่มบัพอยู่ใน modal อัปเกรดแล้ว แต่ตัวนับถอยหลังของบัพที่กำลังทำงาน
+// ต้องมองเห็นได้ตลอดโดยไม่ต้องเปิด modal (แบบไอคอนบัฟลอยในเกมแนวเดียวกัน)
+function renderActiveBuffChip() {
+  const chip = document.getElementById('activeBuffChip');
+  if (!activeBuff) {
+    chip.classList.remove('show');
+    return;
+  }
+  const def = getBuffDef(activeBuff.key);
+  chip.innerHTML = `${def.icon} <span id="buffChipCountdown">${formatBuffCountdown()}</span>`;
+  chip.classList.add('show');
+  chip.title = `${def.name} — ${def.desc}`;
+}
+
 // เรียกทุกเฟรมจาก gameTick แค่ตอนมีบัพ active เท่านั้น -- อัปเดตแค่ textContent ของตัวนับถอยหลัง
-// ไม่ rebuild การ์ดทั้งใบทุกเฟรม (ประหยัดกว่า renderBuffPanel() เต็มรูปแบบมาก)
+// ไม่ rebuild การ์ด/ชิปทั้งใบทุกเฟรม (ประหยัดกว่า renderBuffPanel() เต็มรูปแบบมาก)
 function tickBuffCountdownDisplay() {
   if (!activeBuff) return;
   const el = document.getElementById('buffCountdownText');
   if (el) el.textContent = formatBuffCountdown();
+  const chipEl = document.getElementById('buffChipCountdown');
+  if (chipEl) chipEl.textContent = formatBuffCountdown();
 }
 
 function showBuffResultToast(buff) {
@@ -65,5 +81,5 @@ function showBuffResultToast(buff) {
 }
 
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderBuffPanel()); // เพชรเพิ่ม อาจพอสุ่มได้แล้ว
-GameEvents.on(EVENTS.BUFF_ROLLED, () => renderBuffPanel());
-GameEvents.on(EVENTS.BUFF_ENDED, () => renderBuffPanel());
+GameEvents.on(EVENTS.BUFF_ROLLED, () => { renderBuffPanel(); renderActiveBuffChip(); });
+GameEvents.on(EVENTS.BUFF_ENDED, () => { renderBuffPanel(); renderActiveBuffChip(); });

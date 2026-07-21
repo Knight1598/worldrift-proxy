@@ -60,13 +60,8 @@ function getVipChance() {
   return VIP_CHANCE * (isBuffActive('vip_magnet') ? 3 : 1);
 }
 
-function isStageMaxed() {
-  return UPGRADE_TYPES.every(u => player.upgradeLevels[u.key] >= u.maxLevel);
-}
-
-function getStageProgressCount() {
-  return UPGRADE_TYPES.filter(u => player.upgradeLevels[u.key] >= u.maxLevel).length;
-}
+// เงื่อนไขขึ้นด่านย้ายไปอยู่ที่ isRenovateReady() (ui/renovate-modal.js) แบบเกมต้นแบบ:
+// สินค้าถึงเลเวล RENOVATE_GATE_LEVEL ก็พอ ไม่ต้องอัปครบทุกชนิดจนเต็มขั้นอีกแล้ว
 
 // Game Logic Improvement: ตัดสินใจให้ Station "รองรับงานพร้อมกันได้" (ไม่มี Wait-state คั่นคิว) แทนการบังคับ
 // worker คนที่ 2/3/4/5 ต้องรอสถานีว่าง — เพราะ workerIndex ของแต่ละคนถูกใช้คำนวณตำแหน่งยืนที่ station/idle
