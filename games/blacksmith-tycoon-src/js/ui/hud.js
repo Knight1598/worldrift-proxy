@@ -38,6 +38,7 @@ GameEvents.on(EVENTS.FEVER_ACTIVATED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_ENDED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_PROGRESS, () => renderFeverBar()); // สะสมหลอด Fever (แทน features/fever.js เรียก DOM ตรงๆ)
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderGems());
+GameEvents.on(EVENTS.OBJECTIVE_COMPLETED, () => { renderGems(); renderRenown(); }); // รางวัลเควสนำทาง = เพชร/ชื่อเสียง
 GameEvents.on(EVENTS.BUFF_ROLLED, () => renderGems());
 GameEvents.on(EVENTS.MILESTONE_REACHED, () => renderGems()); // รางวัลดาว milestone = เพชร
 GameEvents.on(EVENTS.GIFT_OPENED, () => { renderGold(); renderGems(); });

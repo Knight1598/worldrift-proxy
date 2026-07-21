@@ -17,6 +17,7 @@ function activateFever() {
   feverState.active = true;
   feverState.progress = 0;
   feverState.endsAt = performance.now() + FEVER_DURATION_MS;
+  player.stats.feverCount = (player.stats.feverCount || 0) + 1; // นับจำนวนครั้งที่เข้า Fever (ใช้กับเควสนำทาง fever1)
   playSfxStageComplete(); // ยืมเสียงรัวเดิมมาใช้แทนเสียง Fever โดยเฉพาะ (ไม่ได้เพิ่มเสียงใหม่ในสโคปนี้)
   // ไม่เรียก renderFeverBar() ตรงๆ ที่นี่ -- ui/hud.js subscribe FEVER_ACTIVATED ไว้แล้ว กันรีเฟรชซ้ำ
   GameEvents.emit(EVENTS.FEVER_ACTIVATED, {});

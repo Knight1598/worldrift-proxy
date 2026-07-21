@@ -122,6 +122,62 @@
     pointer-events: none;
   }
   .active-buff-chip.show { display: inline-flex; }
+
+  /* ป้ายเป้าหมายนำทาง (Guided Objective Chain) — ค้างเหนือปุ่ม FAB (bottom:44 สูง 54 = จบที่ 98) วางที่ 106 ไม่ทับ
+     pointer-events:none เพื่อให้แตะทะลุไป stokeForge ได้ ไม่บังการโหมไฟเตา */
+  .objective-banner {
+    position: absolute;
+    bottom: 106px; left: 10px; right: 10px;
+    z-index: 12;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    background: linear-gradient(180deg, rgba(38,26,14,0.94), rgba(24,16,8,0.94));
+    border: 2px solid var(--accent-gold);
+    border-radius: 10px;
+    box-shadow: 0 3px 0 rgba(0,0,0,0.5), 0 0 10px 1px rgba(255,215,106,0.35);
+    pointer-events: none;
+  }
+  .objective-banner.show { display: flex; }
+  .objective-icon { font-size: 1.3rem; flex-shrink: 0; }
+  .objective-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .objective-title {
+    font-size: 0.66rem; font-weight: bold; color: var(--accent-gold);
+    text-shadow: 1px 1px 0 #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .objective-bar-bg {
+    height: 7px; border-radius: 4px; background: rgba(0,0,0,0.55);
+    border: 1px solid #000; overflow: hidden;
+  }
+  .objective-bar-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #ffb347, #ffe08a);
+    transition: width 0.28s cubic-bezier(.22,1,.36,1);
+  }
+  .objective-progress { font-size: 0.62rem; color: var(--text-main); flex-shrink: 0; }
+  .objective-reward {
+    font-size: 0.64rem; font-weight: bold; color: #7fe0ff;
+    text-shadow: 1px 1px 0 #000; flex-shrink: 0;
+  }
+  /* ป้ายเด้งฉลองตอนเป้าสำเร็จ (ก่อนสลับเป็นเป้าถัดไป) */
+  .objective-banner.objective-complete { animation: objectiveComplete 0.5s ease; }
+  @keyframes objectiveComplete {
+    0%   { transform: scale(1); box-shadow: 0 3px 0 rgba(0,0,0,0.5), 0 0 10px 1px rgba(255,215,106,0.35); }
+    45%  { transform: scale(1.05); box-shadow: 0 3px 0 rgba(0,0,0,0.5), 0 0 20px 6px rgba(120,224,255,0.85); }
+    100% { transform: scale(1); box-shadow: 0 3px 0 rgba(0,0,0,0.5), 0 0 10px 1px rgba(255,215,106,0.35); }
+  }
+
+  /* เรืองแสงชี้นำ (focus) — ปุ่ม/ป้ายที่เป้าปัจจุบันอยากให้ผู้เล่นกด ใช้ outline แยกจาก box-shadow
+     เพื่อไม่ชนกับ .fab--attention ที่ใช้ box-shadow เป็น animation อยู่แล้ว (ซ้อนกันได้) */
+  .objective-focus { animation: objectiveFocus 1.1s ease-in-out infinite; }
+  @keyframes objectiveFocus {
+    0%, 100% { outline: 3px solid rgba(120,224,255,0); outline-offset: 2px; }
+    50%      { outline: 3px solid rgba(120,224,255,0.95); outline-offset: 4px; }
+  }
+
+  /* toast ฉลองเป้าสำเร็จ — ใช้ฐานเดียวกับ .milestone-toast + สีรางวัลฟ้า */
+  .objective-toast-reward { color: #1a6fa8; font-size: 0.95rem; }
   /* พื้นหลังฉาก แยกเป็น 2 เลเยอร์ div ต่างหาก (ไม่ใช้ multi background-image บน element เดียวแบบเดิม)
      เดิมใช้ background-size เป็น % ของความสูง container ที่เป็นเลขทศนิยม (เช่น 489.59375px) ทำให้ pattern
      ไม่ลงตัวพอดีพิกเซล เกิดเป็นเส้นตะเข็บสีอ่อนพาดกลางจอทั้งแนวตั้ง (รอยต่อระหว่างการ repeat) และแนวนอน
@@ -550,6 +606,7 @@
   }
   .float-text--gold { color: var(--accent-gold); text-shadow: 1px 1px 0 #000; }
   .float-text--tip { color: var(--success); text-shadow: 1px 1px 0 #000; }
+  .float-text--levelup { color: #7fe0ff; text-shadow: 1px 1px 0 #000; font-size: 0.82rem; }
   @keyframes floatTextUp {
     0%   { opacity: 0; transform: translateY(4px) scale(0.7); }
     18%  { opacity: 1; transform: translateY(-6px) scale(1.12); }
@@ -1176,6 +1233,17 @@
   <div class="material-stock-panel" id="materialStockPanel"></div>
   <div class="active-buff-chip" id="activeBuffChip"></div>
 
+  <!-- ป้ายเป้าหมายนำทาง (Guided Objective Chain) — ค้างเหนือปุ่ม FAB ชี้นำผู้เล่นใหม่ทีละสเต็ป -->
+  <div class="objective-banner" id="objectiveBanner">
+    <div class="objective-icon" id="objectiveIcon">🍽️</div>
+    <div class="objective-main">
+      <div class="objective-title" id="objectiveTitle"></div>
+      <div class="objective-bar-bg"><div class="objective-bar-fill" id="objectiveBarFill"></div></div>
+    </div>
+    <div class="objective-progress pixel-num" id="objectiveProgress">0/0</div>
+    <div class="objective-reward" id="objectiveReward"></div>
+  </div>
+
   <!-- แถบชื่อด่าน + ความคืบหน้า Renovate แบบบางๆ ลอยล่างสุดของฉาก (ไม่กินพื้นที่ scene) -->
   <div class="stage-strip">
     <span class="stage-strip-name" id="stageName">แผงขายของริมทาง</span>
@@ -1400,6 +1468,7 @@ const EVENTS = {
   RENOWN_UPGRADE_BOUGHT: 'renown:upgraded', // buyRenownUpgrade() — { key, level }
   ACHIEVEMENT_CLAIMED: 'achievement:claimed', // claimAchievement() — { key }
   DAILY_CLAIMED:       'daily:claimed',       // claimDaily() — { streak, reward }
+  OBJECTIVE_COMPLETED: 'objective:completed', // checkObjectives() — { key, reward } (เควสนำทาง ดู systems/objectives.js)
 };
 </script>
 <script>
@@ -1516,10 +1585,13 @@ function getProductIcon() {
 }
 
 const UPGRADE_TYPES = [
-  { key: 'speed',   name: 'ความเร็วในการทำงาน', icon: '⚡', desc: 'พนักงานเดินไวขึ้นและทำของเสร็จเร็วขึ้น', maxLevel: 50, baseCostMult: 8  },
+  // baseCostMult ลดจาก 8 -> 6 (speed) และ 10 -> 6 (portion) เพื่อเร่ง pacing ด่านแรกให้ผู้เล่นใหม่:
+  // portion ถูกลงทำให้ (1) ไต่ถึง Renovate Gate เร็วขึ้น ~40% (2) รายได้ต่อออเดอร์พุ่งเร็วขึ้น = snowball ไว
+  // ทั้งคู่ยังโตด้วย UPGRADE_COST_GROWTH 1.05 ต่อเลเวลเหมือนเดิม จึงกระทบแค่ช่วงต้น ไม่ทำ mid/late game พัง
+  { key: 'speed',   name: 'ความเร็วในการทำงาน', icon: '⚡', desc: 'พนักงานเดินไวขึ้นและทำของเสร็จเร็วขึ้น', maxLevel: 50, baseCostMult: 6  },
   // "คุณภาพสินค้า" ไม่โชว์ในลิสต์ทั่วไป — ย้ายไปเป็นป๊อปอัพแยกที่แตะตัวสินค้าโดยตรงแทน (ตามแพทเทิร์นเกมต้นแบบ
   // ที่ผู้ใช้ส่งวิดีโอมา ซึ่งแยก "อัปเกรดร้านทั่วไป" กับ "เลเวลอัปสินค้า" ออกจากกันเป็นคนละกลไก)
-  { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 50, baseCostMult: 10, hiddenFromList: true },
+  { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 50, baseCostMult: 6, hiddenFromList: true },
   { key: 'signage', name: 'ป้ายร้าน',         icon: '📣', desc: 'ลูกค้ามาบ่อยขึ้น และรับคิวรอได้มากขึ้น',  maxLevel: 50, baseCostMult: 12 },
   { key: 'decor',   name: 'ตกแต่งร้าน',        icon: '✨', desc: 'ลูกค้ามีโอกาสให้ทิป',     maxLevel: 50, baseCostMult: 14 },
 ];
@@ -1660,9 +1732,35 @@ const TUTORIAL_STEPS = [
   { icon: '🏅', title: 'เกิดใหม่ (Prestige)', body: 'เมื่อรวยพอ กด "เกิดใหม่" เริ่มร้านใหม่แลกชื่อเสียงที่เพิ่มรายได้ถาวร — เล่นได้ไม่รู้จบ!' },
 ];
 
+// ===== Guided Objective Chain (เควสนำทาง 10 นาทีแรก) =====
+// เป้าหมายแบบสคริปต์เรียงลำดับ ค้างบนจอทีละอัน จบแล้วเด้งรางวัล+เปิดอันถัดไปทันที — ลากมือผู้เล่นใหม่
+// ผ่าน core loop ทีละสเต็ป (เสิร์ฟ→อัปสินค้า→อัปสปีด→จ้างลูกมือ→Renovate→Fever→...) เพื่อกันช่วง "แล้วไงต่อ?"
+// ที่ทำให้คนเล่นครั้งแรกหลุดก่อนครบ 10 นาที | progress()/target อ่านจากค่าที่ track อยู่แล้ว (เหมือน ACHIEVEMENTS)
+// ไม่ต้องเพิ่ม counter ใหม่ | focus = id ปุ่ม/องค์ประกอบที่จะเรืองแสงชี้นำ (null = ไม่ต้องชี้ที่ไหน)
+const OBJECTIVE_CHAIN = [
+  { key: 'serve3',     icon: '🍽️',  title: 'เสิร์ฟลูกค้า 3 คนแรก',         target: 3,                   progress: () => player.stats.totalCustomersServed, reward: { gems: 2 }, focus: null },
+  { key: 'product5',   icon: '📈',  title: 'แตะสินค้า อัปคุณภาพถึง Lv 5',  target: 5,                   progress: () => player.upgradeLevels.portion,      reward: { gems: 2 }, focus: 'productBadge' },
+  { key: 'speed5',     icon: '⚡',  title: 'กด ⬆️ อัปความเร็วถึง Lv 5',    target: 5,                   progress: () => player.upgradeLevels.speed,        reward: { gems: 2 }, focus: 'btnOpenUpgrades' },
+  { key: 'hire1',      icon: '🧑‍🔧', title: 'จ้างลูกมือคนแรกมาช่วยงาน',      target: 1,                   progress: () => player.staffCount,                 reward: { gems: 3 }, focus: 'btnOpenUpgrades' },
+  { key: 'productGate', icon: '🔨', title: 'อัปสินค้าถึง Lv ' + RENOVATE_GATE_LEVEL + ' เพื่อ Renovate', target: RENOVATE_GATE_LEVEL, progress: () => player.upgradeLevels.portion, reward: { gems: 3 }, focus: 'productBadge' },
+  { key: 'renovate1',  icon: '🏪',  title: 'กด 🔨 Renovate เปิดร้านใหม่!',  target: 1,                   progress: () => player.stageIndex,                 reward: { gems: 5 }, focus: 'btnOpenRenovate' },
+  { key: 'fever1',     icon: '🔥',  title: 'เต็มหลอดแล้วแตะเข้าสู่ Fever!', target: 1,                   progress: () => player.stats.feverCount,           reward: { gems: 3 }, focus: 'feverBarWrap' },
+  { key: 'serve60',    icon: '📦',  title: 'เสิร์ฟลูกค้าครบ 60 คน',        target: 60,                  progress: () => player.stats.totalCustomersServed, reward: { gems: 4 }, focus: null },
+  { key: 'renovate2',  icon: '👑',  title: 'Renovate อีกครั้งสู่ร้านที่ 3',  target: 2,                   progress: () => player.stageIndex,                 reward: { gems: 6 }, focus: 'btnOpenRenovate' },
+];
+
+// ===== แตะฉากช่วย "โหมไฟเตา" (Active-tap) — แตะพื้นที่ว่างในฉากตอนพนักงานกำลังคราฟต์ เร่ง craft ให้เร็วขึ้น =====
+// ให้มี "อะไรให้ทำด้วยมือ" ในช่วงต้นก่อนเกมจะกลายเป็น idle เต็มตัว + สอนกลายๆ ว่าการมีส่วนร่วมมันคุ้ม
+const STOKE_CRAFT_MS = 150;   // แตะ 1 ครั้ง = ดัน craftElapsed ของทุก worker ที่กำลังคราฟต์ไปข้างหน้าเท่านี้
+const STOKE_SPARK_COUNT = 4;  // จำนวนประกายไฟที่กระเด็นออกจากจุดที่แตะ (ฟีดแบ็กภาพ)
+
 // ===== Multi-Staff System =====
 const MAX_STAFF_COUNT = 4; // จ้างลูกมือได้สูงสุด 4 คน (รวมผู้เล่นเอง = 5 คนพร้อมกันในร้าน)
-const HIRE_HELPER_BASE_COST_MULT = 200;
+// ลดจาก 200 -> 40: ลูกมือคนแรก (คนที่ปลดล็อก throughput เกือบ 2 เท่า) เคยแพงถึง ~1000 gold ในด่านแรก
+// ทำให้ผู้เล่นใหม่ต้องฟาร์ม ~12 นาทีกว่าจะจ้างได้ (จาก sim: ทำเงิน ~1.3 gold/วินาที) — หลุดก่อนถึงจุดนั้น
+// 40 = ลูกมือคนแรก ~200 gold (จ้างได้ใน ~2-3 นาที) จุดพลิกเกมที่ทำให้ snowball ต่อไปถึง Renovate ทันใน 10 นาที
+// คนถัดๆ ไปยังแพงขึ้นตาม 1.8^n (คนที่ 2 ~360, 3 ~648, 4 ~1166) คงความรู้สึกลงทุนของ mid-game ไว้
+const HIRE_HELPER_BASE_COST_MULT = 40;
 const HIRE_HELPER_COST_GROWTH = 1.8; // ต่อจำนวนลูกมือที่มีอยู่แล้ว
 
 // ===== Offline Vault — อัปเกรดถาวรแยกต่างหาก ขยายเพดานเวลารายได้ตอนออฟไลน์ =====
@@ -1812,9 +1910,10 @@ let player = {
   achievements: { claimed: {} },         // { claimed: { key: true } } — ความสำเร็จที่กดรับรางวัลแล้ว
   daily: { lastClaimDay: null, streak: 0 }, // รางวัลล็อกอินรายวัน (lastClaimDay = 'YYYY-M-D')
   tutorialSeen: false,                   // เคยดูป๊อปอัพสอนเล่นครั้งแรกแล้วหรือยัง
+  objectiveIndex: 0,                     // เควสนำทางลำดับที่กำลังทำอยู่ (ดู systems/objectives.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true, musicEnabled: true },
-  stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
+  stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0 },
 };
 
 // Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
@@ -1850,6 +1949,7 @@ function saveGame() {
     achievements: player.achievements,
     daily: player.daily,
     tutorialSeen: player.tutorialSeen,
+    objectiveIndex: player.objectiveIndex,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -1990,9 +2090,10 @@ function loadGame() {
     achievements: { claimed: Object.assign({}, (data.achievements && data.achievements.claimed) || {}) },
     daily: Object.assign({ lastClaimDay: null, streak: 0 }, data.daily || {}),
     tutorialSeen: !!data.tutorialSeen,
+    objectiveIndex: Math.max(0, data.objectiveIndex || 0),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
-    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
+    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0 }, data.stats || {}),
   });
   if (needsResave) {
     saveGame(); // เขียนเป็น v6 ทันทีหลัง migrate สำเร็จ
@@ -2390,6 +2491,21 @@ function spawnSpark(x, y) {
     el.style.setProperty('--sx', sx.toFixed(1) + 'px');
     el.style.setProperty('--sy', sy.toFixed(1) + 'px');
   });
+}
+
+// แตะพื้นที่ว่างในฉาก = "โหมไฟเตา" — ดัน craftElapsed ของทุก worker ที่กำลังคราฟต์ให้เสร็จไวขึ้น
+// พร้อมประกายไฟกระเด็นจากจุดที่แตะ (Active-tap ให้มีอะไรทำด้วยมือช่วงต้นเกม) — ถ้าไม่มีใครคราฟต์อยู่
+// ก็ยังมีประกายไฟ + เสียงเป็นฟีดแบ็ก แต่ไม่มีผลเร่ง (กัน spam ให้ประโยชน์เฉพาะตอนมีงานคราฟต์จริง)
+function stokeForge(e) {
+  const stage = document.getElementById('standStageView');
+  const rect = stage.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  workers.forEach(w => { if (w.state === 'CRAFTING') w.craftElapsed += STOKE_CRAFT_MS; });
+  for (let i = 0; i < STOKE_SPARK_COUNT; i++) {
+    spawnSpark(x + (Math.random() * 16 - 8), y + (Math.random() * 10 - 5));
+  }
+  playSfxTap();
 }
 
 // เลือกทิศเดิน (หน้า/หลัง/ซ้าย/ขวา) จากทิศทางรวมของการเดินทั้งช่วง (ไม่คำนวณใหม่ทุกเฟรม กันภาพสั่นตอน dx/dy ใกล้เคียงกัน)
@@ -2841,6 +2957,7 @@ function activateFever() {
   feverState.active = true;
   feverState.progress = 0;
   feverState.endsAt = performance.now() + FEVER_DURATION_MS;
+  player.stats.feverCount = (player.stats.feverCount || 0) + 1; // นับจำนวนครั้งที่เข้า Fever (ใช้กับเควสนำทาง fever1)
   playSfxStageComplete(); // ยืมเสียงรัวเดิมมาใช้แทนเสียง Fever โดยเฉพาะ (ไม่ได้เพิ่มเสียงใหม่ในสโคปนี้)
   // ไม่เรียก renderFeverBar() ตรงๆ ที่นี่ -- ui/hud.js subscribe FEVER_ACTIVATED ไว้แล้ว กันรีเฟรชซ้ำ
   GameEvents.emit(EVENTS.FEVER_ACTIVATED, {});
@@ -3271,6 +3388,57 @@ function claimDaily() {
 </script>
 <script>
 /* =====================================================================
+   Guided Objective Chain — เควสนำทางแบบสคริปต์เรียงลำดับ (ดู OBJECTIVE_CHAIN ใน data.js)
+   เป้าหมายทีละอันค้างบนจอ จบแล้วให้รางวัล+ขยับไปอันถัดไปทันที เพื่อลากมือผู้เล่นใหม่ผ่าน core loop
+   ในช่วง 10 นาทีแรก (กันช่วง "แล้วไงต่อ?" ที่ทำให้หลุด) — ตรรกะ/รางวัลอยู่ที่นี่ ส่วน UI อยู่ที่ ui/objective-banner.js
+   ===================================================================== */
+function getObjectiveDef(i) { return OBJECTIVE_CHAIN[i]; }
+function isObjectiveChainComplete() { return player.objectiveIndex >= OBJECTIVE_CHAIN.length; }
+function currentObjective() { return isObjectiveChainComplete() ? null : OBJECTIVE_CHAIN[player.objectiveIndex]; }
+
+// ค่าความคืบหน้าปัจจุบันของเป้า (ตัดไม่ให้เกิน target เพื่อให้แถบเต็มพอดี 100%)
+function objectiveProgressValue(obj) { return Math.min(obj.target, Math.floor(obj.progress())); }
+function isObjectiveMet(obj) { return obj.progress() >= obj.target; }
+
+// จำนวนเพชรจริงที่จะได้ (คูณ x บุญเพชรเหมือนแหล่งเพชรอื่นๆ) — ใช้ทั้งตอนให้รางวัลจริงและตอนโชว์บนป้าย
+function objectiveRewardGems(obj) { return obj.reward.gems ? Math.round(obj.reward.gems * getGemGainMult()) : 0; }
+function grantObjectiveReward(obj) {
+  if (obj.reward.gems) player.gems += objectiveRewardGems(obj);
+  if (obj.reward.renown) player.prestige.renown += obj.reward.renown;
+}
+
+// เรียกเมื่อ event ที่เกี่ยวข้องเกิด — เช็คว่าเป้าปัจจุบันสำเร็จหรือยัง ถ้าใช่ให้รางวัล+ขยับไปเป้าถัดไป
+// (while loop เผื่อสำเร็จหลายเป้ารวดเดียว เช่นอัปเกรดทีเดียวข้ามหลาย threshold) แล้ว emit ให้ UI ฉลอง
+function checkObjectives() {
+  let advanced = false;
+  while (!isObjectiveChainComplete() && isObjectiveMet(currentObjective())) {
+    const obj = currentObjective();
+    grantObjectiveReward(obj);
+    player.objectiveIndex += 1;
+    advanced = true;
+    GameEvents.emit(EVENTS.OBJECTIVE_COMPLETED, { key: obj.key, reward: obj.reward });
+  }
+  if (advanced) saveGame();
+}
+
+// catch-up ตอนโหลด: ผู้เล่นเก่าที่ค่าสถิติเลยเป้าต้นๆ ไปแล้ว (เพิ่งมาเจอระบบนี้กลางคัน) — ขยับ index
+// ข้ามเป้าที่สำเร็จไปแล้วแบบเงียบๆ ไม่ให้รางวัล/ไม่เด้ง ceremony ให้ป้ายโชว์เป้าจริงถัดไปทันทีตอนบูต
+function catchUpObjectives() {
+  while (!isObjectiveChainComplete() && isObjectiveMet(currentObjective())) {
+    player.objectiveIndex += 1;
+  }
+}
+
+// เป้าแต่ละอันผูกกับ event คนละชนิด — subscribe รวมไว้ที่เดียว (systems/ โหลดก่อน ui/ ใน index.html
+// จึงมั่นใจว่า index ขยับก่อน ui/objective-banner.js อ่านค่าไปวาดในเฟรมเดียวกัน)
+GameEvents.on(EVENTS.ORDER_SERVED, checkObjectives);
+GameEvents.on(EVENTS.UPGRADE_PURCHASED, checkObjectives);
+GameEvents.on(EVENTS.STAFF_HIRED, checkObjectives);
+GameEvents.on(EVENTS.STAGE_ADVANCED, checkObjectives);
+GameEvents.on(EVENTS.FEVER_ACTIVATED, checkObjectives);
+</script>
+<script>
+/* =====================================================================
    Upgrades / Stage progression
    ===================================================================== */
 function buyUpgrade(key) {
@@ -3284,6 +3452,8 @@ function buyUpgrade(key) {
   player.upgradeLevels[key] = newLevel;
   playSfxUpgrade();
   checkMilestone(key, newLevel, type.name);
+  // แฟลช "+Lv N" ลอยจากตัวควบคุมที่กด — สินค้าลอยจากป้ายสินค้า, อัปเกรดอื่นลอยจากปุ่ม ⬆️ (Reward Ceremony)
+  spawnLevelUpFlash(document.getElementById(key === 'portion' ? 'productBadge' : 'btnOpenUpgrades'), '+Lv ' + newLevel);
   // ยิง event แทนเรียก render*() 5-6 ฟังก์ชันข้ามไฟล์ตรงๆ — render.js subscribe เอง (ดู render.js ท้ายไฟล์)
   GameEvents.emit(EVENTS.UPGRADE_PURCHASED, { key, level: newLevel });
   saveGame();
@@ -3475,6 +3645,18 @@ function formatCoinText(total, tipTotal) {
   return tipTotal > 0 ? `+${formatCompact(total)} 🪙 (+${formatCompact(tipTotal)} ทิป!)` : `+${formatCompact(total)} 🪙`;
 }
 
+// แฟลช "+Lv N" ลอยขึ้นจากปุ่ม/ป้ายที่กดอัปเกรด — ฟีดแบ็กเลเวลอัปทันตาแบบเบาๆ (ส่วนหนึ่งของ Reward Ceremony)
+// anchorEl = element ที่จะให้ข้อความลอยขึ้นจากตรงกลาง (คำนวณตำแหน่งเทียบกับ standStageView)
+function spawnLevelUpFlash(anchorEl, text) {
+  if (!anchorEl) return;
+  const stage = document.getElementById('standStageView');
+  const sr = stage.getBoundingClientRect();
+  const ar = anchorEl.getBoundingClientRect();
+  const x = ar.left - sr.left + ar.width / 2;
+  const y = ar.top - sr.top;
+  spawnFloatText(x, y, text, 'levelup');
+}
+
 function showMilestoneToast(displayName, level, mult) {
   const el = document.createElement('div');
   el.className = 'milestone-toast';
@@ -3524,6 +3706,7 @@ GameEvents.on(EVENTS.FEVER_ACTIVATED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_ENDED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_PROGRESS, () => renderFeverBar()); // สะสมหลอด Fever (แทน features/fever.js เรียก DOM ตรงๆ)
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderGems());
+GameEvents.on(EVENTS.OBJECTIVE_COMPLETED, () => { renderGems(); renderRenown(); }); // รางวัลเควสนำทาง = เพชร/ชื่อเสียง
 GameEvents.on(EVENTS.BUFF_ROLLED, () => renderGems());
 GameEvents.on(EVENTS.MILESTONE_REACHED, () => renderGems()); // รางวัลดาว milestone = เพชร
 GameEvents.on(EVENTS.GIFT_OPENED, () => { renderGold(); renderGems(); });
@@ -4371,6 +4554,73 @@ GameEvents.on(EVENTS.PRESTIGE_DONE, () => refreshRewardsBadge());
 </script>
 <script>
 /* =====================================================================
+   Objective Banner — ป้ายเป้าหมายค้างบนจอ (ตรรกะเควสอยู่ที่ systems/objectives.js)
+   โชว์เป้าปัจจุบัน + แถบความคืบหน้า + รางวัล และเรืองแสงชี้ปุ่มที่เกี่ยวข้อง (focus)
+   เมื่อเป้าสำเร็จ (OBJECTIVE_COMPLETED) เล่นพิธีฉลอง (หีบเด้ง + คอนเฟตติ + เสียง) ก่อนสลับเป้าถัดไป
+   ===================================================================== */
+let objectiveFocusEl = null; // element ที่กำลังเรืองแสงชี้นำอยู่ (จำไว้เพื่อถอด class ตอนเปลี่ยนเป้า)
+
+function clearObjectiveFocus() {
+  if (objectiveFocusEl) { objectiveFocusEl.classList.remove('objective-focus'); objectiveFocusEl = null; }
+}
+
+function applyObjectiveFocus(obj) {
+  clearObjectiveFocus();
+  if (!obj || !obj.focus) return;
+  const el = document.getElementById(obj.focus);
+  if (el) { el.classList.add('objective-focus'); objectiveFocusEl = el; }
+}
+
+function renderObjectiveBanner() {
+  const banner = document.getElementById('objectiveBanner');
+  if (!banner) return;
+  const obj = currentObjective();
+  if (!obj) {
+    // จบเชนแล้ว — ซ่อนป้าย + เลิกชี้ปุ่ม (ผู้เล่นเข้าสู่ mid-game ปล่อยให้ระบบ Missions/Achievements นำต่อ)
+    banner.classList.remove('show');
+    clearObjectiveFocus();
+    return;
+  }
+  const cur = objectiveProgressValue(obj);
+  document.getElementById('objectiveIcon').textContent = obj.icon;
+  document.getElementById('objectiveTitle').textContent = obj.title;
+  document.getElementById('objectiveProgress').textContent = cur + '/' + obj.target;
+  document.getElementById('objectiveBarFill').style.width = (cur / obj.target * 100) + '%';
+  const gems = objectiveRewardGems(obj);
+  document.getElementById('objectiveReward').textContent = gems ? '+' + gems + ' 💎' : '+' + obj.reward.renown + ' 🏅';
+  banner.classList.add('show');
+  applyObjectiveFocus(obj);
+}
+
+// พิธีฉลองเมื่อเป้าสำเร็จ (Reward Ceremony) — หีบเด้ง + คอนเฟตติ + เสียงรัว + ป้ายกระพริบ ก่อนเลื่อนเป้าถัดไป
+function objectiveCeremony(obj) {
+  playSfxStageComplete();
+  spawnConfetti(20);
+  const gems = objectiveRewardGems(obj);
+  const rewardText = gems ? '+' + gems + ' 💎' : '+' + obj.reward.renown + ' 🏅';
+  const toast = document.createElement('div');
+  toast.className = 'milestone-toast objective-toast';
+  toast.innerHTML = '🎁 <b>ภารกิจสำเร็จ!</b><br>' + obj.title + '<br><span class="objective-toast-reward">' + rewardText + '</span>';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 1900);
+  const banner = document.getElementById('objectiveBanner');
+  if (banner) { banner.classList.remove('objective-complete'); void banner.offsetWidth; banner.classList.add('objective-complete'); }
+}
+
+// mount ตัวเอง: ฉลองตอนเป้าสำเร็จ + วาดป้ายใหม่เสมอ (systems/objectives.js ขยับ index ไปแล้ว ณ จุดนี้)
+GameEvents.on(EVENTS.OBJECTIVE_COMPLETED, (e) => {
+  const obj = OBJECTIVE_CHAIN.find(o => o.key === e.key);
+  if (obj) objectiveCeremony(obj);
+  renderObjectiveBanner();
+});
+// อัปเดตแถบความคืบหน้าสด ๆ ระหว่างเล่น (เป้าเดิมยังไม่ครบ) — subscribe event เดียวกับ systems/objectives.js
+// แต่ ui โหลดทีหลัง จึงถูกเรียกหลัง checkObjectives() เสมอ (index/รางวัลถูกจัดการก่อนป้ายอ่านค่า)
+[EVENTS.ORDER_SERVED, EVENTS.UPGRADE_PURCHASED, EVENTS.STAFF_HIRED, EVENTS.STATION_UPGRADED].forEach(ev => {
+  GameEvents.on(ev, () => renderObjectiveBanner());
+});
+</script>
+<script>
+/* =====================================================================
    Tutorial — ป๊อปอัพสอนเล่นครั้งแรก (ดู TUTORIAL_STEPS ใน data.js)
    โชว์อัตโนมัติครั้งแรก (tutorialSeen=false) เปิดซ้ำได้จากตั้งค่า
    ===================================================================== */
@@ -4442,6 +4692,7 @@ function renderAll() {
   refreshUpgradesFab();
   refreshRenovateFab();
   refreshStationsUi();
+  renderObjectiveBanner();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
@@ -4500,6 +4751,22 @@ document.getElementById('standBooth').addEventListener('click', (e) => {
   openProductLevelModal();
 });
 
+// แตะพื้นที่ว่างในฉาก = "โหมไฟเตา" ช่วยเร่งคราฟต์ (Active-tap ดู stokeForge ใน entities/worker.js)
+// ใช้ pointerdown บน game-area แล้วกรองเฉพาะการแตะที่ "พื้นหลังฉาก" จริงๆ — ไม่ชนกับปุ่ม/สถานี/ป้าย/โมดัล
+// (การแตะโต๊ะสถานีมี listener เปิดป๊อปอัพเลเวลแยกอยู่แล้ว e.target เป็นตัวโต๊ะ ไม่เข้าเงื่อนไข stoke)
+function isStokeTarget(el) {
+  if (!el) return false;
+  if (el.id === 'standStageView') return true;
+  return el.classList && (
+    el.classList.contains('scene-bg') || el.classList.contains('shop-counter') ||
+    el.classList.contains('customer-lane') || el.classList.contains('worker-layer') ||
+    el.classList.contains('stand-tint-overlay')
+  );
+}
+document.getElementById('standStageView').addEventListener('pointerdown', (e) => {
+  if (isStokeTarget(e.target)) stokeForge(e);
+});
+
 // หมายเหตุ: listener ของ productBadge/btnAdvanceStage/feverBarWrap/settings ทั้งหมดถูกย้ายไปอยู่
 // ในไฟล์ ui/*.js ที่เป็นเจ้าของ component นั้นๆ แล้ว (product-modal.js, stage-complete-modal.js, hud.js,
 // settings-modal.js) เหลือแค่ตัวที่ไม่มีไฟล์ ui/ เฉพาะของตัวเอง (welcome-back/game-complete โมดัลเล็กๆ) ไว้ที่นี่
@@ -4533,6 +4800,7 @@ window.addEventListener('resize', () => {
 
 loadGame();
 ensurePlayerIdentity(); // ให้ผู้เล่นทุกคน (ใหม่หรือ migrate มาจากเซฟรุ่นเก่า) มี playerId คงที่ (ดู systems/leaderboard.js)
+catchUpObjectives();    // ผู้เล่นเก่าที่เลยเป้าต้นๆ ของเควสนำทางไปแล้ว — ข้ามไปเป้าจริงถัดไปแบบเงียบๆ ก่อนวาดจอ
 updateSceneMetrics();
 applyOfflineEarnings();
 renderAll();

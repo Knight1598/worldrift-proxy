@@ -27,4 +27,5 @@ const EVENTS = {
   RENOWN_UPGRADE_BOUGHT: 'renown:upgraded', // buyRenownUpgrade() — { key, level }
   ACHIEVEMENT_CLAIMED: 'achievement:claimed', // claimAchievement() — { key }
   DAILY_CLAIMED:       'daily:claimed',       // claimDaily() — { streak, reward }
+  OBJECTIVE_COMPLETED: 'objective:completed', // checkObjectives() — { key, reward } (เควสนำทาง ดู systems/objectives.js)
 };

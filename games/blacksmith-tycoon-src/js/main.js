@@ -51,6 +51,22 @@ document.getElementById('standBooth').addEventListener('click', (e) => {
   openProductLevelModal();
 });
 
+// แตะพื้นที่ว่างในฉาก = "โหมไฟเตา" ช่วยเร่งคราฟต์ (Active-tap ดู stokeForge ใน entities/worker.js)
+// ใช้ pointerdown บน game-area แล้วกรองเฉพาะการแตะที่ "พื้นหลังฉาก" จริงๆ — ไม่ชนกับปุ่ม/สถานี/ป้าย/โมดัล
+// (การแตะโต๊ะสถานีมี listener เปิดป๊อปอัพเลเวลแยกอยู่แล้ว e.target เป็นตัวโต๊ะ ไม่เข้าเงื่อนไข stoke)
+function isStokeTarget(el) {
+  if (!el) return false;
+  if (el.id === 'standStageView') return true;
+  return el.classList && (
+    el.classList.contains('scene-bg') || el.classList.contains('shop-counter') ||
+    el.classList.contains('customer-lane') || el.classList.contains('worker-layer') ||
+    el.classList.contains('stand-tint-overlay')
+  );
+}
+document.getElementById('standStageView').addEventListener('pointerdown', (e) => {
+  if (isStokeTarget(e.target)) stokeForge(e);
+});
+
 // หมายเหตุ: listener ของ productBadge/btnAdvanceStage/feverBarWrap/settings ทั้งหมดถูกย้ายไปอยู่
 // ในไฟล์ ui/*.js ที่เป็นเจ้าของ component นั้นๆ แล้ว (product-modal.js, stage-complete-modal.js, hud.js,
 // settings-modal.js) เหลือแค่ตัวที่ไม่มีไฟล์ ui/ เฉพาะของตัวเอง (welcome-back/game-complete โมดัลเล็กๆ) ไว้ที่นี่
@@ -84,6 +100,7 @@ window.addEventListener('resize', () => {
 
 loadGame();
 ensurePlayerIdentity(); // ให้ผู้เล่นทุกคน (ใหม่หรือ migrate มาจากเซฟรุ่นเก่า) มี playerId คงที่ (ดู systems/leaderboard.js)
+catchUpObjectives();    // ผู้เล่นเก่าที่เลยเป้าต้นๆ ของเควสนำทางไปแล้ว — ข้ามไปเป้าจริงถัดไปแบบเงียบๆ ก่อนวาดจอ
 updateSceneMetrics();
 applyOfflineEarnings();
 renderAll();

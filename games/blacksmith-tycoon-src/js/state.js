@@ -45,9 +45,10 @@ let player = {
   achievements: { claimed: {} },         // { claimed: { key: true } } — ความสำเร็จที่กดรับรางวัลแล้ว
   daily: { lastClaimDay: null, streak: 0 }, // รางวัลล็อกอินรายวัน (lastClaimDay = 'YYYY-M-D')
   tutorialSeen: false,                   // เคยดูป๊อปอัพสอนเล่นครั้งแรกแล้วหรือยัง
+  objectiveIndex: 0,                     // เควสนำทางลำดับที่กำลังทำอยู่ (ดู systems/objectives.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true, musicEnabled: true },
-  stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
+  stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0 },
 };
 
 // Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
@@ -83,6 +84,7 @@ function saveGame() {
     achievements: player.achievements,
     daily: player.daily,
     tutorialSeen: player.tutorialSeen,
+    objectiveIndex: player.objectiveIndex,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -223,9 +225,10 @@ function loadGame() {
     achievements: { claimed: Object.assign({}, (data.achievements && data.achievements.claimed) || {}) },
     daily: Object.assign({ lastClaimDay: null, streak: 0 }, data.daily || {}),
     tutorialSeen: !!data.tutorialSeen,
+    objectiveIndex: Math.max(0, data.objectiveIndex || 0),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
-    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
+    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0 }, data.stats || {}),
   });
   if (needsResave) {
     saveGame(); // เขียนเป็น v6 ทันทีหลัง migrate สำเร็จ

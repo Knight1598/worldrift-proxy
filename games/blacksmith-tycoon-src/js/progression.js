@@ -12,6 +12,8 @@ function buyUpgrade(key) {
   player.upgradeLevels[key] = newLevel;
   playSfxUpgrade();
   checkMilestone(key, newLevel, type.name);
+  // แฟลช "+Lv N" ลอยจากตัวควบคุมที่กด — สินค้าลอยจากป้ายสินค้า, อัปเกรดอื่นลอยจากปุ่ม ⬆️ (Reward Ceremony)
+  spawnLevelUpFlash(document.getElementById(key === 'portion' ? 'productBadge' : 'btnOpenUpgrades'), '+Lv ' + newLevel);
   // ยิง event แทนเรียก render*() 5-6 ฟังก์ชันข้ามไฟล์ตรงๆ — render.js subscribe เอง (ดู render.js ท้ายไฟล์)
   GameEvents.emit(EVENTS.UPGRADE_PURCHASED, { key, level: newLevel });
   saveGame();

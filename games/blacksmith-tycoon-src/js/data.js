@@ -40,10 +40,13 @@ function getProductIcon() {
 }
 
 const UPGRADE_TYPES = [
-  { key: 'speed',   name: 'ความเร็วในการทำงาน', icon: '⚡', desc: 'พนักงานเดินไวขึ้นและทำของเสร็จเร็วขึ้น', maxLevel: 50, baseCostMult: 8  },
+  // baseCostMult ลดจาก 8 -> 6 (speed) และ 10 -> 6 (portion) เพื่อเร่ง pacing ด่านแรกให้ผู้เล่นใหม่:
+  // portion ถูกลงทำให้ (1) ไต่ถึง Renovate Gate เร็วขึ้น ~40% (2) รายได้ต่อออเดอร์พุ่งเร็วขึ้น = snowball ไว
+  // ทั้งคู่ยังโตด้วย UPGRADE_COST_GROWTH 1.05 ต่อเลเวลเหมือนเดิม จึงกระทบแค่ช่วงต้น ไม่ทำ mid/late game พัง
+  { key: 'speed',   name: 'ความเร็วในการทำงาน', icon: '⚡', desc: 'พนักงานเดินไวขึ้นและทำของเสร็จเร็วขึ้น', maxLevel: 50, baseCostMult: 6  },
   // "คุณภาพสินค้า" ไม่โชว์ในลิสต์ทั่วไป — ย้ายไปเป็นป๊อปอัพแยกที่แตะตัวสินค้าโดยตรงแทน (ตามแพทเทิร์นเกมต้นแบบ
   // ที่ผู้ใช้ส่งวิดีโอมา ซึ่งแยก "อัปเกรดร้านทั่วไป" กับ "เลเวลอัปสินค้า" ออกจากกันเป็นคนละกลไก)
-  { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 50, baseCostMult: 10, hiddenFromList: true },
+  { key: 'portion', name: 'คุณภาพสินค้า',     icon: '📈', desc: 'ได้เงินต่อออเดอร์มากขึ้น (และของที่ขายอัปเกรดหน้าตาด้วย)', maxLevel: 50, baseCostMult: 6, hiddenFromList: true },
   { key: 'signage', name: 'ป้ายร้าน',         icon: '📣', desc: 'ลูกค้ามาบ่อยขึ้น และรับคิวรอได้มากขึ้น',  maxLevel: 50, baseCostMult: 12 },
   { key: 'decor',   name: 'ตกแต่งร้าน',        icon: '✨', desc: 'ลูกค้ามีโอกาสให้ทิป',     maxLevel: 50, baseCostMult: 14 },
 ];
@@ -184,9 +187,35 @@ const TUTORIAL_STEPS = [
   { icon: '🏅', title: 'เกิดใหม่ (Prestige)', body: 'เมื่อรวยพอ กด "เกิดใหม่" เริ่มร้านใหม่แลกชื่อเสียงที่เพิ่มรายได้ถาวร — เล่นได้ไม่รู้จบ!' },
 ];
 
+// ===== Guided Objective Chain (เควสนำทาง 10 นาทีแรก) =====
+// เป้าหมายแบบสคริปต์เรียงลำดับ ค้างบนจอทีละอัน จบแล้วเด้งรางวัล+เปิดอันถัดไปทันที — ลากมือผู้เล่นใหม่
+// ผ่าน core loop ทีละสเต็ป (เสิร์ฟ→อัปสินค้า→อัปสปีด→จ้างลูกมือ→Renovate→Fever→...) เพื่อกันช่วง "แล้วไงต่อ?"
+// ที่ทำให้คนเล่นครั้งแรกหลุดก่อนครบ 10 นาที | progress()/target อ่านจากค่าที่ track อยู่แล้ว (เหมือน ACHIEVEMENTS)
+// ไม่ต้องเพิ่ม counter ใหม่ | focus = id ปุ่ม/องค์ประกอบที่จะเรืองแสงชี้นำ (null = ไม่ต้องชี้ที่ไหน)
+const OBJECTIVE_CHAIN = [
+  { key: 'serve3',     icon: '🍽️',  title: 'เสิร์ฟลูกค้า 3 คนแรก',         target: 3,                   progress: () => player.stats.totalCustomersServed, reward: { gems: 2 }, focus: null },
+  { key: 'product5',   icon: '📈',  title: 'แตะสินค้า อัปคุณภาพถึง Lv 5',  target: 5,                   progress: () => player.upgradeLevels.portion,      reward: { gems: 2 }, focus: 'productBadge' },
+  { key: 'speed5',     icon: '⚡',  title: 'กด ⬆️ อัปความเร็วถึง Lv 5',    target: 5,                   progress: () => player.upgradeLevels.speed,        reward: { gems: 2 }, focus: 'btnOpenUpgrades' },
+  { key: 'hire1',      icon: '🧑‍🔧', title: 'จ้างลูกมือคนแรกมาช่วยงาน',      target: 1,                   progress: () => player.staffCount,                 reward: { gems: 3 }, focus: 'btnOpenUpgrades' },
+  { key: 'productGate', icon: '🔨', title: 'อัปสินค้าถึง Lv ' + RENOVATE_GATE_LEVEL + ' เพื่อ Renovate', target: RENOVATE_GATE_LEVEL, progress: () => player.upgradeLevels.portion, reward: { gems: 3 }, focus: 'productBadge' },
+  { key: 'renovate1',  icon: '🏪',  title: 'กด 🔨 Renovate เปิดร้านใหม่!',  target: 1,                   progress: () => player.stageIndex,                 reward: { gems: 5 }, focus: 'btnOpenRenovate' },
+  { key: 'fever1',     icon: '🔥',  title: 'เต็มหลอดแล้วแตะเข้าสู่ Fever!', target: 1,                   progress: () => player.stats.feverCount,           reward: { gems: 3 }, focus: 'feverBarWrap' },
+  { key: 'serve60',    icon: '📦',  title: 'เสิร์ฟลูกค้าครบ 60 คน',        target: 60,                  progress: () => player.stats.totalCustomersServed, reward: { gems: 4 }, focus: null },
+  { key: 'renovate2',  icon: '👑',  title: 'Renovate อีกครั้งสู่ร้านที่ 3',  target: 2,                   progress: () => player.stageIndex,                 reward: { gems: 6 }, focus: 'btnOpenRenovate' },
+];
+
+// ===== แตะฉากช่วย "โหมไฟเตา" (Active-tap) — แตะพื้นที่ว่างในฉากตอนพนักงานกำลังคราฟต์ เร่ง craft ให้เร็วขึ้น =====
+// ให้มี "อะไรให้ทำด้วยมือ" ในช่วงต้นก่อนเกมจะกลายเป็น idle เต็มตัว + สอนกลายๆ ว่าการมีส่วนร่วมมันคุ้ม
+const STOKE_CRAFT_MS = 150;   // แตะ 1 ครั้ง = ดัน craftElapsed ของทุก worker ที่กำลังคราฟต์ไปข้างหน้าเท่านี้
+const STOKE_SPARK_COUNT = 4;  // จำนวนประกายไฟที่กระเด็นออกจากจุดที่แตะ (ฟีดแบ็กภาพ)
+
 // ===== Multi-Staff System =====
 const MAX_STAFF_COUNT = 4; // จ้างลูกมือได้สูงสุด 4 คน (รวมผู้เล่นเอง = 5 คนพร้อมกันในร้าน)
-const HIRE_HELPER_BASE_COST_MULT = 200;
+// ลดจาก 200 -> 40: ลูกมือคนแรก (คนที่ปลดล็อก throughput เกือบ 2 เท่า) เคยแพงถึง ~1000 gold ในด่านแรก
+// ทำให้ผู้เล่นใหม่ต้องฟาร์ม ~12 นาทีกว่าจะจ้างได้ (จาก sim: ทำเงิน ~1.3 gold/วินาที) — หลุดก่อนถึงจุดนั้น
+// 40 = ลูกมือคนแรก ~200 gold (จ้างได้ใน ~2-3 นาที) จุดพลิกเกมที่ทำให้ snowball ต่อไปถึง Renovate ทันใน 10 นาที
+// คนถัดๆ ไปยังแพงขึ้นตาม 1.8^n (คนที่ 2 ~360, 3 ~648, 4 ~1166) คงความรู้สึกลงทุนของ mid-game ไว้
+const HIRE_HELPER_BASE_COST_MULT = 40;
 const HIRE_HELPER_COST_GROWTH = 1.8; // ต่อจำนวนลูกมือที่มีอยู่แล้ว
 
 // ===== Offline Vault — อัปเกรดถาวรแยกต่างหาก ขยายเพดานเวลารายได้ตอนออฟไลน์ =====

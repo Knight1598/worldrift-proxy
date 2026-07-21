@@ -41,6 +41,18 @@ function formatCoinText(total, tipTotal) {
   return tipTotal > 0 ? `+${formatCompact(total)} 🪙 (+${formatCompact(tipTotal)} ทิป!)` : `+${formatCompact(total)} 🪙`;
 }
 
+// แฟลช "+Lv N" ลอยขึ้นจากปุ่ม/ป้ายที่กดอัปเกรด — ฟีดแบ็กเลเวลอัปทันตาแบบเบาๆ (ส่วนหนึ่งของ Reward Ceremony)
+// anchorEl = element ที่จะให้ข้อความลอยขึ้นจากตรงกลาง (คำนวณตำแหน่งเทียบกับ standStageView)
+function spawnLevelUpFlash(anchorEl, text) {
+  if (!anchorEl) return;
+  const stage = document.getElementById('standStageView');
+  const sr = stage.getBoundingClientRect();
+  const ar = anchorEl.getBoundingClientRect();
+  const x = ar.left - sr.left + ar.width / 2;
+  const y = ar.top - sr.top;
+  spawnFloatText(x, y, text, 'levelup');
+}
+
 function showMilestoneToast(displayName, level, mult) {
   const el = document.createElement('div');
   el.className = 'milestone-toast';

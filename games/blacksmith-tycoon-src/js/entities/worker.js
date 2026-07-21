@@ -38,6 +38,21 @@ function spawnSpark(x, y) {
   });
 }
 
+// แตะพื้นที่ว่างในฉาก = "โหมไฟเตา" — ดัน craftElapsed ของทุก worker ที่กำลังคราฟต์ให้เสร็จไวขึ้น
+// พร้อมประกายไฟกระเด็นจากจุดที่แตะ (Active-tap ให้มีอะไรทำด้วยมือช่วงต้นเกม) — ถ้าไม่มีใครคราฟต์อยู่
+// ก็ยังมีประกายไฟ + เสียงเป็นฟีดแบ็ก แต่ไม่มีผลเร่ง (กัน spam ให้ประโยชน์เฉพาะตอนมีงานคราฟต์จริง)
+function stokeForge(e) {
+  const stage = document.getElementById('standStageView');
+  const rect = stage.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  workers.forEach(w => { if (w.state === 'CRAFTING') w.craftElapsed += STOKE_CRAFT_MS; });
+  for (let i = 0; i < STOKE_SPARK_COUNT; i++) {
+    spawnSpark(x + (Math.random() * 16 - 8), y + (Math.random() * 10 - 5));
+  }
+  playSfxTap();
+}
+
 // เลือกทิศเดิน (หน้า/หลัง/ซ้าย/ขวา) จากทิศทางรวมของการเดินทั้งช่วง (ไม่คำนวณใหม่ทุกเฟรม กันภาพสั่นตอน dx/dy ใกล้เคียงกัน)
 function pickWalkDirection(from, to) {
   const dx = to.x - from.x, dy = to.y - from.y;

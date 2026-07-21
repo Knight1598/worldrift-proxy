@@ -22,6 +22,7 @@ function renderAll() {
   refreshUpgradesFab();
   refreshRenovateFab();
   refreshStationsUi();
+  renderObjectiveBanner();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
