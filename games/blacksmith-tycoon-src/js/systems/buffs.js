@@ -44,7 +44,8 @@ function applyInstantBuff(buff) {
     spawnGoblin();
   } else if (buff.key === 'fever_now') {
     feverState.progress = 1;
-    renderFeverBar();
+    // ยิง event แทนเรียก renderFeverBar() (ui/hud.js) ข้ามโดเมน — systems/ ไม่ควรแตะ DOM ของ HUD โดยตรง
+    GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: feverState.progress });
   } else if (buff.key === 'gold_burst') {
     const reward = Math.max(20, Math.round(estimateIncomePerMinute() * 0.5));
     player.gold += reward;

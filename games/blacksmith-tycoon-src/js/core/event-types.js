@@ -13,6 +13,7 @@ const EVENTS = {
   GOBLIN_CAUGHT:     'goblin:caught',      // catchGoblin() — { reward }
   FEVER_ACTIVATED:   'fever:activated',    // activateFever()
   FEVER_ENDED:       'fever:ended',        // tickFever() เมื่อหมดเวลา
+  FEVER_PROGRESS:    'fever:progress',     // addFeverProgress()/บัพ fever_now — { progress } (ui/hud.js วาดแถบเอง)
   MATERIAL_CONSUMED:  'material:consumed',  // consumeMaterials() — { material, qty, remaining }
   MATERIAL_RESTOCKED: 'material:restocked', // tickMaterialRegen() — { material, stock }
   ORDER_SERVED:       'order:served',       // pickupCoin() — {} (นับ order ที่เสิร์ฟจบสมบูรณ์ ใช้กับ Order Missions)

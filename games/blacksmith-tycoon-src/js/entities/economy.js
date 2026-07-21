@@ -7,7 +7,7 @@ function spawnCoin(x, y, value, tip) {
   const el = document.createElement('div');
   el.className = 'coin-drop';
   el.innerHTML = '<img src="../assets/blacksmith/coin.png" alt="">';
-  el.style.transform = `translate(${x}px, ${y}px)`;
+  el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   // ต่อเข้า standStageView โดยตรง (ไม่ใช่ customerLane) เพราะ customerLane เป็น stacking context ของตัวเอง
   // (z-index:3) ถ้าเหรียญอยู่ในนั้น z-index:4 ของมันจะมีผลแค่ภายใน ไม่สามารถชนะ .shop-counter (z-index:4 ระดับบนสุด) ได้จริง
   document.getElementById('standStageView').appendChild(el);
@@ -36,30 +36,47 @@ const COIN_ARC_HEIGHT_PX = 46;
 function pickupCoin(coin) {
   if (coin.flying) return; // กันเก็บซ้ำ (แตะรัวๆ ระหว่างกำลังบิน)
   playSfxCashRegister();
-  spawnFloatText(
-    coin.x, coin.y,
-    coin.tip > 0 ? `+${Math.round(coin.value)} 🪙 (+${coin.tip} ทิป!)` : `+${Math.round(coin.value)} 🪙`,
-    coin.tip > 0 ? 'tip' : 'gold'
-  );
+  // Smart Floating Text: เก็บหลายเหรียญติดๆ กัน (ลูกมือ 5 คนส่งพร้อมกัน) จะรวมเป็นตัวเลขเดียว
+  // ที่อัปเดตยอดสะสม แทนตัวเลข 5 อันซ้อนทับกันอ่านไม่ออก (ดู ui/floating-text.js)
+  spawnCoinFloatText(coin.x, coin.y, Math.round(coin.value), coin.tip);
   player.stats.totalCustomersServed += 1;
   // ยิง event แทนให้ไฟล์นี้ต้องรู้จัก Order Missions เอง — systems/missions.js subscribe เอง
   GameEvents.emit(EVENTS.ORDER_SERVED, {});
   startCoinFlight(coin);
 }
 
+// คำนวณพิกัดเป้าหมาย (กล่อง Gold) เป็นระบบพิกัดเดียวกับตำแหน่งเหรียญ (สัมพัทธ์ standStageView)
+function goldTargetPos() {
+  const goldRect = document.getElementById('goldValue').getBoundingClientRect();
+  const stageRect = document.getElementById('standStageView').getBoundingClientRect();
+  return {
+    x: goldRect.left - stageRect.left + goldRect.width / 2 - 13,
+    y: goldRect.top - stageRect.top + goldRect.height / 2 - 13,
+  };
+}
 function startCoinFlight(coin) {
-  const goldEl = document.getElementById('goldValue');
-  const stageEl = document.getElementById('standStageView');
-  const goldRect = goldEl.getBoundingClientRect();
-  const stageRect = stageEl.getBoundingClientRect();
+  const target = goldTargetPos();
   coin.flying = true;
   coin.flightElapsed = 0;
   coin.startX = coin.x;
   coin.startY = coin.y;
-  // แปลงตำแหน่ง UI กล่อง Gold (fixed ใน viewport) ให้เป็นพิกัดเดียวกับที่ใช้ตำแหน่งเหรียญ (สัมพัทธ์กับ standStageView)
-  coin.targetX = goldRect.left - stageRect.left + goldRect.width / 2 - 13;
-  coin.targetY = goldRect.top - stageRect.top + goldRect.height / 2 - 13;
+  coin.targetX = target.x;
+  coin.targetY = target.y;
   coin.el.classList.add('coin-flying');
+}
+
+// Responsive: กล่อง Gold เลื่อนตำแหน่งหลัง resize — เล็งเหรียญที่บินอยู่ไปเป้าใหม่ (ดู main.js's resize handler)
+function retargetFlyingCoins() {
+  const target = goldTargetPos();
+  coins.forEach(coin => {
+    if (!coin.flying) return;
+    // รักษาความคืบหน้าเดิม: ตั้ง start เป็นตำแหน่งปัจจุบันแล้วเริ่มช่วงบินที่เหลือไปเป้าใหม่
+    coin.startX = coin.x;
+    coin.startY = coin.y;
+    coin.flightElapsed = 0;
+    coin.targetX = target.x;
+    coin.targetY = target.y;
+  });
 }
 
 function tickFlyingCoins(dt) {
@@ -76,7 +93,7 @@ function tickFlyingCoins(dt) {
     const easeY = 1 - Math.pow(1 - p, 3); // easeOutCubic แกน Y ให้ชะลอตอนใกล้ถึงเป้า ดูมีน้ำหนักโค้ง
     const arc = Math.sin(p * Math.PI) * COIN_ARC_HEIGHT_PX; // โป่งขึ้นกลางทางจำลองวิถีโค้ง (parabola)
     const y = coin.startY + (coin.targetY - coin.startY) * easeY - arc;
-    coin.el.style.transform = `translate(${x}px, ${y}px) scale(${1 - p * 0.45})`;
+    coin.el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) scale(${(1 - p * 0.45).toFixed(3)})`;
     if (p >= 1) finishCoinFlight(coin);
   });
 }

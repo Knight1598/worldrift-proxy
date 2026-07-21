@@ -20,6 +20,9 @@
     --danger: #ff5555;
   }
   * { box-sizing: border-box; }
+  /* Crisp Edges: บังคับ pixelated ทุกภาพ/สไปรต์/พื้นหลัง กัน browser เบลอตอน scale (art เป็น pixel art ล้วน) */
+  img, .worker-sprite, .scene-bg, .stand-booth, .coin-drop img, .customer-img,
+  .product-badge img, .product-level-icon, .station-side-icon, .renovate-side img { image-rendering: pixelated; }
   html, body { height: 100%; }
   body {
     margin: 0;
@@ -34,6 +37,15 @@
   /* ตัวเลข/คะแนน ใช้ฟอนต์แนวพิกเซล-บล็อกแทน (เฉพาะจุด ไม่ใช้ทั้งหน้า เพราะฟอนต์นี้ไม่มีตัวอักษรไทย
      เบราว์เซอร์จะ fallback ไปฟอนต์ปกติสำหรับข้อความไทยอยู่ดี ใส่ไว้ให้ใช้จริงกับตัวเลข/หัวข้ออังกฤษ) */
   .pixel-num { font-family: 'Press Start 2P', 'Courier New', monospace; letter-spacing: -0.5px; }
+
+  /* เคารพ prefers-reduced-motion: ตัดแอนิเมชันบรรยากาศที่วนไม่จบ (เด้ง/เรืองแสง/bob) ให้ผู้ที่ตั้งค่าลดการเคลื่อนไหว
+     — คง transition สั้นๆ ของ feedback การกดไว้ (แค่ทำให้ไม่มี motion loop กวนตา) */
+  @media (prefers-reduced-motion: reduce) {
+    .fab--attention, .station-arrow, .gift-box, .buy-btn--affordable, .buff-card--active,
+    .product-badge.affordable, .worker.crafting .worker-swing, .worker.waiting-stock .worker-wait-bubble,
+    .coin-drop img, .customer.moving .customer-body, .fever-bar-wrap.ready .fever-bar-fill,
+    .customer.vip .customer-img { animation: none !important; }
+  }
 
   /* =====================================================================
      Game Area — เต็มจอทั้งใบแบบเกมต้นแบบ (Eatventure) ไม่แบ่งครึ่งจอกับลิสต์อัปเกรดอีกแล้ว
@@ -283,14 +295,43 @@
      ต้องแยกจาก .worker เพราะ .worker เองมี transform:translate(x,y) ที่ JS เซ็ตทุกเฟรมสำหรับตำแหน่ง
      ถ้าใส่ CSS animation ที่ขยับ transform บนตัวเดียวกัน จะชนกัน (inline style ทับ CSS animation ทุกเฟรม) */
   .worker-swing { width: 100%; height: 100%; }
+  /* Crafting = ตีค้อน: ใช้หลัก Anticipation (ง้างค้อนถอยหลัง+ยืดตัวขึ้นก่อน) แล้ว Squash&Stretch
+     (ฟาดลงเร็ว บี้ตัวเตี้ยลงตอนกระทบ) แล้วเด้งกลับ — timing เร่ง-ผ่อนด้วย cubic-bezier ให้มีน้ำหนัก
+     ไม่ใช่ ease-in-out เรียบๆ (การฟาดต้องเร็วกว่าการง้างเสมอ ตามหลัก animation) */
   .worker.crafting .worker-swing {
-    animation: craftSwing 0.42s ease-in-out infinite;
+    animation: craftStrike 0.5s cubic-bezier(.5,.05,.3,1) infinite;
     transform-origin: 50% 100%;
   }
-  @keyframes craftSwing {
-    0%, 100% { transform: rotate(0deg) scaleY(1); }
-    35%      { transform: rotate(-9deg) scaleY(0.95); }
-    62%      { transform: rotate(7deg) scaleY(1.05); }
+  @keyframes craftStrike {
+    0%   { transform: rotate(0deg) scale(1, 1); }
+    30%  { transform: rotate(-13deg) scale(0.97, 1.06); }   /* Anticipation: ง้างถอยหลัง + ยืดสูง */
+    45%  { transform: rotate(10deg) scale(1.05, 0.9); }     /* Strike: ฟาดลงเร็ว + บี้เตี้ย (squash) */
+    60%  { transform: rotate(6deg) scale(0.99, 1.02); }     /* Recoil: เด้งกลับเล็กน้อย (stretch) */
+    100% { transform: rotate(0deg) scale(1, 1); }
+  }
+  /* บับเบิล 📦 เด้งเหนือหัวตอนวัตถุดิบหมด — สื่อคอขวดโดยไม่ต้องอ่านตัวหนังสือ (Visual Signposting) */
+  .worker-wait-bubble {
+    position: absolute;
+    top: -30px; left: 50%;
+    width: 24px; height: 24px;
+    margin-left: -12px;
+    font-size: 16px;
+    line-height: 24px;
+    text-align: center;
+    border-radius: 50%;
+    background: rgba(255,85,85,0.9);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: scale(0.4);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .worker.waiting-stock .worker-wait-bubble {
+    animation: waitBubblePulse 0.9s ease-in-out infinite;
+  }
+  @keyframes waitBubblePulse {
+    0%, 100% { opacity: 1; transform: scale(1) translateY(0); }
+    50%      { opacity: 1; transform: scale(1.12) translateY(-3px); }
   }
   .worker-body {
     width: 100%; height: 100%;
@@ -493,14 +534,16 @@
     pointer-events: none;
     z-index: 6;
     white-space: nowrap;
-    animation: floatTextUp 1s ease forwards;
+    /* pop เด้งเข้า (overshoot) ช่วงต้นแล้วลอยขึ้นชะลอตัว (ease-out) ช่วงปลาย — มีน้ำหนักกว่า ease เรียบ */
+    animation: floatTextUp 1s cubic-bezier(.22,1,.36,1) forwards;
   }
   .float-text--gold { color: var(--accent-gold); text-shadow: 1px 1px 0 #000; }
   .float-text--tip { color: var(--success); text-shadow: 1px 1px 0 #000; }
   @keyframes floatTextUp {
-    0%   { opacity: 0; transform: translateY(0); }
-    15%  { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-42px); }
+    0%   { opacity: 0; transform: translateY(4px) scale(0.7); }
+    18%  { opacity: 1; transform: translateY(-6px) scale(1.12); }
+    32%  { transform: translateY(-10px) scale(1); }
+    100% { opacity: 0; transform: translateY(-44px) scale(1); }
   }
 
   /* =====================================================================
@@ -791,7 +834,12 @@
     color: var(--text-main);
     box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
   }
-  .material-chip.material-chip--low { color: var(--danger); } /* คลังใกล้หมด (<25%) เตือนด้วยสีแดง */
+  /* คลังใกล้หมด (<25%): สีแดง + กะพริบขอบเบาๆ สื่อคอขวดชัดขึ้น (Visual Signposting) */
+  .material-chip.material-chip--low { color: var(--danger); border-color: var(--danger); animation: lowStockPulse 0.9s ease-in-out infinite; }
+  @keyframes lowStockPulse {
+    0%, 100% { box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+    50%      { box-shadow: 2px 2px 0 rgba(0,0,0,0.5), 0 0 7px 1px rgba(255,85,85,0.7); }
+  }
 
   /* ลูกค้า VIP — ออร่าทอง (glow) รอบสไปรต์ ให้ต่างจากลูกค้าปกติชัดเจนจากระยะไกล */
   .customer.vip .customer-img {
@@ -1149,6 +1197,7 @@ const EVENTS = {
   GOBLIN_CAUGHT:     'goblin:caught',      // catchGoblin() — { reward }
   FEVER_ACTIVATED:   'fever:activated',    // activateFever()
   FEVER_ENDED:       'fever:ended',        // tickFever() เมื่อหมดเวลา
+  FEVER_PROGRESS:    'fever:progress',     // addFeverProgress()/บัพ fever_now — { progress } (ui/hud.js วาดแถบเอง)
   MATERIAL_CONSUMED:  'material:consumed',  // consumeMaterials() — { material, qty, remaining }
   MATERIAL_RESTOCKED: 'material:restocked', // tickMaterialRegen() — { material, stock }
   ORDER_SERVED:       'order:served',       // pickupCoin() — {} (นับ order ที่เสิร์ฟจบสมบูรณ์ ใช้กับ Order Missions)
@@ -1159,6 +1208,77 @@ const EVENTS = {
   STATION_UPGRADED:   'station:upgraded',   // buyStationLevel() — { stationIndex, level }
   GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }
 };
+</script>
+<script>
+/* =====================================================================
+   Number formatting — กันตัวเลขยาวทะลุ UI ตอนเงินโตระดับล้านล้าน (Extreme Value Safety)
+   ต่ำกว่า 100,000 โชว์เต็มพร้อม comma (อ่านง่ายช่วงต้นเกม) เกินนั้นย่อเป็น K/M/B/T/Q
+   ===================================================================== */
+const COMPACT_UNITS = [
+  { value: 1e15, suffix: 'Q' },
+  { value: 1e12, suffix: 'T' },
+  { value: 1e9,  suffix: 'B' },
+  { value: 1e6,  suffix: 'M' },
+  { value: 1e3,  suffix: 'K' },
+];
+function formatCompact(n) {
+  if (!isFinite(n)) return '∞';
+  const neg = n < 0 ? '-' : '';
+  const abs = Math.abs(n);
+  if (abs < 100000) return neg + Math.floor(abs).toLocaleString();
+  for (const u of COMPACT_UNITS) {
+    if (abs >= u.value) {
+      const scaled = abs / u.value;
+      // 1 ตำแหน่งทศนิยมพอ (24.3B) ตัด .0 ทิ้งให้สั้น (24B)
+      const txt = scaled >= 100 ? Math.floor(scaled).toString() : (Math.floor(scaled * 10) / 10).toString();
+      return neg + txt.replace(/\.0$/, '') + u.suffix;
+    }
+  }
+  return neg + Math.floor(abs).toLocaleString();
+}
+</script>
+<script>
+/* =====================================================================
+   Particle Pool — ระบบพาร์ทิเคิล DOM แบบ pool (VFX Pooling)
+   เดิม: spark/confetti สร้าง element ใหม่ทุกครั้งแล้ว remove ทิ้ง — ตอน craft พร้อมกัน 5 คน
+   สร้าง/ทำลาย node ~45 ตัว/วินาที กดดัน GC โดยไม่จำเป็น
+   ใหม่: node ที่แอนิเมชันจบแล้วถูก "คืน pool" (display:none ค้างใน DOM) แล้วหยิบกลับมาใช้ซ้ำ
+   — จำนวน node สูงสุดเท่ากับจำนวนพาร์ทิเคิลที่เคยโชว์พร้อมกันมากที่สุด ไม่โตไปเรื่อยๆ
+   การคืนใช้ setTimeout ตามอายุพาร์ทิเคิลเป๊ะๆ (แอนิเมชันจบ = หายจากจอทันที ไม่มี node ผีค้าง)
+   ===================================================================== */
+const particlePool = { free: {}, created: 0, reused: 0 };
+
+function acquireParticle(className, parent) {
+  const bucket = particlePool.free[className] || (particlePool.free[className] = []);
+  let el = bucket.pop();
+  if (el) {
+    particlePool.reused++;
+    // รีสตาร์ทแอนิเมชัน CSS: ถอด class แล้ว force reflow ก่อนใส่กลับ (แพทเทิร์นเดียวกับ tap-bump)
+    el.className = '';
+    el.removeAttribute('style');
+    void el.offsetWidth;
+  } else {
+    particlePool.created++;
+    el = document.createElement('div');
+  }
+  el.className = className;
+  if (el.parentNode !== parent) parent.appendChild(el);
+  el.style.display = '';
+  return el;
+}
+
+function releaseParticle(el, className) {
+  el.style.display = 'none'; // ซ่อนแทน remove — node อยู่ใน DOM ต่อแต่ไม่ render/ไม่กิน layout
+  (particlePool.free[className] || (particlePool.free[className] = [])).push(el);
+}
+
+// helper ยิงพาร์ทิเคิลอายุสั้น: หยิบจาก pool, ให้ผู้เรียกแต่งสไตล์, คืนอัตโนมัติเมื่อครบอายุ
+function spawnParticle(className, parent, lifetimeMs, decorate) {
+  const el = acquireParticle(className, parent);
+  decorate(el);
+  setTimeout(() => releaseParticle(el, className), lifetimeMs);
+  return el;
+}
 </script>
 <script>
 /* =====================================================================
@@ -1867,25 +1987,24 @@ const WALK_SPRITE_URL = {
 const IDLE_SPRITE_URL = 'assets/blacksmith/farmer_idle.png';
 const WALK_FRAME_MS_AT_BASE_SPEED = 140; // ระยะเวลาต่อเฟรมตอนไม่มีอัปเกรด speed — เดินเร็วขึ้นแล้วขาก็สลับเฟรมไวขึ้นตาม
 
-// ===== Sparks (ตอน Crafting) =====
+// ===== Sparks (ตอน Crafting) — ใช้ Particle Pool (core/particles.js) แทนสร้าง/ทำลาย node ทุกดอก =====
 const SPARK_INTERVAL_MS = 220; // ยิงประกายไฟทุกๆ ช่วงนี้ระหว่าง craft (จังหวะใกล้เคียงกับ craftSwing 0.42s ต่อรอบ)
+const SPARK_LIFETIME_MS = 480; // ตรงกับความยาวแอนิเมชัน sparkFly ใน CSS พอดี — จบปุ๊บคืน pool ปั๊บ
 function spawnSpark(x, y) {
-  const el = document.createElement('div');
-  el.className = 'spark-particle';
-  const angle = (Math.random() - 0.5) * 2.6; // เรเดียน กระจายเฉียงซ้าย-ขวาแบบสุ่ม
-  const dist = 12 + Math.random() * 16;
-  const smx = Math.sin(angle) * dist * 0.6;
-  const smy = -(8 + Math.random() * 8); // พุ่งขึ้นก่อนช่วงแรก (จำลองแรงกระเด็นจากค้อนกระทบ)
-  const sx = Math.sin(angle) * dist;
-  const sy = 8 + Math.random() * 10; // แล้วตกลงมาตาม gravity เสมือนช่วงหลัง
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-  el.style.setProperty('--smx', smx.toFixed(1) + 'px');
-  el.style.setProperty('--smy', smy.toFixed(1) + 'px');
-  el.style.setProperty('--sx', sx.toFixed(1) + 'px');
-  el.style.setProperty('--sy', sy.toFixed(1) + 'px');
-  document.getElementById('standStageView').appendChild(el);
-  setTimeout(() => el.remove(), 480); // ลบทิ้งหลังแอนิเมชันจบพอดี กัน DOM ค้าง/กิน memory
+  spawnParticle('spark-particle', document.getElementById('standStageView'), SPARK_LIFETIME_MS, el => {
+    const angle = (Math.random() - 0.5) * 2.6; // เรเดียน กระจายเฉียงซ้าย-ขวาแบบสุ่ม
+    const dist = 12 + Math.random() * 16;
+    const smx = Math.sin(angle) * dist * 0.6;
+    const smy = -(8 + Math.random() * 8); // พุ่งขึ้นก่อนช่วงแรก (จำลองแรงกระเด็นจากค้อนกระทบ)
+    const sx = Math.sin(angle) * dist;
+    const sy = 8 + Math.random() * 10; // แล้วตกลงมาตาม gravity เสมือนช่วงหลัง
+    el.style.left = Math.round(x) + 'px';
+    el.style.top = Math.round(y) + 'px';
+    el.style.setProperty('--smx', smx.toFixed(1) + 'px');
+    el.style.setProperty('--smy', smy.toFixed(1) + 'px');
+    el.style.setProperty('--sx', sx.toFixed(1) + 'px');
+    el.style.setProperty('--sy', sy.toFixed(1) + 'px');
+  });
 }
 
 // เลือกทิศเดิน (หน้า/หลัง/ซ้าย/ขวา) จากทิศทางรวมของการเดินทั้งช่วง (ไม่คำนวณใหม่ทุกเฟรม กันภาพสั่นตอน dx/dy ใกล้เคียงกัน)
@@ -1901,6 +2020,7 @@ function addWorker(kind) {
   el.className = 'worker' + (kind === 'staff' ? ' staff' : '');
   el.innerHTML =
     '<div class="worker-craft-bar-bg"><div class="worker-craft-bar-fill"></div></div>' +
+    '<div class="worker-wait-bubble">📦</div>' +
     '<div class="worker-swing"><div class="worker-body"><div class="worker-sprite"></div></div></div>';
   document.getElementById('workerLayer').appendChild(el);
   const pos = idlePos(idx);
@@ -1923,7 +2043,10 @@ function initWorkers() {
 }
 
 function renderWorkerTransform(w, moving, dt) {
-  w.el.style.transform = `translate(${w.x}px, ${w.y}px)`;
+  // ปัดพิกัดเป็นจำนวนเต็มเฉพาะตอน "วาด" (ตำแหน่งจริงในซิมยังเป็นทศนิยม) — กัน sub-pixel blur/สั่นของ sprite
+  w.el.style.transform = `translate(${Math.round(w.x)}px, ${Math.round(w.y)}px)`;
+  // Y-sort: ตัวที่อยู่ต่ำกว่าบนจอ (ใกล้กล้องกว่า) ทับตัวที่อยู่สูงกว่าเสมอ ภายในเลเยอร์ worker ด้วยกัน
+  w.el.style.zIndex = Math.max(1, Math.round(w.y));
   w.el.classList.toggle('moving', !!moving);
   if (moving) {
     const frameMs = WALK_FRAME_MS_AT_BASE_SPEED * (BASE_MOVE_SPEED_PX / getMoveSpeedPxPerSec());
@@ -2016,7 +2139,11 @@ function tickWorkers(dt) {
     }
     if (w.state === 'WAITING_FOR_STOCK') {
       renderWorkerTransform(w, false, dt); // ยืนนิ่งรอเฉยๆ ที่ station (โชว์เฟรม idle)
-      if (hasEnoughMaterials(getStage().recipe)) startCrafting(w);
+      w.el.classList.add('waiting-stock'); // บับเบิล 📦 เด้งเหนือหัว — สื่อคอขวดวัตถุดิบโดยไม่ต้องอ่านตัวหนังสือ
+      if (hasEnoughMaterials(getStage().recipe)) {
+        w.el.classList.remove('waiting-stock');
+        startCrafting(w);
+      }
       return;
     }
     if (w.state === 'CRAFTING') {
@@ -2106,7 +2233,9 @@ function getCustomerWalkSpeed(cust) {
 }
 
 function renderCustomerTransform(cust, moving) {
-  cust.el.style.transform = `translate(${cust.x}px, ${cust.y}px)`;
+  // ปัดพิกัดตอนวาด (ซิมคงทศนิยมไว้) กัน sub-pixel blur + Y-sort ให้ตัวล่างทับตัวบนภายในเลนลูกค้า
+  cust.el.style.transform = `translate(${Math.round(cust.x)}px, ${Math.round(cust.y)}px)`;
+  cust.el.style.zIndex = Math.max(1, Math.round(cust.y));
   cust.el.classList.toggle('facing-left', cust.facing === -1);
   cust.el.classList.toggle('moving', !!moving);
 }
@@ -2165,7 +2294,7 @@ function spawnCoin(x, y, value, tip) {
   const el = document.createElement('div');
   el.className = 'coin-drop';
   el.innerHTML = '<img src="assets/blacksmith/coin.png" alt="">';
-  el.style.transform = `translate(${x}px, ${y}px)`;
+  el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
   // ต่อเข้า standStageView โดยตรง (ไม่ใช่ customerLane) เพราะ customerLane เป็น stacking context ของตัวเอง
   // (z-index:3) ถ้าเหรียญอยู่ในนั้น z-index:4 ของมันจะมีผลแค่ภายใน ไม่สามารถชนะ .shop-counter (z-index:4 ระดับบนสุด) ได้จริง
   document.getElementById('standStageView').appendChild(el);
@@ -2194,30 +2323,47 @@ const COIN_ARC_HEIGHT_PX = 46;
 function pickupCoin(coin) {
   if (coin.flying) return; // กันเก็บซ้ำ (แตะรัวๆ ระหว่างกำลังบิน)
   playSfxCashRegister();
-  spawnFloatText(
-    coin.x, coin.y,
-    coin.tip > 0 ? `+${Math.round(coin.value)} 🪙 (+${coin.tip} ทิป!)` : `+${Math.round(coin.value)} 🪙`,
-    coin.tip > 0 ? 'tip' : 'gold'
-  );
+  // Smart Floating Text: เก็บหลายเหรียญติดๆ กัน (ลูกมือ 5 คนส่งพร้อมกัน) จะรวมเป็นตัวเลขเดียว
+  // ที่อัปเดตยอดสะสม แทนตัวเลข 5 อันซ้อนทับกันอ่านไม่ออก (ดู ui/floating-text.js)
+  spawnCoinFloatText(coin.x, coin.y, Math.round(coin.value), coin.tip);
   player.stats.totalCustomersServed += 1;
   // ยิง event แทนให้ไฟล์นี้ต้องรู้จัก Order Missions เอง — systems/missions.js subscribe เอง
   GameEvents.emit(EVENTS.ORDER_SERVED, {});
   startCoinFlight(coin);
 }
 
+// คำนวณพิกัดเป้าหมาย (กล่อง Gold) เป็นระบบพิกัดเดียวกับตำแหน่งเหรียญ (สัมพัทธ์ standStageView)
+function goldTargetPos() {
+  const goldRect = document.getElementById('goldValue').getBoundingClientRect();
+  const stageRect = document.getElementById('standStageView').getBoundingClientRect();
+  return {
+    x: goldRect.left - stageRect.left + goldRect.width / 2 - 13,
+    y: goldRect.top - stageRect.top + goldRect.height / 2 - 13,
+  };
+}
 function startCoinFlight(coin) {
-  const goldEl = document.getElementById('goldValue');
-  const stageEl = document.getElementById('standStageView');
-  const goldRect = goldEl.getBoundingClientRect();
-  const stageRect = stageEl.getBoundingClientRect();
+  const target = goldTargetPos();
   coin.flying = true;
   coin.flightElapsed = 0;
   coin.startX = coin.x;
   coin.startY = coin.y;
-  // แปลงตำแหน่ง UI กล่อง Gold (fixed ใน viewport) ให้เป็นพิกัดเดียวกับที่ใช้ตำแหน่งเหรียญ (สัมพัทธ์กับ standStageView)
-  coin.targetX = goldRect.left - stageRect.left + goldRect.width / 2 - 13;
-  coin.targetY = goldRect.top - stageRect.top + goldRect.height / 2 - 13;
+  coin.targetX = target.x;
+  coin.targetY = target.y;
   coin.el.classList.add('coin-flying');
+}
+
+// Responsive: กล่อง Gold เลื่อนตำแหน่งหลัง resize — เล็งเหรียญที่บินอยู่ไปเป้าใหม่ (ดู main.js's resize handler)
+function retargetFlyingCoins() {
+  const target = goldTargetPos();
+  coins.forEach(coin => {
+    if (!coin.flying) return;
+    // รักษาความคืบหน้าเดิม: ตั้ง start เป็นตำแหน่งปัจจุบันแล้วเริ่มช่วงบินที่เหลือไปเป้าใหม่
+    coin.startX = coin.x;
+    coin.startY = coin.y;
+    coin.flightElapsed = 0;
+    coin.targetX = target.x;
+    coin.targetY = target.y;
+  });
 }
 
 function tickFlyingCoins(dt) {
@@ -2234,7 +2380,7 @@ function tickFlyingCoins(dt) {
     const easeY = 1 - Math.pow(1 - p, 3); // easeOutCubic แกน Y ให้ชะลอตอนใกล้ถึงเป้า ดูมีน้ำหนักโค้ง
     const arc = Math.sin(p * Math.PI) * COIN_ARC_HEIGHT_PX; // โป่งขึ้นกลางทางจำลองวิถีโค้ง (parabola)
     const y = coin.startY + (coin.targetY - coin.startY) * easeY - arc;
-    coin.el.style.transform = `translate(${x}px, ${y}px) scale(${1 - p * 0.45})`;
+    coin.el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) scale(${(1 - p * 0.45).toFixed(3)})`;
     if (p >= 1) finishCoinFlight(coin);
   });
 }
@@ -2302,7 +2448,8 @@ function addFeverProgress(amount) {
   if (feverState.active) return; // ระหว่าง Fever ไม่ต้องสะสมซ้ำ (เต็มแล้วรอใช้ให้หมดก่อน)
   const boosted = isBuffActive('fever_fill_boost') ? amount * 2 : amount; // บัพ "ไฟลุก"
   feverState.progress = Math.min(1, feverState.progress + boosted);
-  renderFeverBar();
+  // ยิง event แทนเรียก renderFeverBar() (ui/hud.js) ข้ามโดเมนตรงๆ — features/ ไม่ควรรู้จัก DOM ของ HUD
+  GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: feverState.progress });
 }
 function activateFever() {
   if (feverState.active || feverState.progress < 1) return;
@@ -2378,7 +2525,7 @@ function catchGoblin(el) {
   player.stats.totalGoldEarned += reward;
   const rect = el.getBoundingClientRect();
   const stageRect = document.getElementById('standStageView').getBoundingClientRect();
-  spawnFloatText(rect.left - stageRect.left, rect.top - stageRect.top, `👺 +${reward.toLocaleString()} 🪙`, 'gold');
+  spawnFloatText(rect.left - stageRect.left, rect.top - stageRect.top, `👺 +${formatCompact(reward)} 🪙`, 'gold');
   playSfxCashRegister();
   // ยิง event แทนเรียก renderGold()/bumpGoldCounter() ข้ามไฟล์ตรงๆ — render.js subscribe เอง
   GameEvents.emit(EVENTS.GOBLIN_CAUGHT, { reward });
@@ -2432,7 +2579,7 @@ function openGiftBox(el) {
     const reward = Math.max(30, Math.round(estimateIncomePerMinute() * 0.7));
     player.gold += reward;
     player.stats.totalGoldEarned += reward;
-    spawnFloatText(x, y, `🎁 +${reward.toLocaleString()} 🪙`, 'gold');
+    spawnFloatText(x, y, `🎁 +${formatCompact(reward)} 🪙`, 'gold');
     GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: reward });
   } else if (roll < 0.8) {
     kind = 'gems';
@@ -2592,7 +2739,8 @@ function applyInstantBuff(buff) {
     spawnGoblin();
   } else if (buff.key === 'fever_now') {
     feverState.progress = 1;
-    renderFeverBar();
+    // ยิง event แทนเรียก renderFeverBar() (ui/hud.js) ข้ามโดเมน — systems/ ไม่ควรแตะ DOM ของ HUD โดยตรง
+    GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: feverState.progress });
   } else if (buff.key === 'gold_burst') {
     const reward = Math.max(20, Math.round(estimateIncomePerMinute() * 0.5));
     player.gold += reward;
@@ -2773,16 +2921,45 @@ function applyOfflineEarnings() {
 <script>
 /* =====================================================================
    Floating Text overlays — ตัวเลขลอยตอนเก็บเหรียญ + ป๊อปอัพฉลอง Milestone
-   ทั้งคู่เป็น "overlay ชั่วคราว" เหมือนกัน: append เข้า DOM แล้วลบตัวเองทิ้งผ่าน setTimeout
+   ใช้ Particle Pool (core/particles.js) — node ถูกรีไซเคิล ไม่สร้าง/ทำลายซ้ำๆ
+
+   Smart Floating Text (ลด cognitive load): เก็บเหรียญหลายเหรียญภายในหน้าต่างเวลาสั้นๆ
+   จะรวมยอดเป็นตัวเลขเดียวที่อัปเดตสด (+50 แทน +10 ห้าอันซ้อนกัน) ส่วน float text ทั่วไป
+   ที่ไม่ใช่เหรียญได้ตำแหน่งสุ่มเยื้องเล็กน้อย (jitter) กันซ้อนทับพอดีจุด
    ===================================================================== */
+const FLOAT_TEXT_LIFETIME_MS = 1000; // ตรงกับความยาวแอนิเมชัน floatTextUp ใน CSS
+const COIN_TEXT_MERGE_WINDOW_MS = 420;
+let coinFloatAggregate = null; // { el, total, tipTotal, expiresAt } — ตัวเลขรวมที่กำลังโชว์อยู่
+
 function spawnFloatText(x, y, text, variant) {
-  const el = document.createElement('div');
-  el.className = 'float-text float-text--' + variant;
-  el.textContent = text;
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-  document.getElementById('standStageView').appendChild(el);
-  setTimeout(() => el.remove(), 1000);
+  // jitter เล็กน้อยกันหลายข้อความเกิดตำแหน่งเดียวกันเป๊ะแล้วอ่านไม่ออก
+  const jx = Math.round(x + (Math.random() - 0.5) * 14);
+  const jy = Math.round(y + (Math.random() - 0.5) * 8);
+  return spawnParticle('float-text float-text--' + variant, document.getElementById('standStageView'), FLOAT_TEXT_LIFETIME_MS, el => {
+    el.textContent = text;
+    el.style.left = jx + 'px';
+    el.style.top = jy + 'px';
+  });
+}
+
+// ตัวเลขเหรียญแบบรวมยอด — เรียกจาก pickupCoin (entities/economy.js)
+function spawnCoinFloatText(x, y, value, tip) {
+  const now = performance.now();
+  if (coinFloatAggregate && now < coinFloatAggregate.expiresAt && coinFloatAggregate.el.style.display !== 'none') {
+    // ยังอยู่ในหน้าต่างรวมยอด — บวกเพิ่มแล้วอัปเดตข้อความเดิม (ไม่เกิดชิ้นใหม่มาซ้อน)
+    coinFloatAggregate.total += value;
+    coinFloatAggregate.tipTotal += tip;
+    coinFloatAggregate.el.textContent = formatCoinText(coinFloatAggregate.total, coinFloatAggregate.tipTotal);
+    // ถ้ามีทิปเข้ามาระหว่างรวมยอด ยกระดับสีเป็นแบบทิป (เขียว) — ทิปเป็นอีเวนต์เด่นกว่า ไม่ให้จมหายในสีทอง
+    if (coinFloatAggregate.tipTotal > 0) coinFloatAggregate.el.className = 'float-text float-text--tip';
+    return;
+  }
+  const el = spawnFloatText(x, y, formatCoinText(value, tip), tip > 0 ? 'tip' : 'gold');
+  coinFloatAggregate = { el, total: value, tipTotal: tip, expiresAt: now + COIN_TEXT_MERGE_WINDOW_MS };
+}
+
+function formatCoinText(total, tipTotal) {
+  return tipTotal > 0 ? `+${formatCompact(total)} 🪙 (+${formatCompact(tipTotal)} ทิป!)` : `+${formatCompact(total)} 🪙`;
 }
 
 function showMilestoneToast(displayName, level, mult) {
@@ -2798,10 +2975,11 @@ function showMilestoneToast(displayName, level, mult) {
    HUD — กล่อง Gold + Gem บนสุด + แถบ Combo/Fever Mode
    ===================================================================== */
 function renderGold() {
-  document.getElementById('goldValue').textContent = Math.floor(player.gold).toLocaleString();
+  // formatCompact กันตัวเลขยาวทะลุ HUD ตอนเงินโตระดับล้านล้าน (1.5M / 24.3B — ดู core/format.js)
+  document.getElementById('goldValue').textContent = formatCompact(player.gold);
 }
 function renderGems() {
-  document.getElementById('gemValue').textContent = player.gems.toLocaleString();
+  document.getElementById('gemValue').textContent = formatCompact(player.gems);
 }
 function bumpGoldCounter() {
   const el = document.querySelector('.gold-counter');
@@ -2831,6 +3009,7 @@ GameEvents.on(EVENTS.STAFF_HIRED, () => renderGold());
 GameEvents.on(EVENTS.VAULT_UPGRADED, () => renderGold());
 GameEvents.on(EVENTS.FEVER_ACTIVATED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_ENDED, () => renderFeverBar());
+GameEvents.on(EVENTS.FEVER_PROGRESS, () => renderFeverBar()); // สะสมหลอด Fever (แทน features/fever.js เรียก DOM ตรงๆ)
 GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderGems());
 GameEvents.on(EVENTS.BUFF_ROLLED, () => renderGems());
 GameEvents.on(EVENTS.MILESTONE_REACHED, () => renderGems()); // รางวัลดาว milestone = เพชร
@@ -2902,7 +3081,7 @@ function renderUpgradeList() {
 
     const btn = document.createElement('button');
     btn.className = 'buy-btn ' + (maxed ? 'buy-btn--maxed' : affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
-    btn.textContent = maxed ? 'เต็มขั้น ✓' : `ซื้อ (${cost.toLocaleString()})`;
+    btn.textContent = maxed ? 'เต็มขั้น ✓' : `ซื้อ (${formatCompact(cost)})`;
     btn.disabled = maxed || !affordable;
     btn.addEventListener('click', () => buyUpgrade(type.key));
 
@@ -2956,7 +3135,7 @@ function buildHireHelperCard() {
 
   const btn = document.createElement('button');
   btn.className = 'buy-btn ' + (maxed ? 'buy-btn--maxed' : affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
-  btn.textContent = maxed ? 'ครบแล้ว ✓' : `จ้าง (${cost.toLocaleString()})`;
+  btn.textContent = maxed ? 'ครบแล้ว ✓' : `จ้าง (${formatCompact(cost)})`;
   btn.disabled = maxed || !affordable;
   btn.addEventListener('click', hireHelper);
 
@@ -2991,7 +3170,7 @@ function buildVaultCard() {
 
   const btn = document.createElement('button');
   btn.className = 'buy-btn ' + (maxed ? 'buy-btn--maxed' : affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
-  btn.textContent = maxed ? 'เต็มขั้น ✓' : `ซื้อ (${cost.toLocaleString()})`;
+  btn.textContent = maxed ? 'เต็มขั้น ✓' : `ซื้อ (${formatCompact(cost)})`;
   btn.disabled = maxed || !affordable;
   btn.addEventListener('click', buyVaultLevel);
 
@@ -3058,11 +3237,11 @@ function renderProductLevelModal() {
   document.getElementById('productLevelProgressFill').style.width = `${Math.min(100, pct)}%`;
 
   // แถวสถิติแบบคลิป: เงินต่อออเดอร์ของสถานีนี้ + เวลาคราฟต์ (คุมโดยอัปเกรดความเร็ว)
-  document.getElementById('productStatRevenue').textContent = Math.round(getStationRevenue(i)).toLocaleString();
+  document.getElementById('productStatRevenue').textContent = formatCompact(getStationRevenue(i));
   document.getElementById('productStatCraft').textContent = (getCraftDurationMs() / 1000).toFixed(1) + 's';
 
   const btn = document.getElementById('btnBuyProductLevel');
-  btn.textContent = maxed ? 'เต็มขั้นแล้ว ✓' : `อัปเกรด (${cost.toLocaleString()})`;
+  btn.textContent = maxed ? 'เต็มขั้นแล้ว ✓' : `อัปเกรด (${formatCompact(cost)})`;
   btn.disabled = maxed || !affordable;
   btn.className = 'btn-cta-mega' + (maxed ? ' btn-cta-mega--maxed' : '');
 }
@@ -3194,17 +3373,17 @@ GameEvents.on(EVENTS.STAGE_ADVANCED, () => refreshRenovateFab());
    ที่ยังยิงฉลองตอนขึ้นด่านเหมือนเดิม)
    ===================================================================== */
 const CONFETTI_COLORS = ['#ff9f45', '#6bbf6b', '#5aa9e6', '#e35d5d', '#ffd76a', '#c77dff'];
+const CONFETTI_LIFETIME_MS = 3200; // ยาวพอให้ชิ้นที่มี animation-delay สูงสุด (0.4s) + duration (2.8s) จบก่อนคืน pool
+// ใช้ Particle Pool (core/particles.js) — คอนเฟตตี้ยิงทีละ 40 ชิ้น รีไซเคิล node แทนสร้าง/ทำลายทุกครั้ง
 function spawnConfetti(count) {
   const n = count || 40;
   for (let i = 0; i < n; i++) {
-    const piece = document.createElement('div');
-    piece.className = 'confetti-piece';
-    piece.style.left = Math.random() * 100 + 'vw';
-    piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
-    piece.style.animationDuration = (1.6 + Math.random() * 1.2) + 's';
-    piece.style.animationDelay = (Math.random() * 0.4) + 's';
-    document.body.appendChild(piece);
-    setTimeout(() => piece.remove(), 3200);
+    spawnParticle('confetti-piece', document.body, CONFETTI_LIFETIME_MS, piece => {
+      piece.style.left = Math.random() * 100 + 'vw';
+      piece.style.background = CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)];
+      piece.style.animationDuration = (1.6 + Math.random() * 1.2) + 's';
+      piece.style.animationDelay = (Math.random() * 0.4) + 's';
+    });
   }
 }
 </script>
@@ -3240,7 +3419,7 @@ document.getElementById('btnResetGame').addEventListener('click', () => {
    ===================================================================== */
 function renderStatsFooter() {
   document.getElementById('statsFooter').textContent =
-    `เสิร์ฟลูกค้าไปแล้ว ${player.stats.totalCustomersServed.toLocaleString()} คน | รายได้สะสมทั้งหมด ${Math.floor(player.stats.totalGoldEarned).toLocaleString()} Gold`;
+    `เสิร์ฟลูกค้าไปแล้ว ${formatCompact(player.stats.totalCustomersServed)} คน | รายได้สะสมทั้งหมด ${formatCompact(player.stats.totalGoldEarned)} Gold`;
 }
 </script>
 <script>
@@ -3295,9 +3474,9 @@ function renderSideStations() {
       const affordable = player.gold >= cost;
       el.innerHTML =
         `<span class="station-side-lock">🔒</span>` +
-        `<span class="station-side-cost ${affordable ? 'ok' : ''}">${cost.toLocaleString()} 🪙</span>` +
+        `<span class="station-side-cost ${affordable ? 'ok' : ''}">${formatCompact(cost)} 🪙</span>` +
         `<div class="station-side-table station-side-table--ghost"></div>`;
-      el.title = `ปลดล็อก ${def.name} (${cost.toLocaleString()} Gold)`;
+      el.title = `ปลดล็อก ${def.name} (${formatCompact(cost)} Gold)`;
       el.addEventListener('click', () => buyStationUnlock(i));
     }
     wrap.appendChild(el);
@@ -3366,7 +3545,7 @@ function renderBuffPanel() {
   name.textContent = active ? getBuffDef(activeBuff.key).name : 'สุ่มบัพติดตัว';
   const desc = document.createElement('div');
   desc.className = 'upgrade-desc';
-  desc.textContent = active ? getBuffDef(activeBuff.key).desc : `มีเพชร ${player.gems.toLocaleString()} เม็ด`;
+  desc.textContent = active ? getBuffDef(activeBuff.key).desc : `มีเพชร ${formatCompact(player.gems)} เม็ด`;
   const countdown = document.createElement('div');
   countdown.className = 'upgrade-level';
   countdown.id = 'buffCountdownText';
@@ -3527,7 +3706,20 @@ document.getElementById('btnCloseGameComplete').addEventListener('click', () => 
    ===================================================================== */
 setInterval(saveGame, 10000);
 window.addEventListener('beforeunload', saveGame);
-window.addEventListener('resize', updateSceneMetrics);
+
+// Responsive geometry: ย่อ/ขยายจอระหว่างเล่นแล้ว waypoint (stationPos/queueSlotPos/idlePos) คำนวณสดจาก
+// scene ทุกเฟรมอยู่แล้ว จึงปรับตามเอง — แต่ต้อง (1) อัปเดต scene ก่อน (2) รีทาร์เก็ตเหรียญที่กำลังบิน
+// เพราะมัน cache targetX/Y ของกล่อง Gold ไว้ (ตำแหน่งเลื่อนหลัง resize) (3) รีเฟรช UI ที่อิงตำแหน่ง
+// debounce กันยิงรัวๆ ตอนลากขอบจอ
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  updateSceneMetrics(); // อัปเดตทันทีให้ waypoint ถูกต้องในเฟรมถัดไป
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    retargetFlyingCoins(); // เหรียญที่บินอยู่เล็งกล่อง Gold ตำแหน่งใหม่
+    refreshStationsUi();
+  }, 120);
+});
 
 loadGame();
 ensurePlayerIdentity(); // ให้ผู้เล่นทุกคน (ใหม่หรือ migrate มาจากเซฟรุ่นเก่า) มี playerId คงที่ (ดู systems/leaderboard.js)

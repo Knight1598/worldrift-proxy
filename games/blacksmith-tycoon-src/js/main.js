@@ -67,7 +67,20 @@ document.getElementById('btnCloseGameComplete').addEventListener('click', () => 
    ===================================================================== */
 setInterval(saveGame, 10000);
 window.addEventListener('beforeunload', saveGame);
-window.addEventListener('resize', updateSceneMetrics);
+
+// Responsive geometry: ย่อ/ขยายจอระหว่างเล่นแล้ว waypoint (stationPos/queueSlotPos/idlePos) คำนวณสดจาก
+// scene ทุกเฟรมอยู่แล้ว จึงปรับตามเอง — แต่ต้อง (1) อัปเดต scene ก่อน (2) รีทาร์เก็ตเหรียญที่กำลังบิน
+// เพราะมัน cache targetX/Y ของกล่อง Gold ไว้ (ตำแหน่งเลื่อนหลัง resize) (3) รีเฟรช UI ที่อิงตำแหน่ง
+// debounce กันยิงรัวๆ ตอนลากขอบจอ
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  updateSceneMetrics(); // อัปเดตทันทีให้ waypoint ถูกต้องในเฟรมถัดไป
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    retargetFlyingCoins(); // เหรียญที่บินอยู่เล็งกล่อง Gold ตำแหน่งใหม่
+    refreshStationsUi();
+  }, 120);
+});
 
 loadGame();
 ensurePlayerIdentity(); // ให้ผู้เล่นทุกคน (ใหม่หรือ migrate มาจากเซฟรุ่นเก่า) มี playerId คงที่ (ดู systems/leaderboard.js)

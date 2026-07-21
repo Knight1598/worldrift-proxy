@@ -43,7 +43,7 @@ function openGiftBox(el) {
     const reward = Math.max(30, Math.round(estimateIncomePerMinute() * 0.7));
     player.gold += reward;
     player.stats.totalGoldEarned += reward;
-    spawnFloatText(x, y, `🎁 +${reward.toLocaleString()} 🪙`, 'gold');
+    spawnFloatText(x, y, `🎁 +${formatCompact(reward)} 🪙`, 'gold');
     GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: reward });
   } else if (roll < 0.8) {
     kind = 'gems';

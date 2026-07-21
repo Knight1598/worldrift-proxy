@@ -48,11 +48,11 @@ function renderProductLevelModal() {
   document.getElementById('productLevelProgressFill').style.width = `${Math.min(100, pct)}%`;
 
   // แถวสถิติแบบคลิป: เงินต่อออเดอร์ของสถานีนี้ + เวลาคราฟต์ (คุมโดยอัปเกรดความเร็ว)
-  document.getElementById('productStatRevenue').textContent = Math.round(getStationRevenue(i)).toLocaleString();
+  document.getElementById('productStatRevenue').textContent = formatCompact(getStationRevenue(i));
   document.getElementById('productStatCraft').textContent = (getCraftDurationMs() / 1000).toFixed(1) + 's';
 
   const btn = document.getElementById('btnBuyProductLevel');
-  btn.textContent = maxed ? 'เต็มขั้นแล้ว ✓' : `อัปเกรด (${cost.toLocaleString()})`;
+  btn.textContent = maxed ? 'เต็มขั้นแล้ว ✓' : `อัปเกรด (${formatCompact(cost)})`;
   btn.disabled = maxed || !affordable;
   btn.className = 'btn-cta-mega' + (maxed ? ' btn-cta-mega--maxed' : '');
 }

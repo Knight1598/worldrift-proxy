@@ -21,7 +21,7 @@ function renderBuffPanel() {
   name.textContent = active ? getBuffDef(activeBuff.key).name : 'สุ่มบัพติดตัว';
   const desc = document.createElement('div');
   desc.className = 'upgrade-desc';
-  desc.textContent = active ? getBuffDef(activeBuff.key).desc : `มีเพชร ${player.gems.toLocaleString()} เม็ด`;
+  desc.textContent = active ? getBuffDef(activeBuff.key).desc : `มีเพชร ${formatCompact(player.gems)} เม็ด`;
   const countdown = document.createElement('div');
   countdown.className = 'upgrade-level';
   countdown.id = 'buffCountdownText';

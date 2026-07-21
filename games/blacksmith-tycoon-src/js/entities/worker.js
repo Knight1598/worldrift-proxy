@@ -18,25 +18,24 @@ const WALK_SPRITE_URL = {
 const IDLE_SPRITE_URL = '../assets/blacksmith/farmer_idle.png';
 const WALK_FRAME_MS_AT_BASE_SPEED = 140; // ระยะเวลาต่อเฟรมตอนไม่มีอัปเกรด speed — เดินเร็วขึ้นแล้วขาก็สลับเฟรมไวขึ้นตาม
 
-// ===== Sparks (ตอน Crafting) =====
+// ===== Sparks (ตอน Crafting) — ใช้ Particle Pool (core/particles.js) แทนสร้าง/ทำลาย node ทุกดอก =====
 const SPARK_INTERVAL_MS = 220; // ยิงประกายไฟทุกๆ ช่วงนี้ระหว่าง craft (จังหวะใกล้เคียงกับ craftSwing 0.42s ต่อรอบ)
+const SPARK_LIFETIME_MS = 480; // ตรงกับความยาวแอนิเมชัน sparkFly ใน CSS พอดี — จบปุ๊บคืน pool ปั๊บ
 function spawnSpark(x, y) {
-  const el = document.createElement('div');
-  el.className = 'spark-particle';
-  const angle = (Math.random() - 0.5) * 2.6; // เรเดียน กระจายเฉียงซ้าย-ขวาแบบสุ่ม
-  const dist = 12 + Math.random() * 16;
-  const smx = Math.sin(angle) * dist * 0.6;
-  const smy = -(8 + Math.random() * 8); // พุ่งขึ้นก่อนช่วงแรก (จำลองแรงกระเด็นจากค้อนกระทบ)
-  const sx = Math.sin(angle) * dist;
-  const sy = 8 + Math.random() * 10; // แล้วตกลงมาตาม gravity เสมือนช่วงหลัง
-  el.style.left = x + 'px';
-  el.style.top = y + 'px';
-  el.style.setProperty('--smx', smx.toFixed(1) + 'px');
-  el.style.setProperty('--smy', smy.toFixed(1) + 'px');
-  el.style.setProperty('--sx', sx.toFixed(1) + 'px');
-  el.style.setProperty('--sy', sy.toFixed(1) + 'px');
-  document.getElementById('standStageView').appendChild(el);
-  setTimeout(() => el.remove(), 480); // ลบทิ้งหลังแอนิเมชันจบพอดี กัน DOM ค้าง/กิน memory
+  spawnParticle('spark-particle', document.getElementById('standStageView'), SPARK_LIFETIME_MS, el => {
+    const angle = (Math.random() - 0.5) * 2.6; // เรเดียน กระจายเฉียงซ้าย-ขวาแบบสุ่ม
+    const dist = 12 + Math.random() * 16;
+    const smx = Math.sin(angle) * dist * 0.6;
+    const smy = -(8 + Math.random() * 8); // พุ่งขึ้นก่อนช่วงแรก (จำลองแรงกระเด็นจากค้อนกระทบ)
+    const sx = Math.sin(angle) * dist;
+    const sy = 8 + Math.random() * 10; // แล้วตกลงมาตาม gravity เสมือนช่วงหลัง
+    el.style.left = Math.round(x) + 'px';
+    el.style.top = Math.round(y) + 'px';
+    el.style.setProperty('--smx', smx.toFixed(1) + 'px');
+    el.style.setProperty('--smy', smy.toFixed(1) + 'px');
+    el.style.setProperty('--sx', sx.toFixed(1) + 'px');
+    el.style.setProperty('--sy', sy.toFixed(1) + 'px');
+  });
 }
 
 // เลือกทิศเดิน (หน้า/หลัง/ซ้าย/ขวา) จากทิศทางรวมของการเดินทั้งช่วง (ไม่คำนวณใหม่ทุกเฟรม กันภาพสั่นตอน dx/dy ใกล้เคียงกัน)
@@ -52,6 +51,7 @@ function addWorker(kind) {
   el.className = 'worker' + (kind === 'staff' ? ' staff' : '');
   el.innerHTML =
     '<div class="worker-craft-bar-bg"><div class="worker-craft-bar-fill"></div></div>' +
+    '<div class="worker-wait-bubble">📦</div>' +
     '<div class="worker-swing"><div class="worker-body"><div class="worker-sprite"></div></div></div>';
   document.getElementById('workerLayer').appendChild(el);
   const pos = idlePos(idx);
@@ -74,7 +74,10 @@ function initWorkers() {
 }
 
 function renderWorkerTransform(w, moving, dt) {
-  w.el.style.transform = `translate(${w.x}px, ${w.y}px)`;
+  // ปัดพิกัดเป็นจำนวนเต็มเฉพาะตอน "วาด" (ตำแหน่งจริงในซิมยังเป็นทศนิยม) — กัน sub-pixel blur/สั่นของ sprite
+  w.el.style.transform = `translate(${Math.round(w.x)}px, ${Math.round(w.y)}px)`;
+  // Y-sort: ตัวที่อยู่ต่ำกว่าบนจอ (ใกล้กล้องกว่า) ทับตัวที่อยู่สูงกว่าเสมอ ภายในเลเยอร์ worker ด้วยกัน
+  w.el.style.zIndex = Math.max(1, Math.round(w.y));
   w.el.classList.toggle('moving', !!moving);
   if (moving) {
     const frameMs = WALK_FRAME_MS_AT_BASE_SPEED * (BASE_MOVE_SPEED_PX / getMoveSpeedPxPerSec());
@@ -167,7 +170,11 @@ function tickWorkers(dt) {
     }
     if (w.state === 'WAITING_FOR_STOCK') {
       renderWorkerTransform(w, false, dt); // ยืนนิ่งรอเฉยๆ ที่ station (โชว์เฟรม idle)
-      if (hasEnoughMaterials(getStage().recipe)) startCrafting(w);
+      w.el.classList.add('waiting-stock'); // บับเบิล 📦 เด้งเหนือหัว — สื่อคอขวดวัตถุดิบโดยไม่ต้องอ่านตัวหนังสือ
+      if (hasEnoughMaterials(getStage().recipe)) {
+        w.el.classList.remove('waiting-stock');
+        startCrafting(w);
+      }
       return;
     }
     if (w.state === 'CRAFTING') {

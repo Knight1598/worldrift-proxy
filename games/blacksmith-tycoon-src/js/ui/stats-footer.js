@@ -3,5 +3,5 @@
    ===================================================================== */
 function renderStatsFooter() {
   document.getElementById('statsFooter').textContent =
-    `เสิร์ฟลูกค้าไปแล้ว ${player.stats.totalCustomersServed.toLocaleString()} คน | รายได้สะสมทั้งหมด ${Math.floor(player.stats.totalGoldEarned).toLocaleString()} Gold`;
+    `เสิร์ฟลูกค้าไปแล้ว ${formatCompact(player.stats.totalCustomersServed)} คน | รายได้สะสมทั้งหมด ${formatCompact(player.stats.totalGoldEarned)} Gold`;
 }

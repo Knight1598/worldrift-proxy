@@ -26,9 +26,9 @@ function renderSideStations() {
       const affordable = player.gold >= cost;
       el.innerHTML =
         `<span class="station-side-lock">🔒</span>` +
-        `<span class="station-side-cost ${affordable ? 'ok' : ''}">${cost.toLocaleString()} 🪙</span>` +
+        `<span class="station-side-cost ${affordable ? 'ok' : ''}">${formatCompact(cost)} 🪙</span>` +
         `<div class="station-side-table station-side-table--ghost"></div>`;
-      el.title = `ปลดล็อก ${def.name} (${cost.toLocaleString()} Gold)`;
+      el.title = `ปลดล็อก ${def.name} (${formatCompact(cost)} Gold)`;
       el.addEventListener('click', () => buyStationUnlock(i));
     }
     wrap.appendChild(el);

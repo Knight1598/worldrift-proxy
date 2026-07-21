@@ -32,7 +32,7 @@ function renderUpgradeList() {
 
     const btn = document.createElement('button');
     btn.className = 'buy-btn ' + (maxed ? 'buy-btn--maxed' : affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
-    btn.textContent = maxed ? 'เต็มขั้น ✓' : `ซื้อ (${cost.toLocaleString()})`;
+    btn.textContent = maxed ? 'เต็มขั้น ✓' : `ซื้อ (${formatCompact(cost)})`;
     btn.disabled = maxed || !affordable;
     btn.addEventListener('click', () => buyUpgrade(type.key));
 

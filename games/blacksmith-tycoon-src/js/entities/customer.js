@@ -43,7 +43,9 @@ function getCustomerWalkSpeed(cust) {
 }
 
 function renderCustomerTransform(cust, moving) {
-  cust.el.style.transform = `translate(${cust.x}px, ${cust.y}px)`;
+  // ปัดพิกัดตอนวาด (ซิมคงทศนิยมไว้) กัน sub-pixel blur + Y-sort ให้ตัวล่างทับตัวบนภายในเลนลูกค้า
+  cust.el.style.transform = `translate(${Math.round(cust.x)}px, ${Math.round(cust.y)}px)`;
+  cust.el.style.zIndex = Math.max(1, Math.round(cust.y));
   cust.el.classList.toggle('facing-left', cust.facing === -1);
   cust.el.classList.toggle('moving', !!moving);
 }

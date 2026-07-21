@@ -12,6 +12,9 @@
     --danger: #ff5555;
   }
   * { box-sizing: border-box; }
+  /* Crisp Edges: บังคับ pixelated ทุกภาพ/สไปรต์/พื้นหลัง กัน browser เบลอตอน scale (art เป็น pixel art ล้วน) */
+  img, .worker-sprite, .scene-bg, .stand-booth, .coin-drop img, .customer-img,
+  .product-badge img, .product-level-icon, .station-side-icon, .renovate-side img { image-rendering: pixelated; }
   html, body { height: 100%; }
   body {
     margin: 0;
@@ -26,6 +29,15 @@
   /* ตัวเลข/คะแนน ใช้ฟอนต์แนวพิกเซล-บล็อกแทน (เฉพาะจุด ไม่ใช้ทั้งหน้า เพราะฟอนต์นี้ไม่มีตัวอักษรไทย
      เบราว์เซอร์จะ fallback ไปฟอนต์ปกติสำหรับข้อความไทยอยู่ดี ใส่ไว้ให้ใช้จริงกับตัวเลข/หัวข้ออังกฤษ) */
   .pixel-num { font-family: 'Press Start 2P', 'Courier New', monospace; letter-spacing: -0.5px; }
+
+  /* เคารพ prefers-reduced-motion: ตัดแอนิเมชันบรรยากาศที่วนไม่จบ (เด้ง/เรืองแสง/bob) ให้ผู้ที่ตั้งค่าลดการเคลื่อนไหว
+     — คง transition สั้นๆ ของ feedback การกดไว้ (แค่ทำให้ไม่มี motion loop กวนตา) */
+  @media (prefers-reduced-motion: reduce) {
+    .fab--attention, .station-arrow, .gift-box, .buy-btn--affordable, .buff-card--active,
+    .product-badge.affordable, .worker.crafting .worker-swing, .worker.waiting-stock .worker-wait-bubble,
+    .coin-drop img, .customer.moving .customer-body, .fever-bar-wrap.ready .fever-bar-fill,
+    .customer.vip .customer-img { animation: none !important; }
+  }
 
   /* =====================================================================
      Game Area — เต็มจอทั้งใบแบบเกมต้นแบบ (Eatventure) ไม่แบ่งครึ่งจอกับลิสต์อัปเกรดอีกแล้ว
@@ -275,14 +287,43 @@
      ต้องแยกจาก .worker เพราะ .worker เองมี transform:translate(x,y) ที่ JS เซ็ตทุกเฟรมสำหรับตำแหน่ง
      ถ้าใส่ CSS animation ที่ขยับ transform บนตัวเดียวกัน จะชนกัน (inline style ทับ CSS animation ทุกเฟรม) */
   .worker-swing { width: 100%; height: 100%; }
+  /* Crafting = ตีค้อน: ใช้หลัก Anticipation (ง้างค้อนถอยหลัง+ยืดตัวขึ้นก่อน) แล้ว Squash&Stretch
+     (ฟาดลงเร็ว บี้ตัวเตี้ยลงตอนกระทบ) แล้วเด้งกลับ — timing เร่ง-ผ่อนด้วย cubic-bezier ให้มีน้ำหนัก
+     ไม่ใช่ ease-in-out เรียบๆ (การฟาดต้องเร็วกว่าการง้างเสมอ ตามหลัก animation) */
   .worker.crafting .worker-swing {
-    animation: craftSwing 0.42s ease-in-out infinite;
+    animation: craftStrike 0.5s cubic-bezier(.5,.05,.3,1) infinite;
     transform-origin: 50% 100%;
   }
-  @keyframes craftSwing {
-    0%, 100% { transform: rotate(0deg) scaleY(1); }
-    35%      { transform: rotate(-9deg) scaleY(0.95); }
-    62%      { transform: rotate(7deg) scaleY(1.05); }
+  @keyframes craftStrike {
+    0%   { transform: rotate(0deg) scale(1, 1); }
+    30%  { transform: rotate(-13deg) scale(0.97, 1.06); }   /* Anticipation: ง้างถอยหลัง + ยืดสูง */
+    45%  { transform: rotate(10deg) scale(1.05, 0.9); }     /* Strike: ฟาดลงเร็ว + บี้เตี้ย (squash) */
+    60%  { transform: rotate(6deg) scale(0.99, 1.02); }     /* Recoil: เด้งกลับเล็กน้อย (stretch) */
+    100% { transform: rotate(0deg) scale(1, 1); }
+  }
+  /* บับเบิล 📦 เด้งเหนือหัวตอนวัตถุดิบหมด — สื่อคอขวดโดยไม่ต้องอ่านตัวหนังสือ (Visual Signposting) */
+  .worker-wait-bubble {
+    position: absolute;
+    top: -30px; left: 50%;
+    width: 24px; height: 24px;
+    margin-left: -12px;
+    font-size: 16px;
+    line-height: 24px;
+    text-align: center;
+    border-radius: 50%;
+    background: rgba(255,85,85,0.9);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: scale(0.4);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .worker.waiting-stock .worker-wait-bubble {
+    animation: waitBubblePulse 0.9s ease-in-out infinite;
+  }
+  @keyframes waitBubblePulse {
+    0%, 100% { opacity: 1; transform: scale(1) translateY(0); }
+    50%      { opacity: 1; transform: scale(1.12) translateY(-3px); }
   }
   .worker-body {
     width: 100%; height: 100%;
@@ -485,14 +526,16 @@
     pointer-events: none;
     z-index: 6;
     white-space: nowrap;
-    animation: floatTextUp 1s ease forwards;
+    /* pop เด้งเข้า (overshoot) ช่วงต้นแล้วลอยขึ้นชะลอตัว (ease-out) ช่วงปลาย — มีน้ำหนักกว่า ease เรียบ */
+    animation: floatTextUp 1s cubic-bezier(.22,1,.36,1) forwards;
   }
   .float-text--gold { color: var(--accent-gold); text-shadow: 1px 1px 0 #000; }
   .float-text--tip { color: var(--success); text-shadow: 1px 1px 0 #000; }
   @keyframes floatTextUp {
-    0%   { opacity: 0; transform: translateY(0); }
-    15%  { opacity: 1; }
-    100% { opacity: 0; transform: translateY(-42px); }
+    0%   { opacity: 0; transform: translateY(4px) scale(0.7); }
+    18%  { opacity: 1; transform: translateY(-6px) scale(1.12); }
+    32%  { transform: translateY(-10px) scale(1); }
+    100% { opacity: 0; transform: translateY(-44px) scale(1); }
   }
 
   /* =====================================================================
@@ -783,7 +826,12 @@
     color: var(--text-main);
     box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
   }
-  .material-chip.material-chip--low { color: var(--danger); } /* คลังใกล้หมด (<25%) เตือนด้วยสีแดง */
+  /* คลังใกล้หมด (<25%): สีแดง + กะพริบขอบเบาๆ สื่อคอขวดชัดขึ้น (Visual Signposting) */
+  .material-chip.material-chip--low { color: var(--danger); border-color: var(--danger); animation: lowStockPulse 0.9s ease-in-out infinite; }
+  @keyframes lowStockPulse {
+    0%, 100% { box-shadow: 2px 2px 0 rgba(0,0,0,0.5); }
+    50%      { box-shadow: 2px 2px 0 rgba(0,0,0,0.5), 0 0 7px 1px rgba(255,85,85,0.7); }
+  }
 
   /* ลูกค้า VIP — ออร่าทอง (glow) รอบสไปรต์ ให้ต่างจากลูกค้าปกติชัดเจนจากระยะไกล */
   .customer.vip .customer-img {
