@@ -61,7 +61,13 @@ function advanceStage() {
   document.getElementById('stageCompleteModal').classList.remove('show');
   const wasFirstStage = player.stageIndex === 0;
   if (player.stageIndex >= STAGES.length - 1) {
+    // ด่านสุดท้ายไม่มี "ด่านถัดไป" ให้ขยับไป แต่ stage-complete-modal.js สัญญาไว้ว่ากดแล้ว "รับรางวัลปิดท้าย"
+    // -- ให้เพชรจริงตามที่พูดไว้ แทนที่จะแค่โชว์ modal เฉยๆ โดยไม่มีอะไรเกิดขึ้นจริง
+    player.gems += FINAL_STAGE_REWARD_GEMS;
+    renderGems();
+    document.getElementById('gameCompleteRewardText').textContent = `🎁 ได้รับรางวัลปิดท้าย +${FINAL_STAGE_REWARD_GEMS} 💎 เพชร!`;
     document.getElementById('gameCompleteModal').classList.add('show');
+    saveGame();
     return;
   }
   player.stageIndex += 1;

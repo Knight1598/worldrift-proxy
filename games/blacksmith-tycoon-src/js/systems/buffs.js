@@ -30,6 +30,7 @@ function rollBuff() {
   } else {
     activeBuff = { key: buff.key, endsAt: performance.now() + BUFF_DURATION_MS };
   }
+  playSfxBuffRoll();
   GameEvents.emit(EVENTS.BUFF_ROLLED, { buff });
   saveGame(); // เพชรเปลี่ยน เก็บทันที
   return buff;

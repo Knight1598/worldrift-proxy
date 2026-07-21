@@ -19,7 +19,9 @@ function consumeMaterials(recipe) {
 }
 
 function tickMaterialRegen(dt) {
-  const rate = MATERIAL_REGEN_PER_SEC * (isBuffActive('regen_boost') ? 2 : 1); // บัพ "คลังไว"
+  // scale ตามจำนวน worker (getWorkerCount()) กันไม่ให้ Multi-Staff (สูงสุด 5 คน) + อัปเกรดความเร็วเต็มเลเวล
+  // เบิกวัตถุดิบไวกว่าคลังเติมจนเป็นคอขวดที่ทำให้ speed/signage/จ้างลูกมือแทบไม่มีผล (ดู data.js's MATERIAL_REGEN_PER_SEC)
+  const rate = MATERIAL_REGEN_PER_SEC * getWorkerCount() * (isBuffActive('regen_boost') ? 2 : 1); // บัพ "คลังไว"
   MATERIALS.forEach(m => {
     const inv = player.inventory[m.key];
     if (inv.stock >= inv.capacity) return; // เต็มแล้วไม่ต้องทำอะไร กัน emit event เปล่าๆ ทุกเฟรม

@@ -521,6 +521,8 @@
   .modal-box h2 { margin: 0 0 10px; color: var(--primary-dark); font-size: 1.15rem; }
   .modal-box p { font-size: 0.85rem; line-height: 1.5; color: #4a3728; margin: 0 0 16px; }
   .modal-emoji-big { font-size: 3rem; margin-bottom: 8px; }
+  /* รางวัลปิดท้ายตอนจบเกม (ดู progression.js's advanceStage) เด่นกว่าข้อความอธิบายทั่วไป */
+  .game-complete-reward { font-size: 1rem; font-weight: bold; color: #8a5fe0; margin-bottom: 10px !important; }
 
   .btn-cta-mega {
     border: none;
