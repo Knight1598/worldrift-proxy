@@ -13,4 +13,6 @@ const EVENTS = {
   GOBLIN_CAUGHT:     'goblin:caught',      // catchGoblin() — { reward }
   FEVER_ACTIVATED:   'fever:activated',    // activateFever()
   FEVER_ENDED:       'fever:ended',        // tickFever() เมื่อหมดเวลา
+  MATERIAL_CONSUMED:  'material:consumed',  // consumeMaterials() — { material, qty, remaining }
+  MATERIAL_RESTOCKED: 'material:restocked', // tickMaterialRegen() — { material, stock }
 };

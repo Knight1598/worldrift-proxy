@@ -14,6 +14,7 @@ function renderAll() {
   renderProductBadge();
   renderStatsFooter();
   renderFeverBar();
+  renderMaterialStockPanel();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());

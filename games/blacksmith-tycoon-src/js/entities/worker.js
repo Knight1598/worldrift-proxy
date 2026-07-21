@@ -1,5 +1,6 @@
 /* =====================================================================
-   Worker (ผู้เล่น + พนักงาน) — State Machine: IDLE -> WALK_TO_STATION -> CRAFTING -> DELIVER -> COLLECT -> IDLE
+   Worker (ผู้เล่น + พนักงาน) — State Machine:
+   IDLE -> WALK_TO_STATION -> [WAITING_FOR_STOCK ถ้าวัตถุดิบไม่พอ] -> CRAFTING -> DELIVER -> COLLECT -> IDLE
    แอนิเมชันเดิน: sprite-sheet จริง 4 เฟรม สลับด้วย background-position ตามทิศทางที่กำลังเดิน
    (หันหลังตอนเดินขึ้นไป Station, หันหน้าตอนเดินลงมาเคาน์เตอร์)
    ===================================================================== */
@@ -96,6 +97,16 @@ function showCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.
 function hideCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.remove('show'); }
 function updateCraftBar(w, pct) { w.el.querySelector('.worker-craft-bar-fill').style.width = (pct * 100) + '%'; }
 
+// จุดเดียวที่เริ่มสถานะ CRAFTING จริง -- เรียกได้ทั้งจาก WALK_TO_STATION (วัตถุดิบพอตั้งแต่มาถึง)
+// และจาก WAITING_FOR_STOCK (เพิ่งเติมวัตถุดิบพอระหว่างรอ) กันโค้ดซ้ำสองที่
+function startCrafting(w) {
+  w.state = 'CRAFTING';
+  w.craftElapsed = 0;
+  w.sparkElapsed = 0;
+  showCraftBar(w);
+  w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
+}
+
 function tickWorkers(dt) {
   const speed = getMoveSpeedPxPerSec();
   workers.forEach(w => {
@@ -128,12 +139,17 @@ function tickWorkers(dt) {
       const arrived = moveToward(w, stTarget, speed, dt);
       renderWorkerTransform(w, !arrived, dt);
       if (arrived) {
-        w.state = 'CRAFTING';
-        w.craftElapsed = 0;
-        w.sparkElapsed = 0;
-        showCraftBar(w);
-        w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
+        if (hasEnoughMaterials(getStage().recipe)) {
+          startCrafting(w);
+        } else {
+          w.state = 'WAITING_FOR_STOCK'; // วัตถุดิบไม่พอ -- ยืนรอที่ station จนกว่าคลังจะเติมพอ (ดู tickMaterialRegen)
+        }
       }
+      return;
+    }
+    if (w.state === 'WAITING_FOR_STOCK') {
+      renderWorkerTransform(w, false, dt); // ยืนนิ่งรอเฉยๆ ที่ station (โชว์เฟรม idle)
+      if (hasEnoughMaterials(getStage().recipe)) startCrafting(w);
       return;
     }
     if (w.state === 'CRAFTING') {
@@ -151,6 +167,7 @@ function tickWorkers(dt) {
       if (w.craftElapsed >= dur) {
         hideCraftBar(w);
         w.el.classList.remove('crafting');
+        consumeMaterials(getStage().recipe); // เบิกวัตถุดิบตอนคราฟต์เสร็จจริง (ไม่ใช่ตอนเริ่ม)
         w.state = 'DELIVER';
       }
       return;

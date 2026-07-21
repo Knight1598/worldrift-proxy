@@ -634,6 +634,32 @@
   }
   .fever-bar-wrap.active .fever-bar-label { color: #ff5555; }
 
+  /* คลังวัตถุดิบ (Materials/Stock Flow) — โชว์เฉพาะชนิดที่สูตรของด่านปัจจุบันใช้ (ดู ui/material-stock.js)
+     วางไว้ใต้ fever-bar-wrap (top:36px) ไม่ให้ชนกัน ไม่มี sprite ภาพกองวัตถุดิบให้ ใช้อิโมจิ+ตัวเลขแทน
+     ตามแพทเทิร์นเดียวกับ Golden Goblin ที่ไม่มี asset ใหม่ให้เหมือนกัน */
+  .material-stock-panel {
+    position: absolute;
+    top: 52px; left: 8px;
+    z-index: 9;
+    display: flex;
+    gap: 5px;
+    pointer-events: none;
+  }
+  .material-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(0,0,0,0.55);
+    border: 2px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-size: 0.6rem;
+    font-weight: bold;
+    color: var(--text-main);
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+  }
+  .material-chip.material-chip--low { color: var(--danger); } /* คลังใกล้หมด (<25%) เตือนด้วยสีแดง */
+
   /* ลูกค้า VIP — ออร่าทอง (glow) รอบสไปรต์ ให้ต่างจากลูกค้าปกติชัดเจนจากระยะไกล */
   .customer.vip .customer-img {
     filter: drop-shadow(0 0 4px #ffd76a) drop-shadow(0 0 8px #ffae00) brightness(1.02);
@@ -700,6 +726,7 @@
     <div class="fever-bar-bg"><div class="fever-bar-fill" id="feverBarFill"></div></div>
     <span class="fever-bar-label" id="feverBarLabel">FEVER</span>
   </div>
+  <div class="material-stock-panel" id="materialStockPanel"></div>
 </div>
 
 <div class="ui-area" id="uiArea">
@@ -813,6 +840,8 @@ const EVENTS = {
   GOBLIN_CAUGHT:     'goblin:caught',      // catchGoblin() — { reward }
   FEVER_ACTIVATED:   'fever:activated',    // activateFever()
   FEVER_ENDED:       'fever:ended',        // tickFever() เมื่อหมดเวลา
+  MATERIAL_CONSUMED:  'material:consumed',  // consumeMaterials() — { material, qty, remaining }
+  MATERIAL_RESTOCKED: 'material:restocked', // tickMaterialRegen() — { material, stock }
 };
 </script>
 <script>
@@ -822,13 +851,16 @@ const EVENTS = {
 const STAGES = [
   { key: 'stall',   name: 'แผงขายของริมทาง',    product: 'ของกินของใช้ทั่วไป', stationImg: 'assets/blacksmith/station_stall.png',
     customerImgs: ['assets/blacksmith/rogue.png', 'assets/blacksmith/villager_woman.png', 'assets/blacksmith/farmer_man.png'],
-    color: '#f3e3c9', baseRevenue: 5   },
+    color: '#f3e3c9', baseRevenue: 5,
+    recipe: [{ material: 'ore', qty: 1 }] },
   { key: 'forge',   name: 'โรงตีดาบ',           product: 'ดาบ',               stationImg: 'assets/blacksmith/station_forge.png',
     customerImgs: ['assets/blacksmith/knight.png'],
-    color: '#dcdbe0', baseRevenue: 25  },
+    color: '#dcdbe0', baseRevenue: 25,
+    recipe: [{ material: 'ore', qty: 2 }, { material: 'coal', qty: 1 }] },
   { key: 'alchemy', name: 'ห้องเล่นแร่แปรธาตุ',  product: 'โพชั่นวิเศษ',        stationImg: 'assets/blacksmith/station_alchemy.png',
     customerImgs: ['assets/blacksmith/wizard.png'],
-    color: '#e3d9f3', baseRevenue: 125 },
+    color: '#e3d9f3', baseRevenue: 125,
+    recipe: [{ material: 'herb', qty: 2 }] },
 ];
 function getRandomCustomerImg() {
   const imgs = getStage().customerImgs;
@@ -929,7 +961,19 @@ const GOBLIN_MIN_INTERVAL_MS = 120000; // 2 นาที
 const GOBLIN_MAX_INTERVAL_MS = 180000; // 3 นาที
 const GOBLIN_CROSS_MS = 2600; // เวลาที่โกบลินวิ่งข้ามจอ
 
-const SAVE_KEY = 'blacksmithTycoonSave_v2';
+// ===== Materials / Stock Flow — วัตถุดิบที่ต้องเบิกจากคลังก่อนคราฟต์ได้ (ดู entities/materials.js) =====
+// ไม่มี sprite ภาพกองวัตถุดิบให้ (เช็ค games/assets/blacksmith/ แล้วไม่มี) เลยใช้อิโมจิแทน sprite ใหม่
+// ตามแพทเทิร์นเดียวกับ Golden Goblin ที่ทำไว้ก่อนหน้า
+const MATERIALS = [
+  { key: 'ore',  name: 'แร่เหล็ก', icon: '🪨' },
+  { key: 'coal', name: 'ถ่านหิน',  icon: '⚫' },
+  { key: 'herb', name: 'สมุนไพร',  icon: '🌿' },
+];
+const MATERIAL_CAPACITY = 20;
+const MATERIAL_REGEN_PER_SEC = 0.5; // เติมคลังอัตโนมัติแบบพาสซีฟ ไม่ต้องมีปุ่มซื้อเพิ่มในสโคปนี้
+
+const SAVE_KEY = 'blacksmithTycoonSave_v3';
+const SAVE_KEY_V2 = 'blacksmithTycoonSave_v2'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V1 = 'blacksmithTycoonSave_v1'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 
 </script>
@@ -937,6 +981,17 @@ const SAVE_KEY_V1 = 'blacksmithTycoonSave_v1'; // เก็บไว้เป็
 /* =====================================================================
    Player State
    ===================================================================== */
+// สร้างจาก MATERIALS (data.js) แทนที่จะ hardcode คีย์ซ้ำสองที่ — เพิ่มวัตถุดิบชนิดใหม่ในอนาคต
+// แค่แก้ MATERIALS แล้ว default inventory ตามมาเองอัตโนมัติ
+function defaultInventory() {
+  const inv = {};
+  MATERIALS.forEach(m => { inv[m.key] = { stock: MATERIAL_CAPACITY, capacity: MATERIAL_CAPACITY }; });
+  return inv;
+}
+function defaultIdentity() {
+  return { playerId: null, displayName: null }; // เตรียมไว้สำหรับ Leaderboard (ดู systems/leaderboard.js)
+}
+
 let player = {
   gold: 0,
   stageIndex: 0,
@@ -944,6 +999,8 @@ let player = {
   staffCount: 0,     // แทนที่ staffHired (bool) เดิม — จำนวนลูกมือที่จ้างแล้ว (0..MAX_STAFF_COUNT)
   vaultLevel: 0,     // อัปเกรดถาวร "คลังเก็บของตอนออฟไลน์" ไม่ถูกรีเซ็ตตอนขึ้นด่านใหม่
   milestonesShown: {}, // { speed: [10, 25], signage: [10], ... } กันป๊อปอัพ Milestone เด้งซ้ำตอนโหลดเซฟ
+  inventory: defaultInventory(), // วัตถุดิบที่ต้องเบิกก่อนคราฟต์ (ดู entities/materials.js)
+  identity: defaultIdentity(),
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
@@ -955,8 +1012,9 @@ let feverState = { progress: 0, active: false, endsAt: 0 };
 let audioCtx = null;
 
 /* =====================================================================
-   Save / Load — SAVE_KEY เป็น v2 (staffCount/vaultLevel/milestonesShown ใหม่)
-   ถ้าไม่เจอเซฟ v2 จะลองดึงเซฟ v1 เดิม (staffHired) มาแปลงให้อัตโนมัติ (Migration) กันผู้เล่นเก่าความคืบหน้าหาย
+   Save / Load — SAVE_KEY เป็น v3 (inventory/identity ใหม่ สำหรับ Materials + Leaderboard)
+   chain การ migrate: v3 (ตรงๆ) -> v2 (ตรงๆ + เติม default ของ v3) -> v1 (แปลงเป็น v2 ก่อน แล้วเติม default
+   ของ v3 อีกที) กันผู้เล่นเก่าทุกรุ่นความคืบหน้าไม่หาย
    worker/customer/coin/feverState เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
    ===================================================================== */
 function saveGame() {
@@ -967,6 +1025,8 @@ function saveGame() {
     staffCount: player.staffCount,
     vaultLevel: player.vaultLevel,
     milestonesShown: player.milestonesShown,
+    inventory: player.inventory,
+    identity: player.identity,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -975,7 +1035,8 @@ function saveGame() {
 }
 
 // แปลงเซฟรูปแบบเก่า (v1: staffHired เป็น true/false) ให้เป็นรูปแบบ v2 (staffCount เป็นตัวเลข) — เรียกเฉพาะตอน
-// หาเซฟ v2 ไม่เจอเท่านั้น ฟิลด์ใหม่ที่ v1 ไม่มี (vaultLevel/milestonesShown) ใส่ค่าเริ่มต้นให้ครบ
+// หาเซฟ v2/v3 ไม่เจอเท่านั้น ฟิลด์ใหม่ที่ v1 ไม่มี (vaultLevel/milestonesShown) ใส่ค่าเริ่มต้นให้ครบ
+// (inventory/identity ของ v3 ยังไม่ต้องเติมตรงนี้ -- fillV3Defaults ด้านล่างจะเติมให้อีกทีไม่ว่าจะมาจาก v1 หรือ v2)
 function migrateFromV1(rawV1) {
   const data = JSON.parse(rawV1);
   return {
@@ -991,19 +1052,41 @@ function migrateFromV1(rawV1) {
   };
 }
 
+// เติมฟิลด์ใหม่ของ v3 (inventory/identity) ให้ข้อมูลที่เป็นทรง v2 อยู่แล้ว ไม่ว่าจะมาจาก key v2 ตรงๆ
+// หรือเพิ่ง migrateFromV1() มา — รวมจุดเติม default ไว้ที่เดียวกันทั้งสองเส้นทาง
+function fillV3Defaults(v2Data) {
+  return Object.assign({}, v2Data, {
+    inventory: defaultInventory(),
+    identity: defaultIdentity(),
+  });
+}
+
 function loadGame() {
   let raw;
   try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
   let data = null;
   if (raw) {
-    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v2 เสีย ลอง fallback ไป v1 ต่อ */ }
+    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v3 เสีย ลอง fallback ลงไปต่อ */ }
   }
-  let migratedFromV1 = false;
+  let needsResave = false;
+  const keysToClean = [];
   if (!data) {
-    let rawV1;
-    try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
-    if (rawV1) {
-      try { data = migrateFromV1(rawV1); migratedFromV1 = true; } catch (e) { data = null; }
+    let rawV2;
+    try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
+    let v2Data = null;
+    if (rawV2) {
+      try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
+    }
+    if (!v2Data) {
+      let rawV1;
+      try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
+      if (rawV1) {
+        try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+      }
+    }
+    if (v2Data) {
+      data = fillV3Defaults(v2Data);
+      needsResave = true;
     }
   }
   if (!data) return;
@@ -1014,13 +1097,15 @@ function loadGame() {
     staffCount: Math.max(0, Math.min(MAX_STAFF_COUNT, data.staffCount || 0)),
     vaultLevel: Math.max(0, Math.min(MAX_VAULT_LEVEL, data.vaultLevel || 0)),
     milestonesShown: data.milestonesShown || {},
+    inventory: data.inventory || defaultInventory(),
+    identity: Object.assign(defaultIdentity(), data.identity || {}),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
   });
-  if (migratedFromV1) {
-    saveGame(); // เขียนเป็น v2 ทันทีหลัง migrate สำเร็จ
-    try { localStorage.removeItem(SAVE_KEY_V1); } catch (e) { /* ไม่เป็นไรถ้าลบไม่ได้ */ }
+  if (needsResave) {
+    saveGame(); // เขียนเป็น v3 ทันทีหลัง migrate สำเร็จ
+    keysToClean.forEach(key => { try { localStorage.removeItem(key); } catch (e) { /* ไม่เป็นไรถ้าลบไม่ได้ */ } });
   }
 }
 </script>
@@ -1111,6 +1196,19 @@ function getThroughputPerMs() {
   const workerThroughputPerMs = getWorkerCount() / getOrderCycleMs();
   const spawnThroughputPerMs = 1 / getSpawnIntervalMs();
   return Math.min(workerThroughputPerMs, spawnThroughputPerMs);
+}
+
+// คะแนนรวม "มูลค่าผู้เล่น" ไว้ใช้เทียบอันดับ Leaderboard (ดู systems/leaderboard.js) — ยังไม่มี backend จริง
+// ตอนนี้ แค่เตรียมสูตรกลางไว้ให้ผลลัพธ์เพิ่มขึ้นเสมอเมื่อ progression ใดๆ (gold/ด่าน/อัปเกรด/ลูกมือ/คลัง) เพิ่มขึ้น
+function getNetWorth() {
+  return Math.floor(
+    player.gold +
+    player.stats.totalGoldEarned * 0.1 +
+    player.stageIndex * 5000 +
+    Object.values(player.upgradeLevels).reduce((a, b) => a + b, 0) * 50 +
+    player.staffCount * 2000 +
+    player.vaultLevel * 500
+  );
 }
 </script>
 <script>
@@ -1219,7 +1317,8 @@ function moveToward(entity, target, speedPxPerSec, dt) {
 </script>
 <script>
 /* =====================================================================
-   Worker (ผู้เล่น + พนักงาน) — State Machine: IDLE -> WALK_TO_STATION -> CRAFTING -> DELIVER -> COLLECT -> IDLE
+   Worker (ผู้เล่น + พนักงาน) — State Machine:
+   IDLE -> WALK_TO_STATION -> [WAITING_FOR_STOCK ถ้าวัตถุดิบไม่พอ] -> CRAFTING -> DELIVER -> COLLECT -> IDLE
    แอนิเมชันเดิน: sprite-sheet จริง 4 เฟรม สลับด้วย background-position ตามทิศทางที่กำลังเดิน
    (หันหลังตอนเดินขึ้นไป Station, หันหน้าตอนเดินลงมาเคาน์เตอร์)
    ===================================================================== */
@@ -1316,6 +1415,16 @@ function showCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.
 function hideCraftBar(w) { w.el.querySelector('.worker-craft-bar-bg').classList.remove('show'); }
 function updateCraftBar(w, pct) { w.el.querySelector('.worker-craft-bar-fill').style.width = (pct * 100) + '%'; }
 
+// จุดเดียวที่เริ่มสถานะ CRAFTING จริง -- เรียกได้ทั้งจาก WALK_TO_STATION (วัตถุดิบพอตั้งแต่มาถึง)
+// และจาก WAITING_FOR_STOCK (เพิ่งเติมวัตถุดิบพอระหว่างรอ) กันโค้ดซ้ำสองที่
+function startCrafting(w) {
+  w.state = 'CRAFTING';
+  w.craftElapsed = 0;
+  w.sparkElapsed = 0;
+  showCraftBar(w);
+  w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
+}
+
 function tickWorkers(dt) {
   const speed = getMoveSpeedPxPerSec();
   workers.forEach(w => {
@@ -1348,12 +1457,17 @@ function tickWorkers(dt) {
       const arrived = moveToward(w, stTarget, speed, dt);
       renderWorkerTransform(w, !arrived, dt);
       if (arrived) {
-        w.state = 'CRAFTING';
-        w.craftElapsed = 0;
-        w.sparkElapsed = 0;
-        showCraftBar(w);
-        w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
+        if (hasEnoughMaterials(getStage().recipe)) {
+          startCrafting(w);
+        } else {
+          w.state = 'WAITING_FOR_STOCK'; // วัตถุดิบไม่พอ -- ยืนรอที่ station จนกว่าคลังจะเติมพอ (ดู tickMaterialRegen)
+        }
       }
+      return;
+    }
+    if (w.state === 'WAITING_FOR_STOCK') {
+      renderWorkerTransform(w, false, dt); // ยืนนิ่งรอเฉยๆ ที่ station (โชว์เฟรม idle)
+      if (hasEnoughMaterials(getStage().recipe)) startCrafting(w);
       return;
     }
     if (w.state === 'CRAFTING') {
@@ -1371,6 +1485,7 @@ function tickWorkers(dt) {
       if (w.craftElapsed >= dur) {
         hideCraftBar(w);
         w.el.classList.remove('crafting');
+        consumeMaterials(getStage().recipe); // เบิกวัตถุดิบตอนคราฟต์เสร็จจริง (ไม่ใช่ตอนเริ่ม)
         w.state = 'DELIVER';
       }
       return;
@@ -1592,6 +1707,33 @@ function clearAllCustomers() {
 </script>
 <script>
 /* =====================================================================
+   Materials / Stock Flow — วัตถุดิบที่ worker ต้องเบิกจากคลัง (player.inventory) ก่อนเริ่มคราฟต์
+   ถ้าคลังไม่พอ worker จะเข้า state WAITING_FOR_STOCK (ดู entities/worker.js) จนกว่าจะเติมพอ
+   คลังเติมเองอัตโนมัติแบบพาสซีฟผ่าน tickMaterialRegen() ไม่มีปุ่มซื้อเพิ่มในสโคปนี้
+   ===================================================================== */
+function hasEnoughMaterials(recipe) {
+  return recipe.every(r => player.inventory[r.material].stock >= r.qty);
+}
+
+function consumeMaterials(recipe) {
+  recipe.forEach(r => {
+    const inv = player.inventory[r.material];
+    inv.stock -= r.qty;
+    GameEvents.emit(EVENTS.MATERIAL_CONSUMED, { material: r.material, qty: r.qty, remaining: inv.stock });
+  });
+}
+
+function tickMaterialRegen(dt) {
+  MATERIALS.forEach(m => {
+    const inv = player.inventory[m.key];
+    if (inv.stock >= inv.capacity) return; // เต็มแล้วไม่ต้องทำอะไร กัน emit event เปล่าๆ ทุกเฟรม
+    inv.stock = Math.min(inv.capacity, inv.stock + MATERIAL_REGEN_PER_SEC * (dt / 1000));
+    GameEvents.emit(EVENTS.MATERIAL_RESTOCKED, { material: m.key, stock: inv.stock });
+  });
+}
+</script>
+<script>
+/* =====================================================================
    Fever Mode / Rush Hour — สะสมคอมโบจากการส่งออเดอร์สำเร็จ เต็มหลอดแล้วแตะเพื่อเข้าสู่โหมด
    ความเร็ว 2 เท่า + ทำของแทบจะทันที เป็นเวลา 15 วินาที (ไม่ persist ผ่าน save — เป็น session state)
    ===================================================================== */
@@ -1720,6 +1862,38 @@ function estimateIncomePerMinute() {
 }
 
 GameEvents.on(EVENTS.COIN_COLLECTED, ({ amount }) => recordIncome(amount));
+</script>
+<script>
+/* =====================================================================
+   Leaderboard — เตรียม schema ฝั่ง client ไว้ล่วงหน้า ยังไม่มี backend/endpoint จริง
+   LEADERBOARD_ENABLED เปิดเมื่อมี endpoint จริงเท่านั้น (ตอนนี้ปิดไว้ ไม่มีการยิง network ใดๆ)
+   ===================================================================== */
+const LEADERBOARD_ENABLED = false;
+
+function generatePlayerId() {
+  return 'p_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+// เรียกครั้งเดียวตอนบูตเกม (ดู main.js) — ผู้เล่นใหม่หรือผู้เล่นที่เพิ่ง migrate มาจากเซฟรุ่นเก่า
+// จะได้ playerId คงที่ติดตัวไปตลอด (persist ผ่าน saveGame ปกติ เพราะอยู่ใน player.identity)
+function ensurePlayerIdentity() {
+  if (!player.identity.playerId) player.identity.playerId = generatePlayerId();
+}
+
+function buildLeaderboardPayload() {
+  return {
+    playerId: player.identity.playerId,
+    displayName: player.identity.displayName || 'ผู้เล่นนิรนาม',
+    netWorth: getNetWorth(),
+    stageIndex: player.stageIndex,
+    totalGoldEarned: player.stats.totalGoldEarned,
+    clientVersion: SAVE_KEY,
+    submittedAt: Date.now(),
+  };
+}
+
+// อนาคต (ยังไม่ implement เพราะยังไม่มี backend):
+// if (LEADERBOARD_ENABLED) fetch(LEADERBOARD_ENDPOINT, { method: 'POST', body: JSON.stringify(buildLeaderboardPayload()) });
 </script>
 <script>
 /* =====================================================================
@@ -2166,6 +2340,7 @@ document.getElementById('btnToggleSound').addEventListener('click', () => {
 document.getElementById('btnResetGame').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  try { localStorage.removeItem(SAVE_KEY_V2); } catch (e) {} // กันเซฟ v2 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V1); } catch (e) {} // กันเซฟ v1 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   location.reload();
 });
@@ -2178,6 +2353,29 @@ function renderStatsFooter() {
   document.getElementById('statsFooter').textContent =
     `เสิร์ฟลูกค้าไปแล้ว ${player.stats.totalCustomersServed.toLocaleString()} คน | รายได้สะสมทั้งหมด ${Math.floor(player.stats.totalGoldEarned).toLocaleString()} Gold`;
 }
+</script>
+<script>
+/* =====================================================================
+   Material Stock Panel — Visual Mapping ของคลังวัตถุดิบ แสดงเฉพาะชนิดที่สูตรของด่าน
+   ปัจจุบันใช้ (getStage().recipe) อัปเดตแบบเรียลไทม์ตามที่เบิก/เติมจริง
+   ===================================================================== */
+function renderMaterialStockPanel() {
+  const panel = document.getElementById('materialStockPanel');
+  panel.innerHTML = '';
+  getStage().recipe.forEach(r => {
+    const def = MATERIALS.find(m => m.key === r.material);
+    const inv = player.inventory[r.material];
+    const chip = document.createElement('div');
+    const low = inv.stock < inv.capacity * 0.25;
+    chip.className = 'material-chip' + (low ? ' material-chip--low' : '');
+    chip.textContent = `${def.icon} ${Math.floor(inv.stock)}/${inv.capacity}`;
+    panel.appendChild(chip);
+  });
+}
+
+GameEvents.on(EVENTS.MATERIAL_CONSUMED, () => renderMaterialStockPanel());
+GameEvents.on(EVENTS.MATERIAL_RESTOCKED, () => renderMaterialStockPanel());
+GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderMaterialStockPanel());
 </script>
 <script>
 /* =====================================================================
@@ -2196,6 +2394,7 @@ function renderAll() {
   renderProductBadge();
   renderStatsFooter();
   renderFeverBar();
+  renderMaterialStockPanel();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
@@ -2223,6 +2422,7 @@ function gameTick(ts) {
   lastTickTime = ts;
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
   tickFever();
+  tickMaterialRegen(dt);
   tickWorkers(dt);
   tickCustomers(dt);
   tickFlyingCoins(dt);
@@ -2268,6 +2468,7 @@ window.addEventListener('beforeunload', saveGame);
 window.addEventListener('resize', updateSceneMetrics);
 
 loadGame();
+ensurePlayerIdentity(); // ให้ผู้เล่นทุกคน (ใหม่หรือ migrate มาจากเซฟรุ่นเก่า) มี playerId คงที่ (ดู systems/leaderboard.js)
 updateSceneMetrics();
 applyOfflineEarnings();
 renderAll();

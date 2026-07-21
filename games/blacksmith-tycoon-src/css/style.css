@@ -626,6 +626,32 @@
   }
   .fever-bar-wrap.active .fever-bar-label { color: #ff5555; }
 
+  /* คลังวัตถุดิบ (Materials/Stock Flow) — โชว์เฉพาะชนิดที่สูตรของด่านปัจจุบันใช้ (ดู ui/material-stock.js)
+     วางไว้ใต้ fever-bar-wrap (top:36px) ไม่ให้ชนกัน ไม่มี sprite ภาพกองวัตถุดิบให้ ใช้อิโมจิ+ตัวเลขแทน
+     ตามแพทเทิร์นเดียวกับ Golden Goblin ที่ไม่มี asset ใหม่ให้เหมือนกัน */
+  .material-stock-panel {
+    position: absolute;
+    top: 52px; left: 8px;
+    z-index: 9;
+    display: flex;
+    gap: 5px;
+    pointer-events: none;
+  }
+  .material-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: rgba(0,0,0,0.55);
+    border: 2px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 2px 5px;
+    font-size: 0.6rem;
+    font-weight: bold;
+    color: var(--text-main);
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+  }
+  .material-chip.material-chip--low { color: var(--danger); } /* คลังใกล้หมด (<25%) เตือนด้วยสีแดง */
+
   /* ลูกค้า VIP — ออร่าทอง (glow) รอบสไปรต์ ให้ต่างจากลูกค้าปกติชัดเจนจากระยะไกล */
   .customer.vip .customer-img {
     filter: drop-shadow(0 0 4px #ffd76a) drop-shadow(0 0 8px #ffae00) brightness(1.02);

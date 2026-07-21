@@ -85,3 +85,16 @@ function getThroughputPerMs() {
   const spawnThroughputPerMs = 1 / getSpawnIntervalMs();
   return Math.min(workerThroughputPerMs, spawnThroughputPerMs);
 }
+
+// คะแนนรวม "มูลค่าผู้เล่น" ไว้ใช้เทียบอันดับ Leaderboard (ดู systems/leaderboard.js) — ยังไม่มี backend จริง
+// ตอนนี้ แค่เตรียมสูตรกลางไว้ให้ผลลัพธ์เพิ่มขึ้นเสมอเมื่อ progression ใดๆ (gold/ด่าน/อัปเกรด/ลูกมือ/คลัง) เพิ่มขึ้น
+function getNetWorth() {
+  return Math.floor(
+    player.gold +
+    player.stats.totalGoldEarned * 0.1 +
+    player.stageIndex * 5000 +
+    Object.values(player.upgradeLevels).reduce((a, b) => a + b, 0) * 50 +
+    player.staffCount * 2000 +
+    player.vaultLevel * 500
+  );
+}

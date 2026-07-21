@@ -4,13 +4,16 @@
 const STAGES = [
   { key: 'stall',   name: 'แผงขายของริมทาง',    product: 'ของกินของใช้ทั่วไป', stationImg: '../assets/blacksmith/station_stall.png',
     customerImgs: ['../assets/blacksmith/rogue.png', '../assets/blacksmith/villager_woman.png', '../assets/blacksmith/farmer_man.png'],
-    color: '#f3e3c9', baseRevenue: 5   },
+    color: '#f3e3c9', baseRevenue: 5,
+    recipe: [{ material: 'ore', qty: 1 }] },
   { key: 'forge',   name: 'โรงตีดาบ',           product: 'ดาบ',               stationImg: '../assets/blacksmith/station_forge.png',
     customerImgs: ['../assets/blacksmith/knight.png'],
-    color: '#dcdbe0', baseRevenue: 25  },
+    color: '#dcdbe0', baseRevenue: 25,
+    recipe: [{ material: 'ore', qty: 2 }, { material: 'coal', qty: 1 }] },
   { key: 'alchemy', name: 'ห้องเล่นแร่แปรธาตุ',  product: 'โพชั่นวิเศษ',        stationImg: '../assets/blacksmith/station_alchemy.png',
     customerImgs: ['../assets/blacksmith/wizard.png'],
-    color: '#e3d9f3', baseRevenue: 125 },
+    color: '#e3d9f3', baseRevenue: 125,
+    recipe: [{ material: 'herb', qty: 2 }] },
 ];
 function getRandomCustomerImg() {
   const imgs = getStage().customerImgs;
@@ -111,6 +114,18 @@ const GOBLIN_MIN_INTERVAL_MS = 120000; // 2 นาที
 const GOBLIN_MAX_INTERVAL_MS = 180000; // 3 นาที
 const GOBLIN_CROSS_MS = 2600; // เวลาที่โกบลินวิ่งข้ามจอ
 
-const SAVE_KEY = 'blacksmithTycoonSave_v2';
+// ===== Materials / Stock Flow — วัตถุดิบที่ต้องเบิกจากคลังก่อนคราฟต์ได้ (ดู entities/materials.js) =====
+// ไม่มี sprite ภาพกองวัตถุดิบให้ (เช็ค games/assets/blacksmith/ แล้วไม่มี) เลยใช้อิโมจิแทน sprite ใหม่
+// ตามแพทเทิร์นเดียวกับ Golden Goblin ที่ทำไว้ก่อนหน้า
+const MATERIALS = [
+  { key: 'ore',  name: 'แร่เหล็ก', icon: '🪨' },
+  { key: 'coal', name: 'ถ่านหิน',  icon: '⚫' },
+  { key: 'herb', name: 'สมุนไพร',  icon: '🌿' },
+];
+const MATERIAL_CAPACITY = 20;
+const MATERIAL_REGEN_PER_SEC = 0.5; // เติมคลังอัตโนมัติแบบพาสซีฟ ไม่ต้องมีปุ่มซื้อเพิ่มในสโคปนี้
+
+const SAVE_KEY = 'blacksmithTycoonSave_v3';
+const SAVE_KEY_V2 = 'blacksmithTycoonSave_v2'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V1 = 'blacksmithTycoonSave_v1'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 
