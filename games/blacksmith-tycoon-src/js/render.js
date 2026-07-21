@@ -7,6 +7,7 @@
    ===================================================================== */
 function renderAll() {
   renderGold();
+  renderGems();
   renderStageView();
   renderStageProgress();
   renderUpgradeList();
@@ -15,6 +16,7 @@ function renderAll() {
   renderStatsFooter();
   renderFeverBar();
   renderMaterialStockPanel();
+  renderBuffPanel();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());

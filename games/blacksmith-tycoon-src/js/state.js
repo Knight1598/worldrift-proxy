@@ -21,6 +21,9 @@ let player = {
   milestonesShown: {}, // { speed: [10, 25], signage: [10], ... } กันป๊อปอัพ Milestone เด้งซ้ำตอนโหลดเซฟ
   inventory: defaultInventory(), // วัตถุดิบที่ต้องเบิกก่อนคราฟต์ (ดู entities/materials.js)
   identity: defaultIdentity(),
+  gems: 0,             // เพชร ได้จาก Order Missions ใช้สุ่มบัพ (ดู systems/missions.js, systems/buffs.js)
+  missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
+  missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
@@ -29,13 +32,17 @@ let player = {
 // Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
 let feverState = { progress: 0, active: false, endsAt: 0 };
 
+// Active Buff ก็เป็น session state ล้วนๆ เหมือนกัน (ตั้งใจไม่ persist — สุ่มใหม่ได้ทุกครั้งที่เข้าเกม ไม่ต้องมี
+// กรณี edge-case บัพค้างข้ามเซสชันให้ดูแล)
+let activeBuff = null; // null หรือ { key, endsAt } (ดู systems/buffs.js)
+
 let audioCtx = null;
 
 /* =====================================================================
-   Save / Load — SAVE_KEY เป็น v3 (inventory/identity ใหม่ สำหรับ Materials + Leaderboard)
-   chain การ migrate: v3 (ตรงๆ) -> v2 (ตรงๆ + เติม default ของ v3) -> v1 (แปลงเป็น v2 ก่อน แล้วเติม default
-   ของ v3 อีกที) กันผู้เล่นเก่าทุกรุ่นความคืบหน้าไม่หาย
-   worker/customer/coin/feverState เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
+   Save / Load — SAVE_KEY เป็น v4 (gems/missionIndex/missionProgress ใหม่ สำหรับ Order Missions + Buff Roll)
+   chain การ migrate: v4 (ตรงๆ) -> v3 (ตรงๆ + เติม default v4) -> v2 (ตรงๆ + เติม default v3 แล้วต่อ v4)
+   -> v1 (แปลงเป็น v2 ก่อน แล้วเติม default v3 ต่อด้วย v4) กันผู้เล่นเก่าทุกรุ่นความคืบหน้าไม่หาย
+   worker/customer/coin/feverState/activeBuff เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
    ===================================================================== */
 function saveGame() {
   const data = {
@@ -47,6 +54,9 @@ function saveGame() {
     milestonesShown: player.milestonesShown,
     inventory: player.inventory,
     identity: player.identity,
+    gems: player.gems,
+    missionIndex: player.missionIndex,
+    missionProgress: player.missionProgress,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -55,8 +65,8 @@ function saveGame() {
 }
 
 // แปลงเซฟรูปแบบเก่า (v1: staffHired เป็น true/false) ให้เป็นรูปแบบ v2 (staffCount เป็นตัวเลข) — เรียกเฉพาะตอน
-// หาเซฟ v2/v3 ไม่เจอเท่านั้น ฟิลด์ใหม่ที่ v1 ไม่มี (vaultLevel/milestonesShown) ใส่ค่าเริ่มต้นให้ครบ
-// (inventory/identity ของ v3 ยังไม่ต้องเติมตรงนี้ -- fillV3Defaults ด้านล่างจะเติมให้อีกทีไม่ว่าจะมาจาก v1 หรือ v2)
+// หาเซฟ v2/v3/v4 ไม่เจอเท่านั้น ฟิลด์ใหม่ที่ v1 ไม่มี (vaultLevel/milestonesShown) ใส่ค่าเริ่มต้นให้ครบ
+// (ฟิลด์ใหม่ของ v3/v4 ยังไม่ต้องเติมตรงนี้ -- fillV3Defaults/fillV4Defaults ด้านล่างจะเติมให้อีกทีไม่ว่าจะมาจาก v1 หรือ v2)
 function migrateFromV1(rawV1) {
   const data = JSON.parse(rawV1);
   return {
@@ -81,31 +91,53 @@ function fillV3Defaults(v2Data) {
   });
 }
 
+// เติมฟิลด์ใหม่ของ v4 (gems/missionIndex/missionProgress) ให้ข้อมูลที่เป็นทรง v3 อยู่แล้ว ไม่ว่าจะมาจาก key v3
+// ตรงๆ หรือเพิ่ง fillV3Defaults() มา (จาก v2/v1)
+function fillV4Defaults(v3Data) {
+  return Object.assign({}, v3Data, {
+    gems: 0,
+    missionIndex: 0,
+    missionProgress: 0,
+  });
+}
+
 function loadGame() {
   let raw;
   try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
   let data = null;
   if (raw) {
-    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v3 เสีย ลอง fallback ลงไปต่อ */ }
+    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v4 เสีย ลอง fallback ลงไปต่อ */ }
   }
   let needsResave = false;
   const keysToClean = [];
   if (!data) {
-    let rawV2;
-    try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
-    let v2Data = null;
-    if (rawV2) {
-      try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
+    // ไม่เจอ v4 -- ลอง v3 ตรงๆ ก่อน
+    let rawV3;
+    try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
+    let v3Data = null;
+    if (rawV3) {
+      try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
     }
-    if (!v2Data) {
-      let rawV1;
-      try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
-      if (rawV1) {
-        try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+    if (!v3Data) {
+      // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
+      let rawV2;
+      try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
+      let v2Data = null;
+      if (rawV2) {
+        try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
       }
+      if (!v2Data) {
+        // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
+        let rawV1;
+        try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
+        if (rawV1) {
+          try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+        }
+      }
+      if (v2Data) v3Data = fillV3Defaults(v2Data);
     }
-    if (v2Data) {
-      data = fillV3Defaults(v2Data);
+    if (v3Data) {
+      data = fillV4Defaults(v3Data);
       needsResave = true;
     }
   }
@@ -119,12 +151,15 @@ function loadGame() {
     milestonesShown: data.milestonesShown || {},
     inventory: data.inventory || defaultInventory(),
     identity: Object.assign(defaultIdentity(), data.identity || {}),
+    gems: Math.max(0, data.gems || 0),
+    missionIndex: Math.max(0, data.missionIndex || 0),
+    missionProgress: Math.max(0, data.missionProgress || 0),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
   });
   if (needsResave) {
-    saveGame(); // เขียนเป็น v3 ทันทีหลัง migrate สำเร็จ
+    saveGame(); // เขียนเป็น v4 ทันทีหลัง migrate สำเร็จ
     keysToClean.forEach(key => { try { localStorage.removeItem(key); } catch (e) { /* ไม่เป็นไรถ้าลบไม่ได้ */ } });
   }
 }

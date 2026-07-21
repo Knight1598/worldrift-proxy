@@ -15,4 +15,8 @@ const EVENTS = {
   FEVER_ENDED:       'fever:ended',        // tickFever() เมื่อหมดเวลา
   MATERIAL_CONSUMED:  'material:consumed',  // consumeMaterials() — { material, qty, remaining }
   MATERIAL_RESTOCKED: 'material:restocked', // tickMaterialRegen() — { material, stock }
+  ORDER_SERVED:       'order:served',       // pickupCoin() — {} (นับ order ที่เสิร์ฟจบสมบูรณ์ ใช้กับ Order Missions)
+  MISSION_COMPLETED:  'mission:completed',  // tickMissionProgress() — { missionIndex, reward }
+  BUFF_ROLLED:        'buff:rolled',        // rollBuff() — { buff }
+  BUFF_ENDED:         'buff:ended',         // tickBuffs() เมื่อ buff แบบ duration หมดเวลา
 };

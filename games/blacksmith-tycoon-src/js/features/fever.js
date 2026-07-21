@@ -7,7 +7,8 @@ function isFeverActive() {
 }
 function addFeverProgress(amount) {
   if (feverState.active) return; // ระหว่าง Fever ไม่ต้องสะสมซ้ำ (เต็มแล้วรอใช้ให้หมดก่อน)
-  feverState.progress = Math.min(1, feverState.progress + amount);
+  const boosted = isBuffActive('fever_fill_boost') ? amount * 2 : amount; // บัพ "ไฟลุก"
+  feverState.progress = Math.min(1, feverState.progress + boosted);
   renderFeverBar();
 }
 function activateFever() {

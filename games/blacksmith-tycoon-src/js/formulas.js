@@ -7,7 +7,8 @@ function getUpgradeType(key) { return UPGRADE_TYPES.find(u => u.key === key); }
 function getUpgradeCost(key) {
   const type = getUpgradeType(key);
   const level = player.upgradeLevels[key];
-  return Math.ceil(getStage().baseRevenue * type.baseCostMult * Math.pow(UPGRADE_COST_GROWTH, level));
+  const base = getStage().baseRevenue * type.baseCostMult * Math.pow(UPGRADE_COST_GROWTH, level);
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
 }
 
 function getRevenuePerSale() {
@@ -26,26 +27,37 @@ function getCraftDurationMs() {
 function getMoveSpeedPxPerSec() {
   const level = player.upgradeLevels.speed;
   const bonus = level * SPEED_MOVE_BONUS_PX * getMilestoneMultiplier(level);
-  const base = Math.min(MAX_MOVE_SPEED_PX, BASE_MOVE_SPEED_PX + bonus);
+  let base = Math.min(MAX_MOVE_SPEED_PX, BASE_MOVE_SPEED_PX + bonus);
+  if (isBuffActive('speed_boost')) base *= 1.5; // บัพ "เท้าไฟ"
   return isFeverActive() ? base * FEVER_SPEED_MULT : base; // Fever Mode: 2 เท่าความเร็วเดิน
 }
 
 function getSpawnIntervalMs() {
   const level = player.upgradeLevels.signage;
   const reduction = level * SIGNAGE_SPAWN_MS_REDUCTION * getMilestoneMultiplier(level);
-  return Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - reduction);
+  let ms = Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - reduction);
+  if (isBuffActive('signage_boost')) ms = Math.max(MIN_SPAWN_INTERVAL_MS, ms * 0.7); // บัพ "ป้ายเรืองแสง"
+  return ms;
 }
 
 function getMaxQueueSize() {
   const level = player.upgradeLevels.signage;
   const bonus = level * SIGNAGE_QUEUE_BONUS * getMilestoneMultiplier(level);
-  return Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus));
+  let size = Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus));
+  if (isBuffActive('signage_boost')) size += 2; // บัพ "ป้ายเรืองแสง"
+  return size;
 }
 
 function getTipChance() {
   const level = player.upgradeLevels.decor;
-  const chance = level * DECOR_LEVEL_TIP_CHANCE * getMilestoneMultiplier(level);
+  let chance = level * DECOR_LEVEL_TIP_CHANCE * getMilestoneMultiplier(level);
+  if (isBuffActive('tip_boost')) chance *= 2; // บัพ "มือทิป"
   return Math.min(MAX_TIP_CHANCE, chance);
+}
+
+// โอกาสเจอลูกค้า VIP ตอนเกิดใหม่ — แยกเป็นฟังก์ชันแทนใช้ VIP_CHANCE คงที่ตรงๆ เพื่อให้บัพ "แม่เหล็ก VIP" มีผลได้
+function getVipChance() {
+  return VIP_CHANCE * (isBuffActive('vip_magnet') ? 3 : 1);
 }
 
 function isStageMaxed() {
@@ -63,11 +75,13 @@ function getStageProgressCount() {
 function getWorkerCount() { return 1 + player.staffCount; }
 
 function getHireHelperCost() {
-  return Math.ceil(getStage().baseRevenue * HIRE_HELPER_BASE_COST_MULT * Math.pow(HIRE_HELPER_COST_GROWTH, player.staffCount));
+  const base = getStage().baseRevenue * HIRE_HELPER_BASE_COST_MULT * Math.pow(HIRE_HELPER_COST_GROWTH, player.staffCount);
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
 }
 
 function getVaultUpgradeCost() {
-  return Math.ceil(VAULT_BASE_COST * Math.pow(VAULT_COST_GROWTH, player.vaultLevel));
+  const base = VAULT_BASE_COST * Math.pow(VAULT_COST_GROWTH, player.vaultLevel);
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
 }
 
 function getOfflineMaxHours() {

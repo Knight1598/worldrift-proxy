@@ -117,6 +117,22 @@
     100% { transform: scale(1); }
   }
 
+  /* กอง Gold + Gem ซ้อนกันแนวตั้งเป็นกลุ่มเดียว ให้ hud-bar ยังจัด space-between 3 ช่องเท่าเดิม (กลุ่มเงิน/ชื่อเกม/ปุ่มตั้งค่า) */
+  .hud-currency-group { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+  .gem-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(0,0,0,0.55);
+    border: 2px solid #6a4fc9;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.65rem;
+    font-weight: bold;
+    color: #c9a8ff;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+  }
+
   .btn-tertiary {
     width: 30px; height: 30px;
     border-radius: 4px;
@@ -689,4 +705,16 @@
     0%   { transform: translateX(-50%) scale(0.7); opacity: 0.3; }
     60%  { transform: translateX(-50%) scale(1.1); opacity: 1; }
     100% { transform: translateX(-50%) scale(1); }
+  }
+
+  /* ===== Buff Roll (สุ่มบัพติดตัวด้วยเพชร) — reuse .upgrade-card เดิม เพิ่มแค่ highlight ตอนมีบัพ active ===== */
+  .buff-panel { margin-bottom: 4px; }
+  .upgrade-card--buff-active {
+    border-color: var(--accent-gold-dark);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 10px 2px rgba(255,215,106,0.5);
+    animation: buffActivePulse 1.2s ease-in-out infinite;
+  }
+  @keyframes buffActivePulse {
+    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 10px 2px rgba(255,215,106,0.5); }
+    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 16px 4px rgba(255,215,106,0.75); }
   }

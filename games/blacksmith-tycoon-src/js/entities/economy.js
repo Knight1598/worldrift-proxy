@@ -40,6 +40,8 @@ function pickupCoin(coin, worker) {
     coin.tip > 0 ? 'tip' : 'gold'
   );
   player.stats.totalCustomersServed += 1;
+  // ยิง event แทนให้ไฟล์นี้ต้องรู้จัก Order Missions เอง — systems/missions.js subscribe เอง
+  GameEvents.emit(EVENTS.ORDER_SERVED, {});
   startCoinFlight(coin);
 }
 

@@ -125,7 +125,52 @@ const MATERIALS = [
 const MATERIAL_CAPACITY = 20;
 const MATERIAL_REGEN_PER_SEC = 0.5; // เติมคลังอัตโนมัติแบบพาสซีฟ ไม่ต้องมีปุ่มซื้อเพิ่มในสโคปนี้
 
-const SAVE_KEY = 'blacksmithTycoonSave_v3';
+// ===== Order Missions — ภารกิจสะสมจำนวนออเดอร์ที่ "เสิร์ฟสำเร็จ" (นับตั้งแต่ภารกิจก่อนหน้าจบ ไม่ใช่สะสมทั้งเกม)
+// ให้รางวัลเป็นเพชร ใช้สูตร growth แบบเดียวกับที่ใช้ทั่วทั้งเกม (cost/milestone) แทนการลิสต์ค่าคงที่ตายตัว =====
+const ORDER_MISSION_BASE_TARGET = 8;      // ภารกิจแรกต้องเสิร์ฟ 8 ออเดอร์
+const ORDER_MISSION_TARGET_GROWTH = 1.35; // แต่ละภารกิจถัดไปต้องเสิร์ฟมากขึ้น
+const ORDER_MISSION_BASE_REWARD = 3;      // เพชรรางวัลภารกิจแรก
+const ORDER_MISSION_REWARD_GROWTH = 1.15;
+
+// ===== Buff Roll (สุ่มบัพติดตัวด้วยเพชร) — ช่วยเร่งจบด่านเร็วขึ้น ไม่ใช่อัปเกรดถาวร =====
+// buff แบบ duration ใช้งานได้ทีละ 1 ตัว (สุ่มใหม่ทับของเดิม) ส่วนแบบ instant ใช้ผลทันทีครั้งเดียวไม่ค้าง state
+const BUFF_ROLL_COST_GEMS = 3;
+const BUFF_DURATION_MS = 60000; // buff แบบ duration ทั้งหมดอยู่ได้ 60 วินาทีเท่ากัน (เข้าใจง่าย ไม่ต้องจำหลายเลข)
+const BUFF_DEFS = [
+  // ----- แบบมีระยะเวลา (kind: 'duration') -----
+  { key: 'instant_craft',    kind: 'duration', weight: 15, icon: '⚡', name: 'ช่างไว',
+    desc: '30% โอกาสคราฟต์เสร็จทันทีต่อออเดอร์', chance: 0.30 },
+  { key: 'double_gold',      kind: 'duration', weight: 15, icon: '💰', name: 'เงินสองเท่า',
+    desc: '30% โอกาสได้เงิน x2 ต่อออเดอร์', chance: 0.30, mult: 2 },
+  { key: 'crit_gold',        kind: 'duration', weight: 6,  icon: '🍀', name: 'โชคกาชา',
+    desc: '10% โอกาสได้เงิน x5 ต่อออเดอร์', chance: 0.10, mult: 5 },
+  { key: 'speed_boost',      kind: 'duration', weight: 15, icon: '👟', name: 'เท้าไฟ',
+    desc: 'ความเร็วเดิน +50%' },
+  { key: 'tip_boost',        kind: 'duration', weight: 12, icon: '✨', name: 'มือทิป',
+    desc: 'โอกาสได้ทิป x2' },
+  { key: 'vip_magnet',       kind: 'duration', weight: 8,  icon: '👑', name: 'แม่เหล็ก VIP',
+    desc: 'โอกาสเจอลูกค้า VIP x3' },
+  { key: 'signage_boost',    kind: 'duration', weight: 12, icon: '📣', name: 'ป้ายเรืองแสง',
+    desc: 'ลูกค้ามาถี่ขึ้น + รับคิวเพิ่ม' },
+  { key: 'discount',         kind: 'duration', weight: 10, icon: '🏷️', name: 'ลดกระหน่ำ',
+    desc: 'ราคาซื้ออัปเกรด/จ้างลูกมือ/คลังออฟไลน์ลด 20%' },
+  { key: 'fever_fill_boost', kind: 'duration', weight: 10, icon: '🔥', name: 'ไฟลุก',
+    desc: 'สะสมหลอด Fever Mode ไวขึ้น 2 เท่า' },
+  { key: 'regen_boost',      kind: 'duration', weight: 10, icon: '📦', name: 'คลังไว',
+    desc: 'วัตถุดิบเติมคลังไวขึ้น 2 เท่า' },
+  // ----- แบบผลทันที ครั้งเดียว (kind: 'instant') -----
+  { key: 'instant_restock',  kind: 'instant', weight: 8, icon: '🎁', name: 'เติมเต็มทันที',
+    desc: 'เติมวัตถุดิบทุกชนิดเต็มคลังทันที' },
+  { key: 'goblin_now',       kind: 'instant', weight: 6, icon: '👺', name: 'เรียกโกบลิน',
+    desc: 'เรียกโกลเด้นโกบลินออกมาทันที' },
+  { key: 'fever_now',        kind: 'instant', weight: 5, icon: '🌟', name: 'ฟีเวอร์ทันใจ',
+    desc: 'เติมหลอด Fever Mode เต็มทันที' },
+  { key: 'gold_burst',       kind: 'instant', weight: 8, icon: '💎', name: 'กระเป๋าตุง',
+    desc: 'ได้ Gold ก้อนโตทันที (อิงรายได้ต่อนาทีปัจจุบัน)' },
+];
+
+const SAVE_KEY = 'blacksmithTycoonSave_v4';
+const SAVE_KEY_V3 = 'blacksmithTycoonSave_v3'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V2 = 'blacksmithTycoonSave_v2'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V1 = 'blacksmithTycoonSave_v1'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 

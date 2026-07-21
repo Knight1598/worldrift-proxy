@@ -103,6 +103,10 @@ function startCrafting(w) {
   w.state = 'CRAFTING';
   w.craftElapsed = 0;
   w.sparkElapsed = 0;
+  // บัพ "ช่างไว" — สุ่มโอกาสให้ออเดอร์นี้เสร็จทันทีในติ๊กถัดไป (ตั้ง craftElapsed ให้เกิน dur แน่นอนเลย)
+  if (isBuffActive('instant_craft') && Math.random() < getBuffDef('instant_craft').chance) {
+    w.craftElapsed = BASE_CRAFT_MS * 10;
+  }
   showCraftBar(w);
   w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
 }
@@ -115,8 +119,12 @@ function tickWorkers(dt) {
       if (cust) {
         cust.state = 'ORDER_ACTIVE';
         cust.orderIcon = getProductIcon();
+        // บัพ "เงินสองเท่า"/"โชคกาชา" — สุ่มโอกาสคูณเงินออเดอร์นี้เพิ่ม (มีได้ทีละบัพเดียวอยู่แล้ว เลยไม่มีทางชนกัน)
+        let buffGoldMult = 1;
+        if (isBuffActive('double_gold') && Math.random() < getBuffDef('double_gold').chance) buffGoldMult = getBuffDef('double_gold').mult;
+        else if (isBuffActive('crit_gold') && Math.random() < getBuffDef('crit_gold').chance) buffGoldMult = getBuffDef('crit_gold').mult;
         // VIP: จ่าย 10 เท่าของราคาปกติ + ทิปการันตี 100% ของยอดออเดอร์ (ลูกค้าทั่วไปสุ่มทิปตามอัปเกรด "ตกแต่งร้าน")
-        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1);
+        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult;
         cust.orderTip = cust.isVIP
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);

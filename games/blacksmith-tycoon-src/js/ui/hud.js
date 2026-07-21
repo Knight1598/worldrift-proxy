@@ -1,8 +1,11 @@
 /* =====================================================================
-   HUD — กล่อง Gold บนสุด + แถบ Combo/Fever Mode
+   HUD — กล่อง Gold + Gem บนสุด + แถบ Combo/Fever Mode
    ===================================================================== */
 function renderGold() {
   document.getElementById('goldValue').textContent = Math.floor(player.gold).toLocaleString();
+}
+function renderGems() {
+  document.getElementById('gemValue').textContent = player.gems.toLocaleString();
 }
 function bumpGoldCounter() {
   const el = document.querySelector('.gold-counter');
@@ -32,3 +35,5 @@ GameEvents.on(EVENTS.STAFF_HIRED, () => renderGold());
 GameEvents.on(EVENTS.VAULT_UPGRADED, () => renderGold());
 GameEvents.on(EVENTS.FEVER_ACTIVATED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_ENDED, () => renderFeverBar());
+GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderGems());
+GameEvents.on(EVENTS.BUFF_ROLLED, () => renderGems());

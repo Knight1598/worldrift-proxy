@@ -24,7 +24,10 @@
   </button>
 
   <div class="hud-bar">
-    <div class="gold-counter"><img class="coin-icon" src="../assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
+    <div class="hud-currency-group">
+      <div class="gold-counter"><img class="coin-icon" src="../assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
+      <div class="gem-counter" id="gemCounter" title="เพชร — ได้จาก Order Missions ใช้สุ่มบัพ">💎<span id="gemValue" class="pixel-num">0</span></div>
+    </div>
     <div class="hud-title">⚒️ Blacksmith Tycoon</div>
     <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
   </div>
@@ -43,6 +46,9 @@
       <div class="stage-progress-dots" id="stageProgressDots"></div>
     </div>
   </div>
+
+  <div class="section-label">สุ่มบัพ (ใช้เพชร ช่วยเร่งจบด่านเร็วขึ้น)</div>
+  <div class="buff-panel" id="buffPanel"></div>
 
   <div class="upgrade-list" id="upgradeList"></div>
 
@@ -120,6 +126,8 @@
 <script src="js/features/goblin.js"></script>
 <script src="js/systems/income-tracker.js"></script>
 <script src="js/systems/leaderboard.js"></script>
+<script src="js/systems/missions.js"></script>
+<script src="js/systems/buffs.js"></script>
 <script src="js/progression.js"></script>
 <script src="js/ui/floating-text.js"></script>
 <script src="js/ui/hud.js"></script>
@@ -131,6 +139,7 @@
 <script src="js/ui/settings-modal.js"></script>
 <script src="js/ui/stats-footer.js"></script>
 <script src="js/ui/material-stock.js"></script>
+<script src="js/ui/buff-roll.js"></script>
 <script src="js/render.js"></script>
 <script src="js/main.js"></script>
 </body>

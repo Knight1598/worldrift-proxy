@@ -15,7 +15,7 @@ function spawnCustomerEntity() {
   const slotIndex = getQueueCustomers().length;
   const id = 'cust' + (nextEntityId++);
   const el = document.createElement('div');
-  const isVIP = Math.random() < VIP_CHANCE; // Juicy Feature: ลูกค้า VIP — โอกาส 5%
+  const isVIP = Math.random() < getVipChance(); // Juicy Feature: ลูกค้า VIP — โอกาส 5% ปกติ (บัพ "แม่เหล็ก VIP" คูณ 3)
   el.className = 'customer' + (isVIP ? ' vip' : '');
   el.innerHTML =
     '<div class="customer-patience-bg"><div class="customer-patience-fill"></div></div>' +

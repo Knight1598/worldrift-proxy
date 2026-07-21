@@ -125,6 +125,22 @@
     100% { transform: scale(1); }
   }
 
+  /* กอง Gold + Gem ซ้อนกันแนวตั้งเป็นกลุ่มเดียว ให้ hud-bar ยังจัด space-between 3 ช่องเท่าเดิม (กลุ่มเงิน/ชื่อเกม/ปุ่มตั้งค่า) */
+  .hud-currency-group { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; }
+  .gem-counter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(0,0,0,0.55);
+    border: 2px solid #6a4fc9;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.65rem;
+    font-weight: bold;
+    color: #c9a8ff;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+  }
+
   .btn-tertiary {
     width: 30px; height: 30px;
     border-radius: 4px;
@@ -698,6 +714,18 @@
     60%  { transform: translateX(-50%) scale(1.1); opacity: 1; }
     100% { transform: translateX(-50%) scale(1); }
   }
+
+  /* ===== Buff Roll (สุ่มบัพติดตัวด้วยเพชร) — reuse .upgrade-card เดิม เพิ่มแค่ highlight ตอนมีบัพ active ===== */
+  .buff-panel { margin-bottom: 4px; }
+  .upgrade-card--buff-active {
+    border-color: var(--accent-gold-dark);
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 10px 2px rgba(255,215,106,0.5);
+    animation: buffActivePulse 1.2s ease-in-out infinite;
+  }
+  @keyframes buffActivePulse {
+    0%, 100% { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 10px 2px rgba(255,215,106,0.5); }
+    50%      { box-shadow: 3px 3px 0 rgba(0,0,0,0.5), 0 0 16px 4px rgba(255,215,106,0.75); }
+  }
 </style>
 </head>
 <body>
@@ -718,7 +746,10 @@
   </button>
 
   <div class="hud-bar">
-    <div class="gold-counter"><img class="coin-icon" src="assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
+    <div class="hud-currency-group">
+      <div class="gold-counter"><img class="coin-icon" src="assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
+      <div class="gem-counter" id="gemCounter" title="เพชร — ได้จาก Order Missions ใช้สุ่มบัพ">💎<span id="gemValue" class="pixel-num">0</span></div>
+    </div>
     <div class="hud-title">⚒️ Blacksmith Tycoon</div>
     <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
   </div>
@@ -737,6 +768,9 @@
       <div class="stage-progress-dots" id="stageProgressDots"></div>
     </div>
   </div>
+
+  <div class="section-label">สุ่มบัพ (ใช้เพชร ช่วยเร่งจบด่านเร็วขึ้น)</div>
+  <div class="buff-panel" id="buffPanel"></div>
 
   <div class="upgrade-list" id="upgradeList"></div>
 
@@ -842,6 +876,10 @@ const EVENTS = {
   FEVER_ENDED:       'fever:ended',        // tickFever() เมื่อหมดเวลา
   MATERIAL_CONSUMED:  'material:consumed',  // consumeMaterials() — { material, qty, remaining }
   MATERIAL_RESTOCKED: 'material:restocked', // tickMaterialRegen() — { material, stock }
+  ORDER_SERVED:       'order:served',       // pickupCoin() — {} (นับ order ที่เสิร์ฟจบสมบูรณ์ ใช้กับ Order Missions)
+  MISSION_COMPLETED:  'mission:completed',  // tickMissionProgress() — { missionIndex, reward }
+  BUFF_ROLLED:        'buff:rolled',        // rollBuff() — { buff }
+  BUFF_ENDED:         'buff:ended',         // tickBuffs() เมื่อ buff แบบ duration หมดเวลา
 };
 </script>
 <script>
@@ -972,7 +1010,52 @@ const MATERIALS = [
 const MATERIAL_CAPACITY = 20;
 const MATERIAL_REGEN_PER_SEC = 0.5; // เติมคลังอัตโนมัติแบบพาสซีฟ ไม่ต้องมีปุ่มซื้อเพิ่มในสโคปนี้
 
-const SAVE_KEY = 'blacksmithTycoonSave_v3';
+// ===== Order Missions — ภารกิจสะสมจำนวนออเดอร์ที่ "เสิร์ฟสำเร็จ" (นับตั้งแต่ภารกิจก่อนหน้าจบ ไม่ใช่สะสมทั้งเกม)
+// ให้รางวัลเป็นเพชร ใช้สูตร growth แบบเดียวกับที่ใช้ทั่วทั้งเกม (cost/milestone) แทนการลิสต์ค่าคงที่ตายตัว =====
+const ORDER_MISSION_BASE_TARGET = 8;      // ภารกิจแรกต้องเสิร์ฟ 8 ออเดอร์
+const ORDER_MISSION_TARGET_GROWTH = 1.35; // แต่ละภารกิจถัดไปต้องเสิร์ฟมากขึ้น
+const ORDER_MISSION_BASE_REWARD = 3;      // เพชรรางวัลภารกิจแรก
+const ORDER_MISSION_REWARD_GROWTH = 1.15;
+
+// ===== Buff Roll (สุ่มบัพติดตัวด้วยเพชร) — ช่วยเร่งจบด่านเร็วขึ้น ไม่ใช่อัปเกรดถาวร =====
+// buff แบบ duration ใช้งานได้ทีละ 1 ตัว (สุ่มใหม่ทับของเดิม) ส่วนแบบ instant ใช้ผลทันทีครั้งเดียวไม่ค้าง state
+const BUFF_ROLL_COST_GEMS = 3;
+const BUFF_DURATION_MS = 60000; // buff แบบ duration ทั้งหมดอยู่ได้ 60 วินาทีเท่ากัน (เข้าใจง่าย ไม่ต้องจำหลายเลข)
+const BUFF_DEFS = [
+  // ----- แบบมีระยะเวลา (kind: 'duration') -----
+  { key: 'instant_craft',    kind: 'duration', weight: 15, icon: '⚡', name: 'ช่างไว',
+    desc: '30% โอกาสคราฟต์เสร็จทันทีต่อออเดอร์', chance: 0.30 },
+  { key: 'double_gold',      kind: 'duration', weight: 15, icon: '💰', name: 'เงินสองเท่า',
+    desc: '30% โอกาสได้เงิน x2 ต่อออเดอร์', chance: 0.30, mult: 2 },
+  { key: 'crit_gold',        kind: 'duration', weight: 6,  icon: '🍀', name: 'โชคกาชา',
+    desc: '10% โอกาสได้เงิน x5 ต่อออเดอร์', chance: 0.10, mult: 5 },
+  { key: 'speed_boost',      kind: 'duration', weight: 15, icon: '👟', name: 'เท้าไฟ',
+    desc: 'ความเร็วเดิน +50%' },
+  { key: 'tip_boost',        kind: 'duration', weight: 12, icon: '✨', name: 'มือทิป',
+    desc: 'โอกาสได้ทิป x2' },
+  { key: 'vip_magnet',       kind: 'duration', weight: 8,  icon: '👑', name: 'แม่เหล็ก VIP',
+    desc: 'โอกาสเจอลูกค้า VIP x3' },
+  { key: 'signage_boost',    kind: 'duration', weight: 12, icon: '📣', name: 'ป้ายเรืองแสง',
+    desc: 'ลูกค้ามาถี่ขึ้น + รับคิวเพิ่ม' },
+  { key: 'discount',         kind: 'duration', weight: 10, icon: '🏷️', name: 'ลดกระหน่ำ',
+    desc: 'ราคาซื้ออัปเกรด/จ้างลูกมือ/คลังออฟไลน์ลด 20%' },
+  { key: 'fever_fill_boost', kind: 'duration', weight: 10, icon: '🔥', name: 'ไฟลุก',
+    desc: 'สะสมหลอด Fever Mode ไวขึ้น 2 เท่า' },
+  { key: 'regen_boost',      kind: 'duration', weight: 10, icon: '📦', name: 'คลังไว',
+    desc: 'วัตถุดิบเติมคลังไวขึ้น 2 เท่า' },
+  // ----- แบบผลทันที ครั้งเดียว (kind: 'instant') -----
+  { key: 'instant_restock',  kind: 'instant', weight: 8, icon: '🎁', name: 'เติมเต็มทันที',
+    desc: 'เติมวัตถุดิบทุกชนิดเต็มคลังทันที' },
+  { key: 'goblin_now',       kind: 'instant', weight: 6, icon: '👺', name: 'เรียกโกบลิน',
+    desc: 'เรียกโกลเด้นโกบลินออกมาทันที' },
+  { key: 'fever_now',        kind: 'instant', weight: 5, icon: '🌟', name: 'ฟีเวอร์ทันใจ',
+    desc: 'เติมหลอด Fever Mode เต็มทันที' },
+  { key: 'gold_burst',       kind: 'instant', weight: 8, icon: '💎', name: 'กระเป๋าตุง',
+    desc: 'ได้ Gold ก้อนโตทันที (อิงรายได้ต่อนาทีปัจจุบัน)' },
+];
+
+const SAVE_KEY = 'blacksmithTycoonSave_v4';
+const SAVE_KEY_V3 = 'blacksmithTycoonSave_v3'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V2 = 'blacksmithTycoonSave_v2'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 const SAVE_KEY_V1 = 'blacksmithTycoonSave_v1'; // เก็บไว้เป็นแหล่งข้อมูล migrate เท่านั้น ไม่เขียนทับอีก
 
@@ -1001,6 +1084,9 @@ let player = {
   milestonesShown: {}, // { speed: [10, 25], signage: [10], ... } กันป๊อปอัพ Milestone เด้งซ้ำตอนโหลดเซฟ
   inventory: defaultInventory(), // วัตถุดิบที่ต้องเบิกก่อนคราฟต์ (ดู entities/materials.js)
   identity: defaultIdentity(),
+  gems: 0,             // เพชร ได้จาก Order Missions ใช้สุ่มบัพ (ดู systems/missions.js, systems/buffs.js)
+  missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
+  missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
@@ -1009,13 +1095,17 @@ let player = {
 // Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
 let feverState = { progress: 0, active: false, endsAt: 0 };
 
+// Active Buff ก็เป็น session state ล้วนๆ เหมือนกัน (ตั้งใจไม่ persist — สุ่มใหม่ได้ทุกครั้งที่เข้าเกม ไม่ต้องมี
+// กรณี edge-case บัพค้างข้ามเซสชันให้ดูแล)
+let activeBuff = null; // null หรือ { key, endsAt } (ดู systems/buffs.js)
+
 let audioCtx = null;
 
 /* =====================================================================
-   Save / Load — SAVE_KEY เป็น v3 (inventory/identity ใหม่ สำหรับ Materials + Leaderboard)
-   chain การ migrate: v3 (ตรงๆ) -> v2 (ตรงๆ + เติม default ของ v3) -> v1 (แปลงเป็น v2 ก่อน แล้วเติม default
-   ของ v3 อีกที) กันผู้เล่นเก่าทุกรุ่นความคืบหน้าไม่หาย
-   worker/customer/coin/feverState เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
+   Save / Load — SAVE_KEY เป็น v4 (gems/missionIndex/missionProgress ใหม่ สำหรับ Order Missions + Buff Roll)
+   chain การ migrate: v4 (ตรงๆ) -> v3 (ตรงๆ + เติม default v4) -> v2 (ตรงๆ + เติม default v3 แล้วต่อ v4)
+   -> v1 (แปลงเป็น v2 ก่อน แล้วเติม default v3 ต่อด้วย v4) กันผู้เล่นเก่าทุกรุ่นความคืบหน้าไม่หาย
+   worker/customer/coin/feverState/activeBuff เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
    ===================================================================== */
 function saveGame() {
   const data = {
@@ -1027,6 +1117,9 @@ function saveGame() {
     milestonesShown: player.milestonesShown,
     inventory: player.inventory,
     identity: player.identity,
+    gems: player.gems,
+    missionIndex: player.missionIndex,
+    missionProgress: player.missionProgress,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -1035,8 +1128,8 @@ function saveGame() {
 }
 
 // แปลงเซฟรูปแบบเก่า (v1: staffHired เป็น true/false) ให้เป็นรูปแบบ v2 (staffCount เป็นตัวเลข) — เรียกเฉพาะตอน
-// หาเซฟ v2/v3 ไม่เจอเท่านั้น ฟิลด์ใหม่ที่ v1 ไม่มี (vaultLevel/milestonesShown) ใส่ค่าเริ่มต้นให้ครบ
-// (inventory/identity ของ v3 ยังไม่ต้องเติมตรงนี้ -- fillV3Defaults ด้านล่างจะเติมให้อีกทีไม่ว่าจะมาจาก v1 หรือ v2)
+// หาเซฟ v2/v3/v4 ไม่เจอเท่านั้น ฟิลด์ใหม่ที่ v1 ไม่มี (vaultLevel/milestonesShown) ใส่ค่าเริ่มต้นให้ครบ
+// (ฟิลด์ใหม่ของ v3/v4 ยังไม่ต้องเติมตรงนี้ -- fillV3Defaults/fillV4Defaults ด้านล่างจะเติมให้อีกทีไม่ว่าจะมาจาก v1 หรือ v2)
 function migrateFromV1(rawV1) {
   const data = JSON.parse(rawV1);
   return {
@@ -1061,31 +1154,53 @@ function fillV3Defaults(v2Data) {
   });
 }
 
+// เติมฟิลด์ใหม่ของ v4 (gems/missionIndex/missionProgress) ให้ข้อมูลที่เป็นทรง v3 อยู่แล้ว ไม่ว่าจะมาจาก key v3
+// ตรงๆ หรือเพิ่ง fillV3Defaults() มา (จาก v2/v1)
+function fillV4Defaults(v3Data) {
+  return Object.assign({}, v3Data, {
+    gems: 0,
+    missionIndex: 0,
+    missionProgress: 0,
+  });
+}
+
 function loadGame() {
   let raw;
   try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
   let data = null;
   if (raw) {
-    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v3 เสีย ลอง fallback ลงไปต่อ */ }
+    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v4 เสีย ลอง fallback ลงไปต่อ */ }
   }
   let needsResave = false;
   const keysToClean = [];
   if (!data) {
-    let rawV2;
-    try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
-    let v2Data = null;
-    if (rawV2) {
-      try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
+    // ไม่เจอ v4 -- ลอง v3 ตรงๆ ก่อน
+    let rawV3;
+    try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
+    let v3Data = null;
+    if (rawV3) {
+      try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
     }
-    if (!v2Data) {
-      let rawV1;
-      try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
-      if (rawV1) {
-        try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+    if (!v3Data) {
+      // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
+      let rawV2;
+      try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
+      let v2Data = null;
+      if (rawV2) {
+        try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
       }
+      if (!v2Data) {
+        // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
+        let rawV1;
+        try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
+        if (rawV1) {
+          try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+        }
+      }
+      if (v2Data) v3Data = fillV3Defaults(v2Data);
     }
-    if (v2Data) {
-      data = fillV3Defaults(v2Data);
+    if (v3Data) {
+      data = fillV4Defaults(v3Data);
       needsResave = true;
     }
   }
@@ -1099,12 +1214,15 @@ function loadGame() {
     milestonesShown: data.milestonesShown || {},
     inventory: data.inventory || defaultInventory(),
     identity: Object.assign(defaultIdentity(), data.identity || {}),
+    gems: Math.max(0, data.gems || 0),
+    missionIndex: Math.max(0, data.missionIndex || 0),
+    missionProgress: Math.max(0, data.missionProgress || 0),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
   });
   if (needsResave) {
-    saveGame(); // เขียนเป็น v3 ทันทีหลัง migrate สำเร็จ
+    saveGame(); // เขียนเป็น v4 ทันทีหลัง migrate สำเร็จ
     keysToClean.forEach(key => { try { localStorage.removeItem(key); } catch (e) { /* ไม่เป็นไรถ้าลบไม่ได้ */ } });
   }
 }
@@ -1119,7 +1237,8 @@ function getUpgradeType(key) { return UPGRADE_TYPES.find(u => u.key === key); }
 function getUpgradeCost(key) {
   const type = getUpgradeType(key);
   const level = player.upgradeLevels[key];
-  return Math.ceil(getStage().baseRevenue * type.baseCostMult * Math.pow(UPGRADE_COST_GROWTH, level));
+  const base = getStage().baseRevenue * type.baseCostMult * Math.pow(UPGRADE_COST_GROWTH, level);
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
 }
 
 function getRevenuePerSale() {
@@ -1138,26 +1257,37 @@ function getCraftDurationMs() {
 function getMoveSpeedPxPerSec() {
   const level = player.upgradeLevels.speed;
   const bonus = level * SPEED_MOVE_BONUS_PX * getMilestoneMultiplier(level);
-  const base = Math.min(MAX_MOVE_SPEED_PX, BASE_MOVE_SPEED_PX + bonus);
+  let base = Math.min(MAX_MOVE_SPEED_PX, BASE_MOVE_SPEED_PX + bonus);
+  if (isBuffActive('speed_boost')) base *= 1.5; // บัพ "เท้าไฟ"
   return isFeverActive() ? base * FEVER_SPEED_MULT : base; // Fever Mode: 2 เท่าความเร็วเดิน
 }
 
 function getSpawnIntervalMs() {
   const level = player.upgradeLevels.signage;
   const reduction = level * SIGNAGE_SPAWN_MS_REDUCTION * getMilestoneMultiplier(level);
-  return Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - reduction);
+  let ms = Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - reduction);
+  if (isBuffActive('signage_boost')) ms = Math.max(MIN_SPAWN_INTERVAL_MS, ms * 0.7); // บัพ "ป้ายเรืองแสง"
+  return ms;
 }
 
 function getMaxQueueSize() {
   const level = player.upgradeLevels.signage;
   const bonus = level * SIGNAGE_QUEUE_BONUS * getMilestoneMultiplier(level);
-  return Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus));
+  let size = Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus));
+  if (isBuffActive('signage_boost')) size += 2; // บัพ "ป้ายเรืองแสง"
+  return size;
 }
 
 function getTipChance() {
   const level = player.upgradeLevels.decor;
-  const chance = level * DECOR_LEVEL_TIP_CHANCE * getMilestoneMultiplier(level);
+  let chance = level * DECOR_LEVEL_TIP_CHANCE * getMilestoneMultiplier(level);
+  if (isBuffActive('tip_boost')) chance *= 2; // บัพ "มือทิป"
   return Math.min(MAX_TIP_CHANCE, chance);
+}
+
+// โอกาสเจอลูกค้า VIP ตอนเกิดใหม่ — แยกเป็นฟังก์ชันแทนใช้ VIP_CHANCE คงที่ตรงๆ เพื่อให้บัพ "แม่เหล็ก VIP" มีผลได้
+function getVipChance() {
+  return VIP_CHANCE * (isBuffActive('vip_magnet') ? 3 : 1);
 }
 
 function isStageMaxed() {
@@ -1175,11 +1305,13 @@ function getStageProgressCount() {
 function getWorkerCount() { return 1 + player.staffCount; }
 
 function getHireHelperCost() {
-  return Math.ceil(getStage().baseRevenue * HIRE_HELPER_BASE_COST_MULT * Math.pow(HIRE_HELPER_COST_GROWTH, player.staffCount));
+  const base = getStage().baseRevenue * HIRE_HELPER_BASE_COST_MULT * Math.pow(HIRE_HELPER_COST_GROWTH, player.staffCount);
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
 }
 
 function getVaultUpgradeCost() {
-  return Math.ceil(VAULT_BASE_COST * Math.pow(VAULT_COST_GROWTH, player.vaultLevel));
+  const base = VAULT_BASE_COST * Math.pow(VAULT_COST_GROWTH, player.vaultLevel);
+  return Math.ceil(isBuffActive('discount') ? base * 0.8 : base);
 }
 
 function getOfflineMaxHours() {
@@ -1421,6 +1553,10 @@ function startCrafting(w) {
   w.state = 'CRAFTING';
   w.craftElapsed = 0;
   w.sparkElapsed = 0;
+  // บัพ "ช่างไว" — สุ่มโอกาสให้ออเดอร์นี้เสร็จทันทีในติ๊กถัดไป (ตั้ง craftElapsed ให้เกิน dur แน่นอนเลย)
+  if (isBuffActive('instant_craft') && Math.random() < getBuffDef('instant_craft').chance) {
+    w.craftElapsed = BASE_CRAFT_MS * 10;
+  }
   showCraftBar(w);
   w.el.classList.add('crafting'); // เริ่มท่าตีค้อน (squash/rotate loop ดู CSS .worker.crafting)
 }
@@ -1433,8 +1569,12 @@ function tickWorkers(dt) {
       if (cust) {
         cust.state = 'ORDER_ACTIVE';
         cust.orderIcon = getProductIcon();
+        // บัพ "เงินสองเท่า"/"โชคกาชา" — สุ่มโอกาสคูณเงินออเดอร์นี้เพิ่ม (มีได้ทีละบัพเดียวอยู่แล้ว เลยไม่มีทางชนกัน)
+        let buffGoldMult = 1;
+        if (isBuffActive('double_gold') && Math.random() < getBuffDef('double_gold').chance) buffGoldMult = getBuffDef('double_gold').mult;
+        else if (isBuffActive('crit_gold') && Math.random() < getBuffDef('crit_gold').chance) buffGoldMult = getBuffDef('crit_gold').mult;
         // VIP: จ่าย 10 เท่าของราคาปกติ + ทิปการันตี 100% ของยอดออเดอร์ (ลูกค้าทั่วไปสุ่มทิปตามอัปเกรด "ตกแต่งร้าน")
-        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1);
+        cust.orderRevenue = getRevenuePerSale() * (cust.isVIP ? VIP_REVENUE_MULT : 1) * buffGoldMult;
         cust.orderTip = cust.isVIP
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);
@@ -1541,7 +1681,7 @@ function spawnCustomerEntity() {
   const slotIndex = getQueueCustomers().length;
   const id = 'cust' + (nextEntityId++);
   const el = document.createElement('div');
-  const isVIP = Math.random() < VIP_CHANCE; // Juicy Feature: ลูกค้า VIP — โอกาส 5%
+  const isVIP = Math.random() < getVipChance(); // Juicy Feature: ลูกค้า VIP — โอกาส 5% ปกติ (บัพ "แม่เหล็ก VIP" คูณ 3)
   el.className = 'customer' + (isVIP ? ' vip' : '');
   el.innerHTML =
     '<div class="customer-patience-bg"><div class="customer-patience-fill"></div></div>' +
@@ -1655,6 +1795,8 @@ function pickupCoin(coin, worker) {
     coin.tip > 0 ? 'tip' : 'gold'
   );
   player.stats.totalCustomersServed += 1;
+  // ยิง event แทนให้ไฟล์นี้ต้องรู้จัก Order Missions เอง — systems/missions.js subscribe เอง
+  GameEvents.emit(EVENTS.ORDER_SERVED, {});
   startCoinFlight(coin);
 }
 
@@ -1724,10 +1866,11 @@ function consumeMaterials(recipe) {
 }
 
 function tickMaterialRegen(dt) {
+  const rate = MATERIAL_REGEN_PER_SEC * (isBuffActive('regen_boost') ? 2 : 1); // บัพ "คลังไว"
   MATERIALS.forEach(m => {
     const inv = player.inventory[m.key];
     if (inv.stock >= inv.capacity) return; // เต็มแล้วไม่ต้องทำอะไร กัน emit event เปล่าๆ ทุกเฟรม
-    inv.stock = Math.min(inv.capacity, inv.stock + MATERIAL_REGEN_PER_SEC * (dt / 1000));
+    inv.stock = Math.min(inv.capacity, inv.stock + rate * (dt / 1000));
     GameEvents.emit(EVENTS.MATERIAL_RESTOCKED, { material: m.key, stock: inv.stock });
   });
 }
@@ -1742,7 +1885,8 @@ function isFeverActive() {
 }
 function addFeverProgress(amount) {
   if (feverState.active) return; // ระหว่าง Fever ไม่ต้องสะสมซ้ำ (เต็มแล้วรอใช้ให้หมดก่อน)
-  feverState.progress = Math.min(1, feverState.progress + amount);
+  const boosted = isBuffActive('fever_fill_boost') ? amount * 2 : amount; // บัพ "ไฟลุก"
+  feverState.progress = Math.min(1, feverState.progress + boosted);
   renderFeverBar();
 }
 function activateFever() {
@@ -1897,6 +2041,96 @@ function buildLeaderboardPayload() {
 </script>
 <script>
 /* =====================================================================
+   Order Missions — ภารกิจสะสมออเดอร์ที่เสิร์ฟสำเร็จ (นับใหม่ทุกครั้งที่ภารกิจก่อนหน้าจบ ไม่ใช่สะสมทั้งเกม)
+   จบภารกิจแล้วได้เพชร เอาไปสุ่มบัพต่อที่ systems/buffs.js
+   ===================================================================== */
+function getMissionRequirement(index) {
+  return Math.round(ORDER_MISSION_BASE_TARGET * Math.pow(ORDER_MISSION_TARGET_GROWTH, index));
+}
+function getMissionReward(index) {
+  return Math.round(ORDER_MISSION_BASE_REWARD * Math.pow(ORDER_MISSION_REWARD_GROWTH, index));
+}
+
+function tickMissionProgress() {
+  player.missionProgress += 1;
+  const requirement = getMissionRequirement(player.missionIndex);
+  if (player.missionProgress >= requirement) {
+    const reward = getMissionReward(player.missionIndex);
+    player.missionProgress = 0;
+    player.missionIndex += 1;
+    player.gems += reward;
+    GameEvents.emit(EVENTS.MISSION_COMPLETED, { missionIndex: player.missionIndex, reward });
+    saveGame(); // เพชร/ความคืบหน้าภารกิจเปลี่ยน เก็บทันทีเหมือน progression อื่นๆ
+  }
+}
+
+GameEvents.on(EVENTS.ORDER_SERVED, () => tickMissionProgress());
+</script>
+<script>
+/* =====================================================================
+   Buff Roll (สุ่มบัพติดตัวด้วยเพชร) — ช่วยเร่งจบด่านเร็วขึ้น ไม่ใช่อัปเกรดถาวร
+   บัพแบบ duration ใช้ได้ทีละ 1 ตัวเท่านั้น (สุ่มใหม่ทับของเดิม) ส่วนแบบ instant ใช้ผลทันทีครั้งเดียว
+   activeBuff เป็น transient state ล้วนๆ (ประกาศไว้ที่ state.js เหมือน feverState) ไม่ persist ผ่าน save
+   ===================================================================== */
+function getBuffDef(key) {
+  return BUFF_DEFS.find(b => b.key === key);
+}
+
+function isBuffActive(key) {
+  return !!(activeBuff && activeBuff.key === key);
+}
+
+function pickWeightedBuff() {
+  const totalWeight = BUFF_DEFS.reduce((sum, b) => sum + b.weight, 0);
+  let r = Math.random() * totalWeight;
+  for (const b of BUFF_DEFS) {
+    r -= b.weight;
+    if (r <= 0) return b;
+  }
+  return BUFF_DEFS[BUFF_DEFS.length - 1]; // กันพลาดจาก floating point เศษเล็กน้อย
+}
+
+function rollBuff() {
+  if (player.gems < BUFF_ROLL_COST_GEMS) return null;
+  player.gems -= BUFF_ROLL_COST_GEMS;
+  const buff = pickWeightedBuff();
+  if (buff.kind === 'instant') {
+    applyInstantBuff(buff);
+  } else {
+    activeBuff = { key: buff.key, endsAt: performance.now() + BUFF_DURATION_MS };
+  }
+  GameEvents.emit(EVENTS.BUFF_ROLLED, { buff });
+  saveGame(); // เพชรเปลี่ยน เก็บทันที
+  return buff;
+}
+
+function applyInstantBuff(buff) {
+  if (buff.key === 'instant_restock') {
+    MATERIALS.forEach(m => { player.inventory[m.key].stock = player.inventory[m.key].capacity; });
+  } else if (buff.key === 'goblin_now') {
+    if (goblinTimerId) clearTimeout(goblinTimerId);
+    spawnGoblin();
+  } else if (buff.key === 'fever_now') {
+    feverState.progress = 1;
+    renderFeverBar();
+  } else if (buff.key === 'gold_burst') {
+    const reward = Math.max(20, Math.round(estimateIncomePerMinute() * 0.5));
+    player.gold += reward;
+    player.stats.totalGoldEarned += reward;
+    // ยิง COIN_COLLECTED เดียวกับที่เหรียญบินมาถึงจริงยิง -- ให้ income tracker/HUD/อัปเกรด list รับรู้เหมือนได้เงินจริง
+    GameEvents.emit(EVENTS.COIN_COLLECTED, { amount: reward });
+  }
+}
+
+function tickBuffs() {
+  if (activeBuff && performance.now() >= activeBuff.endsAt) {
+    activeBuff = null;
+    GameEvents.emit(EVENTS.BUFF_ENDED, {});
+  }
+}
+</script>
+<script>
+/* =====================================================================
    Upgrades / Stage progression
    ===================================================================== */
 function buyUpgrade(key) {
@@ -2026,10 +2260,13 @@ function showMilestoneToast(displayName, level, mult) {
 </script>
 <script>
 /* =====================================================================
-   HUD — กล่อง Gold บนสุด + แถบ Combo/Fever Mode
+   HUD — กล่อง Gold + Gem บนสุด + แถบ Combo/Fever Mode
    ===================================================================== */
 function renderGold() {
   document.getElementById('goldValue').textContent = Math.floor(player.gold).toLocaleString();
+}
+function renderGems() {
+  document.getElementById('gemValue').textContent = player.gems.toLocaleString();
 }
 function bumpGoldCounter() {
   const el = document.querySelector('.gold-counter');
@@ -2059,6 +2296,8 @@ GameEvents.on(EVENTS.STAFF_HIRED, () => renderGold());
 GameEvents.on(EVENTS.VAULT_UPGRADED, () => renderGold());
 GameEvents.on(EVENTS.FEVER_ACTIVATED, () => renderFeverBar());
 GameEvents.on(EVENTS.FEVER_ENDED, () => renderFeverBar());
+GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderGems());
+GameEvents.on(EVENTS.BUFF_ROLLED, () => renderGems());
 </script>
 <script>
 /* =====================================================================
@@ -2340,6 +2579,7 @@ document.getElementById('btnToggleSound').addEventListener('click', () => {
 document.getElementById('btnResetGame').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;
   try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+  try { localStorage.removeItem(SAVE_KEY_V3); } catch (e) {} // กันเซฟ v3 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V2); } catch (e) {} // กันเซฟ v2 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   try { localStorage.removeItem(SAVE_KEY_V1); } catch (e) {} // กันเซฟ v1 เก่าฟื้นคืนชีพตอนโหลดครั้งถัดไป
   location.reload();
@@ -2379,6 +2619,77 @@ GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderMaterialStockPanel());
 </script>
 <script>
 /* =====================================================================
+   Buff Roll panel — การ์ดเดียวใน ui-area: สุ่มบัพด้วยเพชร + โชว์บัพที่กำลัง active อยู่ (ถ้ามี)
+   ใช้โครง .upgrade-card เดิมซ้ำ (เหมือน Hire Helper/Vault card) ไม่ต้องคิด style ใหม่
+   ===================================================================== */
+function renderBuffPanel() {
+  const panel = document.getElementById('buffPanel');
+  panel.innerHTML = '';
+
+  const card = document.createElement('div');
+  const active = !!activeBuff;
+  card.className = 'upgrade-card' + (active ? ' upgrade-card--buff-active' : '');
+
+  const icon = document.createElement('div');
+  icon.className = 'upgrade-icon';
+  icon.textContent = active ? getBuffDef(activeBuff.key).icon : '💎';
+
+  const info = document.createElement('div');
+  info.className = 'upgrade-info';
+  const name = document.createElement('div');
+  name.className = 'upgrade-name';
+  name.textContent = active ? getBuffDef(activeBuff.key).name : 'สุ่มบัพติดตัว';
+  const desc = document.createElement('div');
+  desc.className = 'upgrade-desc';
+  desc.textContent = active ? getBuffDef(activeBuff.key).desc : `มีเพชร ${player.gems.toLocaleString()} เม็ด`;
+  const countdown = document.createElement('div');
+  countdown.className = 'upgrade-level';
+  countdown.id = 'buffCountdownText';
+  countdown.textContent = active ? formatBuffCountdown() : '';
+  info.append(name, desc, countdown);
+
+  const btn = document.createElement('button');
+  const affordable = player.gems >= BUFF_ROLL_COST_GEMS;
+  btn.className = 'buy-btn ' + (affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
+  btn.textContent = `สุ่ม (${BUFF_ROLL_COST_GEMS}💎)`;
+  btn.disabled = !affordable;
+  btn.addEventListener('click', () => {
+    const buff = rollBuff();
+    if (buff) showBuffResultToast(buff);
+  });
+
+  card.append(icon, info, btn);
+  panel.appendChild(card);
+}
+
+function formatBuffCountdown() {
+  if (!activeBuff) return '';
+  const secLeft = Math.max(0, Math.round((activeBuff.endsAt - performance.now()) / 1000));
+  return `เหลือ ${secLeft} วินาที`;
+}
+
+// เรียกทุกเฟรมจาก gameTick แค่ตอนมีบัพ active เท่านั้น -- อัปเดตแค่ textContent ของตัวนับถอยหลัง
+// ไม่ rebuild การ์ดทั้งใบทุกเฟรม (ประหยัดกว่า renderBuffPanel() เต็มรูปแบบมาก)
+function tickBuffCountdownDisplay() {
+  if (!activeBuff) return;
+  const el = document.getElementById('buffCountdownText');
+  if (el) el.textContent = formatBuffCountdown();
+}
+
+function showBuffResultToast(buff) {
+  const el = document.createElement('div');
+  el.className = 'milestone-toast'; // ยืมสไตล์ป๊อปอัพเดิมจาก Milestone Boosts มาใช้ซ้ำ
+  el.innerHTML = `${buff.icon} ได้บัพ <b>${buff.name}</b>!<br>${buff.desc}`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1900);
+}
+
+GameEvents.on(EVENTS.MISSION_COMPLETED, () => renderBuffPanel()); // เพชรเพิ่ม อาจพอสุ่มได้แล้ว
+GameEvents.on(EVENTS.BUFF_ROLLED, () => renderBuffPanel());
+GameEvents.on(EVENTS.BUFF_ENDED, () => renderBuffPanel());
+</script>
+<script>
+/* =====================================================================
    Rendering orchestrator — renderAll() คือจุดเดียวที่ compose การรีเฟรชทั้งจอ
    (ตอนโหลดเกม/ขึ้นด่านใหม่) ฟังก์ชัน render ย่อยแต่ละตัวถูกย้ายไปอยู่ใน ui/*.js
    ตามหน้าที่ของมันแล้ว (hud.js, stage-status-bar.js, upgrade-list.js, ...) —
@@ -2387,6 +2698,7 @@ GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderMaterialStockPanel());
    ===================================================================== */
 function renderAll() {
   renderGold();
+  renderGems();
   renderStageView();
   renderStageProgress();
   renderUpgradeList();
@@ -2395,6 +2707,7 @@ function renderAll() {
   renderStatsFooter();
   renderFeverBar();
   renderMaterialStockPanel();
+  renderBuffPanel();
 }
 
 GameEvents.on(EVENTS.STAGE_ADVANCED, () => renderAll());
@@ -2422,6 +2735,8 @@ function gameTick(ts) {
   lastTickTime = ts;
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
   tickFever();
+  tickBuffs();
+  tickBuffCountdownDisplay();
   tickMaterialRegen(dt);
   tickWorkers(dt);
   tickCustomers(dt);
