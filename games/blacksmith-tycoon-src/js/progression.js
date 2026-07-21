@@ -35,7 +35,7 @@ function checkMilestone(key, level, displayName) {
   if (player.milestonesShown[key].includes(level)) return;
   player.milestonesShown[key].push(level);
   const mult = getMilestoneMultiplier(level);
-  player.gems += STATION_STAR_REWARD_GEMS; // รางวัลดาว milestone
+  player.gems += Math.round(STATION_STAR_REWARD_GEMS * getGemGainMult()); // รางวัลดาว milestone (x บุญเพชร)
   renderGems();
   showMilestoneToast(displayName, level, mult); // ui/floating-text.js
   GameEvents.emit(EVENTS.MILESTONE_REACHED, { key, level, mult, displayName });
@@ -66,7 +66,7 @@ function buyStationLevel(i) {
   playSfxUpgrade();
   if (MILESTONE_LEVELS.includes(newLevel)) {
     // รางวัลดาวของสถานีเสริม — ไม่ต้องพึ่ง milestonesShown เพราะเลเวลขึ้นทีละ 1 แตะแต่ละ milestone ได้ครั้งเดียวโดยธรรมชาติ
-    player.gems += STATION_STAR_REWARD_GEMS;
+    player.gems += Math.round(STATION_STAR_REWARD_GEMS * getGemGainMult());
     renderGems();
     showMilestoneToast(getStationDef(i).name, newLevel, getMilestoneMultiplier(newLevel));
   }
@@ -103,22 +103,23 @@ function buyVaultLevel() {
 
 function advanceStage() {
   const wasFirstStage = player.stageIndex === 0;
-  if (player.stageIndex >= STAGES.length - 1) {
-    // ด่านสุดท้ายไม่มี "ด่านถัดไป" ให้ขยับไป -- Renovate ครั้งสุดท้าย = รับรางวัลปิดท้าย + จบเกม
-    player.gems += FINAL_STAGE_REWARD_GEMS;
-    renderGems();
-    document.getElementById('gameCompleteRewardText').textContent = `🎁 ได้รับรางวัลปิดท้าย +${FINAL_STAGE_REWARD_GEMS} 💎 เพชร!`;
-    document.getElementById('gameCompleteModal').classList.add('show');
-    spawnConfetti();
-    saveGame();
-    return;
-  }
+  const enteringNewLoop = (player.stageIndex + 1) % STAGES.length === 0; // กำลังจะจบรอบ (เข้ารอบ ★ ถัดไป)
+  // ด่านไม่รู้จบ: Renovate ขยับด่านต่อไปได้เสมอ (ไม่มีจุดจบเกมอีกแล้ว — จุดจบย้ายไปที่ Prestige)
   // รางวัล Renovate (ช่อง Rewards ในหน้าต่าง Renovate สัญญาไว้ ดู ui/renovate-modal.js)
   player.gems += RENOVATE_REWARD_GEMS;
   renderGems();
   spawnConfetti();
   playSfxStageComplete();
   player.stageIndex += 1;
+  if (enteringNewLoop) {
+    // จบครบ 1 รอบ (3 ธีม) — โบนัสก้อนใหญ่ + ป๊อปอัพฉลองว่าเข้าสู่รอบ ★ ที่ยากขึ้น/รวยขึ้น
+    player.gems += FINAL_STAGE_REWARD_GEMS;
+    const toast = document.createElement('div');
+    toast.className = 'milestone-toast';
+    toast.innerHTML = `👑 เข้าสู่รอบ ★${getStageCycle() + 1}!<br>รายได้ทุกอย่างสูงขึ้น +${FINAL_STAGE_REWARD_GEMS} 💎`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2100);
+  }
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
   player.stationsExtra = defaultStationsExtra(); // ร้านใหม่ สถานีเสริมเริ่มล็อกใหม่ (แบบเกมต้นแบบ)
   // staffCount/vaultLevel เป็นอัปเกรดถาวร ไม่ถูกรีเซ็ตตรงนี้ — คงค่าจากด่านก่อนหน้าไว้ทั้งหมด

@@ -7,22 +7,30 @@ function isRenovateReady() {
   return player.upgradeLevels.portion >= RENOVATE_GATE_LEVEL;
 }
 
+// พรีวิวด่านถัดไป (ด่านไม่รู้จบ) — คำนวณชื่อ/ภาพของด่าน index+1 ผ่านการวน STAGES + suffix ★รอบ
+function nextStagePreview() {
+  const nextIndex = player.stageIndex + 1;
+  const cycle = Math.floor(nextIndex / STAGES.length);
+  const base = STAGES[nextIndex % STAGES.length];
+  return { img: base.stationImg, name: cycle === 0 ? base.name : base.name + ' ★' + (cycle + 1) };
+}
+
 function renderRenovateModal() {
   const stage = getStage();
-  const isLast = player.stageIndex >= STAGES.length - 1;
-  const next = isLast ? null : STAGES[player.stageIndex + 1];
+  const next = nextStagePreview();
+  const enteringNewLoop = (player.stageIndex + 1) % STAGES.length === 0;
   document.getElementById('renovateBeforeImg').src = stage.stationImg;
   document.getElementById('renovateBeforeName').textContent = stage.name;
-  document.getElementById('renovateAfterImg').src = isLast ? stage.stationImg : next.stationImg;
-  document.getElementById('renovateAfterName').textContent = isLast ? 'จบเกม 👑' : next.name;
-  document.getElementById('renovateRewards').textContent = isLast
-    ? `🎁 รางวัล: +${FINAL_STAGE_REWARD_GEMS} 💎 เพชร (รางวัลปิดท้าย)`
+  document.getElementById('renovateAfterImg').src = next.img;
+  document.getElementById('renovateAfterName').textContent = next.name;
+  document.getElementById('renovateRewards').textContent = enteringNewLoop
+    ? `🎁 จบรอบ! รางวัลใหญ่ +${RENOVATE_REWARD_GEMS + FINAL_STAGE_REWARD_GEMS} 💎 | รายได้รอบใหม่สูงขึ้นมาก`
     : `🎁 รางวัล: +${RENOVATE_REWARD_GEMS} 💎 เพชร | Gold ที่มีอยู่ไม่หายไปไหน`;
 
   const ready = isRenovateReady();
   const btn = document.getElementById('btnConfirmRenovate');
   btn.disabled = !ready;
-  btn.textContent = isLast ? 'รับรางวัลปิดท้าย!' : `Renovate เป็น "${next.name}"!`;
+  btn.textContent = `Renovate เป็น "${next.name}"!`;
   document.getElementById('renovateGateText').textContent = ready
     ? ''
     : `อัปเกรดสินค้า (แตะโต๊ะสถานี) ให้ถึงเลเวล ${RENOVATE_GATE_LEVEL} ก่อน! (ตอนนี้ ${player.upgradeLevels.portion})`;

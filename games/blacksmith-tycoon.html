@@ -224,6 +224,7 @@
     font-size: 0.68rem;
   }
   .renown-counter.show { display: inline-flex; }
+  .renown-counter { cursor: pointer; } /* แตะเปิดร้านชื่อเสียง */
 
   .btn-tertiary {
     width: 30px; height: 30px;
@@ -1081,6 +1082,17 @@
   .prestige-stat--gain .prestige-stat-val { color: #b8860b; }
   .prestige-warn { font-size: 0.68rem !important; color: #a06a1a !important; margin: 0 0 12px !important; line-height: 1.5; }
   .prestige-gate-text { font-size: 0.72rem !important; color: var(--primary-dark) !important; font-weight: bold; margin: 10px 0 0 !important; }
+  #btnOpenRenownShop { margin-top: 8px; }
+
+  /* ร้านชื่อเสียง (Renown Shop) — โทนมืดเหมือนหน้าอัปเกรด การ์ดขอบทองอำพัน */
+  .renown-shop-box { position: relative; padding: 30px 10px 12px; background: var(--ui-bg); border-color: #c9941f; max-height: 82vh; display: flex; flex-direction: column; }
+  .renown-shop-box h2 { color: #ffcf5a; font-size: 1rem; margin: 0 0 4px; }
+  .renown-shop-balance { font-size: 0.72rem; color: var(--text-dim); margin: 0 0 12px; }
+  .renown-shop-balance b { color: #ffcf5a; }
+  .renown-shop-list { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 2px 4px; }
+  .renown-card { background: linear-gradient(135deg, #332810, #201908); border-color: #7a5b18; }
+  .renown-card .upgrade-name { color: #ffe08a; }
+  .renown-card .buy-btn--affordable { background: linear-gradient(180deg, #ffe08a, #d99a1f); color: #3a2a00; }
 </style>
 </head>
 <body>
@@ -1242,7 +1254,17 @@
     </div>
     <p class="prestige-warn">⚠️ Gold / ด่าน / อัปเกรด / สถานี / ลูกมือ จะรีเซ็ต — แต่ 💎 เพชร และ 🏅 ชื่อเสียง จะอยู่ครบ</p>
     <button class="btn-cta-mega" id="btnConfirmPrestige">🏅 เกิดใหม่!</button>
+    <button class="btn-secondary-modal" id="btnOpenRenownShop">🏪 ร้านชื่อเสียง — ใช้ 🏅 ซื้ออัปเกรดถาวร</button>
     <p class="prestige-gate-text" id="prestigeGateText"></p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="renownShopModal">
+  <div class="modal-box renown-shop-box">
+    <button class="modal-close-x" id="btnCloseRenownShop">✕</button>
+    <h2>🏪 ร้านชื่อเสียง</h2>
+    <p class="renown-shop-balance">มีชื่อเสียง <b id="renownShopBalance">0 🏅</b> — อัปเกรดพวกนี้อยู่ถาวร ไม่หายตอนเกิดใหม่</p>
+    <div class="renown-shop-list" id="renownShopList"></div>
   </div>
 </div>
 
@@ -1298,6 +1320,7 @@ const EVENTS = {
   STATION_UPGRADED:   'station:upgraded',   // buyStationLevel() — { stationIndex, level }
   GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }
   PRESTIGE_DONE:      'prestige:done',      // doPrestige() — { renownGained, totalRenown }
+  RENOWN_UPGRADE_BOUGHT: 'renown:upgraded', // buyRenownUpgrade() — { key, level }
 };
 </script>
 <script>
@@ -1389,6 +1412,10 @@ const STAGES = [
     color: '#e3d9f3', baseRevenue: 125,
     recipe: [{ material: 'herb', qty: 2 }] },
 ];
+// ด่านไม่รู้จบ: หลังด่านสุดท้ายวนกลับไปธีมเดิม แต่คูณ baseRevenue ต่อ "รอบ" (cycle) ที่วนครบ 3 ด่าน
+// stageIndex เดินต่อได้เรื่อยๆ ไม่มีเพดาน — getStage() (formulas.js) จัดการ mod + scale ให้เอง
+// เลข 6 = รอบถัดไปรายได้ x6 (ด่าน 4 = stall x6, ด่าน 7 = stall x36, ...) โตชันพอให้ตัวเลขไต่ไม่รู้จบ
+const STAGE_LOOP_REVENUE_MULT = 6;
 function getRandomCustomerImg() {
   const imgs = getStage().customerImgs;
   return imgs[Math.floor(Math.random() * imgs.length)];
@@ -1476,6 +1503,20 @@ const RENOVATE_REWARD_GEMS = 10;  // รางวัลเพชรตอน Ren
 const RENOWN_DIVISOR = 800;             // ปรับด้วย sim: เล่นจบเกม 1 รอบ (~119K gold) = ~12 renown (+24% รายได้)
 const PRESTIGE_MULT_PER_RENOWN = 0.02;  // renown 1 หน่วย = +2% รายได้ทุกสถานี (50 renown = x2)
 const PRESTIGE_MIN_GEMS_REWARD = 5;     // โบนัสเพชรก้อนเล็กตอน prestige (ให้รู้สึกคุ้มทุกรอบ ไม่ใช่แค่ตัวคูณ)
+
+// ===== ร้านชื่อเสียง (Renown Shop) — อัปเกรดถาวรซื้อด้วย renown อยู่ข้ามทุก prestige =====
+// เป็น meta-progression: renown ไม่ได้ให้แค่ตัวคูณ passive แต่เอาไปลงทุนต่อยอดได้ด้วย
+// effectPerLevel = ค่าผลต่อเลเวล (ความหมายต่างกันตาม key ดูที่ formulas.js) | cost = baseCost * costGrowth^level
+const RENOWN_UPGRADES = [
+  { key: 'income',     icon: '💰', name: 'สายเลือดพ่อค้า', desc: 'รายได้ทุกสถานี +6% ต่อเลเวล',
+    maxLevel: 25, baseCost: 3, costGrowth: 1.5, effectPerLevel: 0.06 },
+  { key: 'craft',      icon: '⚡', name: 'มือเทวดา',       desc: 'เวลาคราฟต์ -2% ต่อเลเวล (ถาวร)',
+    maxLevel: 20, baseCost: 4, costGrowth: 1.55, effectPerLevel: 0.02 },
+  { key: 'startStaff', icon: '🧑‍🔧', name: 'ทีมประจำร้าน',   desc: 'เริ่มแต่ละรอบพร้อมลูกมือ +1 คนต่อเลเวล',
+    maxLevel: 4,  baseCost: 8, costGrowth: 2.2,  effectPerLevel: 1 },
+  { key: 'gemBonus',   icon: '💎', name: 'สายบุญเพชร',     desc: 'ได้เพชรจากภารกิจ/ดาว +10% ต่อเลเวล',
+    maxLevel: 15, baseCost: 5, costGrowth: 1.6,  effectPerLevel: 0.10 },
+];
 
 // ===== หลายสถานีในด่านเดียว (Multi-Station แบบ Eatventure) =====
 // แต่ละด่านมี 3 สถานี: สถานีหลัก (ปลดล็อกอยู่แล้ว ใช้ระบบเลเวลสินค้าเดิม) + สถานีเสริม 2 ตัว
@@ -1639,10 +1680,16 @@ function defaultIdentity() {
 function defaultStationsExtra() {
   return { s1: { unlocked: false, level: 0 }, s2: { unlocked: false, level: 0 } };
 }
+function defaultRenownUpgrades() {
+  const o = {};
+  RENOWN_UPGRADES.forEach(u => { o[u.key] = 0; });
+  return o;
+}
 function defaultPrestige() {
   // renown = ชื่อเสียงสะสมถาวร, goldAtCycleStart = snapshot totalGoldEarned ตอนเริ่มรอบปัจจุบัน
   // (goldThisCycle = totalGoldEarned - goldAtCycleStart), count = จำนวนครั้งที่เกิดใหม่
-  return { renown: 0, goldAtCycleStart: 0, count: 0 };
+  // upgrades = เลเวลอัปเกรดร้านชื่อเสียง (ดู RENOWN_UPGRADES / systems/prestige.js)
+  return { renown: 0, goldAtCycleStart: 0, count: 0, upgrades: defaultRenownUpgrades() };
 }
 
 let player = {
@@ -1826,7 +1873,10 @@ function loadGame() {
     missionIndex: Math.max(0, data.missionIndex || 0),
     missionProgress: Math.max(0, data.missionProgress || 0),
     stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
-    prestige: Object.assign(defaultPrestige(), data.prestige || {}),
+    // merge ระดับบน + เติม upgrades ที่ขาด (เซฟ v6 รุ่นแรกยังไม่มี field upgrades — เติมให้ครบทุก key)
+    prestige: Object.assign(defaultPrestige(), data.prestige || {}, {
+      upgrades: Object.assign(defaultRenownUpgrades(), (data.prestige && data.prestige.upgrades) || {}),
+    }),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
@@ -1841,8 +1891,40 @@ function loadGame() {
 /* =====================================================================
    Formulas
    ===================================================================== */
-function getStage() { return STAGES[player.stageIndex]; }
+// ด่านไม่รู้จบ: index >= จำนวนธีม -> วนกลับธีมเดิม + คูณ baseRevenue ตามจำนวนรอบที่วนครบ (cycle)
+// คืน object ใหม่ (ไม่แก้ STAGES เดิม) โดย copy ธีมแล้ว override baseRevenue/name ให้ต่างกันแต่ละรอบ
+// cache ไว้ต่อ stageIndex เพื่อไม่สร้าง object ใหม่ทุกครั้งที่เรียก (getStage ถูกเรียกบ่อยมากต่อเฟรม)
+let _stageCache = { index: -1, stage: null };
+function getStageCycle() { return Math.floor(player.stageIndex / STAGES.length); }
+function getStage() {
+  if (_stageCache.index === player.stageIndex) return _stageCache.stage;
+  const cycle = getStageCycle();
+  const base = STAGES[player.stageIndex % STAGES.length];
+  let stage;
+  if (cycle === 0) {
+    stage = base; // 3 ด่านแรกใช้ของเดิมตรงๆ (ไม่ต้อง copy)
+  } else {
+    stage = Object.assign({}, base, {
+      baseRevenue: base.baseRevenue * Math.pow(STAGE_LOOP_REVENUE_MULT, cycle),
+      name: base.name + ' ★' + (cycle + 1), // ต่อท้าย ★2/★3... บอกว่าเป็นรอบที่เท่าไหร่
+    });
+  }
+  _stageCache = { index: player.stageIndex, stage };
+  return stage;
+}
 function getUpgradeType(key) { return UPGRADE_TYPES.find(u => u.key === key); }
+
+/* ===== ร้านชื่อเสียง (Renown Shop) — อัปเกรดถาวรซื้อด้วย renown (ดู data.js RENOWN_UPGRADES) ===== */
+function getRenownUpgradeDef(key) { return RENOWN_UPGRADES.find(u => u.key === key); }
+function getRenownUpgradeLevel(key) { return (player.prestige.upgrades && player.prestige.upgrades[key]) || 0; }
+function getRenownUpgradeCost(key) {
+  const def = getRenownUpgradeDef(key);
+  return Math.ceil(def.baseCost * Math.pow(def.costGrowth, getRenownUpgradeLevel(key)));
+}
+function getRenownIncomeMult() { return 1 + getRenownUpgradeLevel('income') * getRenownUpgradeDef('income').effectPerLevel; }
+function getRenownCraftMult() { return 1 - getRenownUpgradeLevel('craft') * getRenownUpgradeDef('craft').effectPerLevel; }
+function getStartStaffCount() { return Math.min(MAX_STAFF_COUNT, getRenownUpgradeLevel('startStaff')); }
+function getGemGainMult() { return 1 + getRenownUpgradeLevel('gemBonus') * getRenownUpgradeDef('gemBonus').effectPerLevel; }
 
 function getUpgradeCost(key) {
   const type = getUpgradeType(key);
@@ -1878,7 +1960,11 @@ function getStationRevenue(i) {
 }
 
 /* ===== Prestige (systems/prestige.js) — ตัวคูณรายได้ถาวรจากชื่อเสียง + จำนวน renown ที่จะได้ถ้ากดตอนนี้ ===== */
+// ตัวคูณ prestige รวม = (โบนัส renown แบบ passive) x (อัปเกรด "สายเลือดพ่อค้า" จากร้านชื่อเสียง)
 function getPrestigeMultiplier() {
+  return getRenownPassiveMult() * getRenownIncomeMult();
+}
+function getRenownPassiveMult() {
   return 1 + player.prestige.renown * PRESTIGE_MULT_PER_RENOWN;
 }
 function getGoldThisCycle() {
@@ -1905,7 +1991,8 @@ function getCraftDurationMs() {
   if (isFeverActive()) return FEVER_CRAFT_MS; // Fever Mode: แทบจะทำเสร็จทันที
   const level = player.upgradeLevels.speed;
   const reduction = level * SPEED_CRAFT_MS_REDUCTION * getMilestoneMultiplier(level);
-  return Math.max(MIN_CRAFT_MS, BASE_CRAFT_MS - reduction);
+  // อัปเกรด "มือเทวดา" (ร้านชื่อเสียง) ลดเวลาคราฟต์ถาวรเป็น % คูณทับหลังหักจากเลเวล speed
+  return Math.max(MIN_CRAFT_MS, (BASE_CRAFT_MS - reduction) * getRenownCraftMult());
 }
 
 function getMoveSpeedPxPerSec() {
@@ -2820,7 +2907,8 @@ function tickMissionProgress() {
   player.missionProgress += 1;
   const requirement = getMissionRequirement(player.missionIndex);
   if (player.missionProgress >= requirement) {
-    const reward = getMissionReward(player.missionIndex);
+    // x บุญเพชร (อัปเกรดร้านชื่อเสียง) — จ่ายเพชรจริงมากกว่ารางวัลฐานตามเลเวล gemBonus
+    const reward = Math.round(getMissionReward(player.missionIndex) * getGemGainMult());
     player.missionProgress = 0;
     player.missionIndex += 1;
     player.gems += reward;
@@ -2923,7 +3011,7 @@ function doPrestige() {
   player.stageIndex = 0;
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
   player.stationsExtra = defaultStationsExtra();
-  player.staffCount = 0;
+  player.staffCount = getStartStaffCount(); // อัปเกรด "ทีมประจำร้าน" — เริ่มพร้อมลูกมือติดตัว
   player.vaultLevel = 0;
   player.milestonesShown = {};
   player.missionIndex = 0;
@@ -2941,6 +3029,22 @@ function doPrestige() {
   playSfxStageComplete();
   spawnConfetti(60);
   return gain;
+}
+
+/* ===== ร้านชื่อเสียง (Renown Shop) — ซื้ออัปเกรดถาวรด้วย renown ===== */
+function buyRenownUpgrade(key) {
+  const def = getRenownUpgradeDef(key);
+  if (!def) return false;
+  const level = getRenownUpgradeLevel(key);
+  if (level >= def.maxLevel) return false;
+  const cost = getRenownUpgradeCost(key);
+  if (player.prestige.renown < cost) return false;
+  player.prestige.renown -= cost;
+  player.prestige.upgrades[key] = level + 1;
+  playSfxUpgrade();
+  GameEvents.emit(EVENTS.RENOWN_UPGRADE_BOUGHT, { key, level: level + 1 });
+  saveGame();
+  return true;
 }
 </script>
 <script>
@@ -2981,7 +3085,7 @@ function checkMilestone(key, level, displayName) {
   if (player.milestonesShown[key].includes(level)) return;
   player.milestonesShown[key].push(level);
   const mult = getMilestoneMultiplier(level);
-  player.gems += STATION_STAR_REWARD_GEMS; // รางวัลดาว milestone
+  player.gems += Math.round(STATION_STAR_REWARD_GEMS * getGemGainMult()); // รางวัลดาว milestone (x บุญเพชร)
   renderGems();
   showMilestoneToast(displayName, level, mult); // ui/floating-text.js
   GameEvents.emit(EVENTS.MILESTONE_REACHED, { key, level, mult, displayName });
@@ -3012,7 +3116,7 @@ function buyStationLevel(i) {
   playSfxUpgrade();
   if (MILESTONE_LEVELS.includes(newLevel)) {
     // รางวัลดาวของสถานีเสริม — ไม่ต้องพึ่ง milestonesShown เพราะเลเวลขึ้นทีละ 1 แตะแต่ละ milestone ได้ครั้งเดียวโดยธรรมชาติ
-    player.gems += STATION_STAR_REWARD_GEMS;
+    player.gems += Math.round(STATION_STAR_REWARD_GEMS * getGemGainMult());
     renderGems();
     showMilestoneToast(getStationDef(i).name, newLevel, getMilestoneMultiplier(newLevel));
   }
@@ -3049,22 +3153,23 @@ function buyVaultLevel() {
 
 function advanceStage() {
   const wasFirstStage = player.stageIndex === 0;
-  if (player.stageIndex >= STAGES.length - 1) {
-    // ด่านสุดท้ายไม่มี "ด่านถัดไป" ให้ขยับไป -- Renovate ครั้งสุดท้าย = รับรางวัลปิดท้าย + จบเกม
-    player.gems += FINAL_STAGE_REWARD_GEMS;
-    renderGems();
-    document.getElementById('gameCompleteRewardText').textContent = `🎁 ได้รับรางวัลปิดท้าย +${FINAL_STAGE_REWARD_GEMS} 💎 เพชร!`;
-    document.getElementById('gameCompleteModal').classList.add('show');
-    spawnConfetti();
-    saveGame();
-    return;
-  }
+  const enteringNewLoop = (player.stageIndex + 1) % STAGES.length === 0; // กำลังจะจบรอบ (เข้ารอบ ★ ถัดไป)
+  // ด่านไม่รู้จบ: Renovate ขยับด่านต่อไปได้เสมอ (ไม่มีจุดจบเกมอีกแล้ว — จุดจบย้ายไปที่ Prestige)
   // รางวัล Renovate (ช่อง Rewards ในหน้าต่าง Renovate สัญญาไว้ ดู ui/renovate-modal.js)
   player.gems += RENOVATE_REWARD_GEMS;
   renderGems();
   spawnConfetti();
   playSfxStageComplete();
   player.stageIndex += 1;
+  if (enteringNewLoop) {
+    // จบครบ 1 รอบ (3 ธีม) — โบนัสก้อนใหญ่ + ป๊อปอัพฉลองว่าเข้าสู่รอบ ★ ที่ยากขึ้น/รวยขึ้น
+    player.gems += FINAL_STAGE_REWARD_GEMS;
+    const toast = document.createElement('div');
+    toast.className = 'milestone-toast';
+    toast.innerHTML = `👑 เข้าสู่รอบ ★${getStageCycle() + 1}!<br>รายได้ทุกอย่างสูงขึ้น +${FINAL_STAGE_REWARD_GEMS} 💎`;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 2100);
+  }
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
   player.stationsExtra = defaultStationsExtra(); // ร้านใหม่ สถานีเสริมเริ่มล็อกใหม่ (แบบเกมต้นแบบ)
   // staffCount/vaultLevel เป็นอัปเกรดถาวร ไม่ถูกรีเซ็ตตรงนี้ — คงค่าจากด่านก่อนหน้าไว้ทั้งหมด
@@ -3220,12 +3325,7 @@ function renderStageView() {
 function renderStageProgress() {
   const el = document.getElementById('stageRenovateProgress');
   const level = player.upgradeLevels.portion;
-  const isLast = player.stageIndex >= STAGES.length - 1;
-  if (isLast && level >= RENOVATE_GATE_LEVEL) {
-    el.textContent = `Lv ${level} 👑`;
-    el.classList.add('gate-met');
-    return;
-  }
+  // ด่านไม่รู้จบ: ไม่มี "ด่านสุดท้าย" อีกแล้ว โชว์ Lv X/15 สู่ Renovate เสมอ (พร้อมแล้วขึ้น 🔨→เขียว)
   el.textContent = `🔨 Lv ${Math.min(level, RENOVATE_GATE_LEVEL)}/${RENOVATE_GATE_LEVEL}`;
   el.classList.toggle('gate-met', level >= RENOVATE_GATE_LEVEL);
 }
@@ -3522,22 +3622,30 @@ function isRenovateReady() {
   return player.upgradeLevels.portion >= RENOVATE_GATE_LEVEL;
 }
 
+// พรีวิวด่านถัดไป (ด่านไม่รู้จบ) — คำนวณชื่อ/ภาพของด่าน index+1 ผ่านการวน STAGES + suffix ★รอบ
+function nextStagePreview() {
+  const nextIndex = player.stageIndex + 1;
+  const cycle = Math.floor(nextIndex / STAGES.length);
+  const base = STAGES[nextIndex % STAGES.length];
+  return { img: base.stationImg, name: cycle === 0 ? base.name : base.name + ' ★' + (cycle + 1) };
+}
+
 function renderRenovateModal() {
   const stage = getStage();
-  const isLast = player.stageIndex >= STAGES.length - 1;
-  const next = isLast ? null : STAGES[player.stageIndex + 1];
+  const next = nextStagePreview();
+  const enteringNewLoop = (player.stageIndex + 1) % STAGES.length === 0;
   document.getElementById('renovateBeforeImg').src = stage.stationImg;
   document.getElementById('renovateBeforeName').textContent = stage.name;
-  document.getElementById('renovateAfterImg').src = isLast ? stage.stationImg : next.stationImg;
-  document.getElementById('renovateAfterName').textContent = isLast ? 'จบเกม 👑' : next.name;
-  document.getElementById('renovateRewards').textContent = isLast
-    ? `🎁 รางวัล: +${FINAL_STAGE_REWARD_GEMS} 💎 เพชร (รางวัลปิดท้าย)`
+  document.getElementById('renovateAfterImg').src = next.img;
+  document.getElementById('renovateAfterName').textContent = next.name;
+  document.getElementById('renovateRewards').textContent = enteringNewLoop
+    ? `🎁 จบรอบ! รางวัลใหญ่ +${RENOVATE_REWARD_GEMS + FINAL_STAGE_REWARD_GEMS} 💎 | รายได้รอบใหม่สูงขึ้นมาก`
     : `🎁 รางวัล: +${RENOVATE_REWARD_GEMS} 💎 เพชร | Gold ที่มีอยู่ไม่หายไปไหน`;
 
   const ready = isRenovateReady();
   const btn = document.getElementById('btnConfirmRenovate');
   btn.disabled = !ready;
-  btn.textContent = isLast ? 'รับรางวัลปิดท้าย!' : `Renovate เป็น "${next.name}"!`;
+  btn.textContent = `Renovate เป็น "${next.name}"!`;
   document.getElementById('renovateGateText').textContent = ready
     ? ''
     : `อัปเกรดสินค้า (แตะโต๊ะสถานี) ให้ถึงเลเวล ${RENOVATE_GATE_LEVEL} ก่อน! (ตอนนี้ ${player.upgradeLevels.portion})`;
@@ -3872,6 +3980,69 @@ document.getElementById('btnGameCompletePrestige').addEventListener('click', () 
 });
 
 GameEvents.on(EVENTS.PRESTIGE_DONE, () => { renderRenown(); renderAll(); });
+</script>
+<script>
+/* =====================================================================
+   Renown Shop — ใช้ชื่อเสียง (renown 🏅) ซื้ออัปเกรดถาวรที่อยู่ข้ามทุก prestige
+   เปิดจาก: ชิป 🏅 ใน HUD (แตะได้เมื่อมี renown) หรือปุ่มในหน้าต่าง Prestige
+   การ์ดแต่ละใบ = 1 อัปเกรดใน RENOWN_UPGRADES: ไอคอน/ชื่อ/คำอธิบาย/เลเวล + ปุ่มซื้อ (ราคาเป็น renown)
+   ===================================================================== */
+function renderRenownShop() {
+  document.getElementById('renownShopBalance').textContent = `${formatCompact(player.prestige.renown)} 🏅`;
+  const list = document.getElementById('renownShopList');
+  list.innerHTML = '';
+  RENOWN_UPGRADES.forEach(def => {
+    const level = getRenownUpgradeLevel(def.key);
+    const maxed = level >= def.maxLevel;
+    const cost = maxed ? null : getRenownUpgradeCost(def.key);
+    const affordable = !maxed && player.prestige.renown >= cost;
+
+    const card = document.createElement('div');
+    card.className = 'upgrade-card renown-card';
+
+    const icon = document.createElement('div');
+    icon.className = 'upgrade-icon';
+    icon.textContent = def.icon;
+
+    const info = document.createElement('div');
+    info.className = 'upgrade-info';
+    const name = document.createElement('div');
+    name.className = 'upgrade-name';
+    name.textContent = def.name;
+    const desc = document.createElement('div');
+    desc.className = 'upgrade-desc';
+    desc.textContent = def.desc;
+    const lvl = document.createElement('div');
+    lvl.className = 'upgrade-level';
+    lvl.textContent = `เลเวล ${level}/${def.maxLevel}`;
+    info.append(name, desc, lvl);
+
+    const btn = document.createElement('button');
+    btn.className = 'buy-btn ' + (maxed ? 'buy-btn--maxed' : affordable ? 'buy-btn--affordable' : 'buy-btn--disabled');
+    btn.textContent = maxed ? 'สุดแล้ว ✓' : `${formatCompact(cost)} 🏅`;
+    btn.disabled = maxed || !affordable;
+    btn.addEventListener('click', () => { if (buyRenownUpgrade(def.key)) renderRenownShop(); });
+
+    card.append(icon, info, btn);
+    list.appendChild(card);
+  });
+}
+
+function openRenownShop() {
+  renderRenownShop();
+  document.getElementById('renownShopModal').classList.add('show');
+}
+function closeRenownShop() {
+  document.getElementById('renownShopModal').classList.remove('show');
+}
+
+document.getElementById('btnCloseRenownShop').addEventListener('click', () => closeRenownShop());
+document.getElementById('btnOpenRenownShop').addEventListener('click', () => openRenownShop());
+// แตะชิป 🏅 ใน HUD เปิดร้านชื่อเสียงได้เลย (ทางลัด)
+document.getElementById('renownCounter').addEventListener('click', () => { if (player.prestige.renown > 0) openRenownShop(); });
+
+// ซื้ออัปเกรดแล้วรีเฟรช HUD (renown ลด) + ร้าน + ราคา/สถิติที่อาจเปลี่ยน
+GameEvents.on(EVENTS.RENOWN_UPGRADE_BOUGHT, () => { renderRenown(); renderRenownShop(); });
 </script>
 <script>
 /* =====================================================================

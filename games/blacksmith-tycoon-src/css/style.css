@@ -216,6 +216,7 @@
     font-size: 0.68rem;
   }
   .renown-counter.show { display: inline-flex; }
+  .renown-counter { cursor: pointer; } /* แตะเปิดร้านชื่อเสียง */
 
   .btn-tertiary {
     width: 30px; height: 30px;
@@ -1073,3 +1074,14 @@
   .prestige-stat--gain .prestige-stat-val { color: #b8860b; }
   .prestige-warn { font-size: 0.68rem !important; color: #a06a1a !important; margin: 0 0 12px !important; line-height: 1.5; }
   .prestige-gate-text { font-size: 0.72rem !important; color: var(--primary-dark) !important; font-weight: bold; margin: 10px 0 0 !important; }
+  #btnOpenRenownShop { margin-top: 8px; }
+
+  /* ร้านชื่อเสียง (Renown Shop) — โทนมืดเหมือนหน้าอัปเกรด การ์ดขอบทองอำพัน */
+  .renown-shop-box { position: relative; padding: 30px 10px 12px; background: var(--ui-bg); border-color: #c9941f; max-height: 82vh; display: flex; flex-direction: column; }
+  .renown-shop-box h2 { color: #ffcf5a; font-size: 1rem; margin: 0 0 4px; }
+  .renown-shop-balance { font-size: 0.72rem; color: var(--text-dim); margin: 0 0 12px; }
+  .renown-shop-balance b { color: #ffcf5a; }
+  .renown-shop-list { display: flex; flex-direction: column; gap: 7px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 2px 4px; }
+  .renown-card { background: linear-gradient(135deg, #332810, #201908); border-color: #7a5b18; }
+  .renown-card .upgrade-name { color: #ffe08a; }
+  .renown-card .buy-btn--affordable { background: linear-gradient(180deg, #ffe08a, #d99a1f); color: #3a2a00; }

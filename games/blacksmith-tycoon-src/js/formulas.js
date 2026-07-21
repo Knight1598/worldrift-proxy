@@ -1,8 +1,40 @@
 /* =====================================================================
    Formulas
    ===================================================================== */
-function getStage() { return STAGES[player.stageIndex]; }
+// ด่านไม่รู้จบ: index >= จำนวนธีม -> วนกลับธีมเดิม + คูณ baseRevenue ตามจำนวนรอบที่วนครบ (cycle)
+// คืน object ใหม่ (ไม่แก้ STAGES เดิม) โดย copy ธีมแล้ว override baseRevenue/name ให้ต่างกันแต่ละรอบ
+// cache ไว้ต่อ stageIndex เพื่อไม่สร้าง object ใหม่ทุกครั้งที่เรียก (getStage ถูกเรียกบ่อยมากต่อเฟรม)
+let _stageCache = { index: -1, stage: null };
+function getStageCycle() { return Math.floor(player.stageIndex / STAGES.length); }
+function getStage() {
+  if (_stageCache.index === player.stageIndex) return _stageCache.stage;
+  const cycle = getStageCycle();
+  const base = STAGES[player.stageIndex % STAGES.length];
+  let stage;
+  if (cycle === 0) {
+    stage = base; // 3 ด่านแรกใช้ของเดิมตรงๆ (ไม่ต้อง copy)
+  } else {
+    stage = Object.assign({}, base, {
+      baseRevenue: base.baseRevenue * Math.pow(STAGE_LOOP_REVENUE_MULT, cycle),
+      name: base.name + ' ★' + (cycle + 1), // ต่อท้าย ★2/★3... บอกว่าเป็นรอบที่เท่าไหร่
+    });
+  }
+  _stageCache = { index: player.stageIndex, stage };
+  return stage;
+}
 function getUpgradeType(key) { return UPGRADE_TYPES.find(u => u.key === key); }
+
+/* ===== ร้านชื่อเสียง (Renown Shop) — อัปเกรดถาวรซื้อด้วย renown (ดู data.js RENOWN_UPGRADES) ===== */
+function getRenownUpgradeDef(key) { return RENOWN_UPGRADES.find(u => u.key === key); }
+function getRenownUpgradeLevel(key) { return (player.prestige.upgrades && player.prestige.upgrades[key]) || 0; }
+function getRenownUpgradeCost(key) {
+  const def = getRenownUpgradeDef(key);
+  return Math.ceil(def.baseCost * Math.pow(def.costGrowth, getRenownUpgradeLevel(key)));
+}
+function getRenownIncomeMult() { return 1 + getRenownUpgradeLevel('income') * getRenownUpgradeDef('income').effectPerLevel; }
+function getRenownCraftMult() { return 1 - getRenownUpgradeLevel('craft') * getRenownUpgradeDef('craft').effectPerLevel; }
+function getStartStaffCount() { return Math.min(MAX_STAFF_COUNT, getRenownUpgradeLevel('startStaff')); }
+function getGemGainMult() { return 1 + getRenownUpgradeLevel('gemBonus') * getRenownUpgradeDef('gemBonus').effectPerLevel; }
 
 function getUpgradeCost(key) {
   const type = getUpgradeType(key);
@@ -38,7 +70,11 @@ function getStationRevenue(i) {
 }
 
 /* ===== Prestige (systems/prestige.js) — ตัวคูณรายได้ถาวรจากชื่อเสียง + จำนวน renown ที่จะได้ถ้ากดตอนนี้ ===== */
+// ตัวคูณ prestige รวม = (โบนัส renown แบบ passive) x (อัปเกรด "สายเลือดพ่อค้า" จากร้านชื่อเสียง)
 function getPrestigeMultiplier() {
+  return getRenownPassiveMult() * getRenownIncomeMult();
+}
+function getRenownPassiveMult() {
   return 1 + player.prestige.renown * PRESTIGE_MULT_PER_RENOWN;
 }
 function getGoldThisCycle() {
@@ -65,7 +101,8 @@ function getCraftDurationMs() {
   if (isFeverActive()) return FEVER_CRAFT_MS; // Fever Mode: แทบจะทำเสร็จทันที
   const level = player.upgradeLevels.speed;
   const reduction = level * SPEED_CRAFT_MS_REDUCTION * getMilestoneMultiplier(level);
-  return Math.max(MIN_CRAFT_MS, BASE_CRAFT_MS - reduction);
+  // อัปเกรด "มือเทวดา" (ร้านชื่อเสียง) ลดเวลาคราฟต์ถาวรเป็น % คูณทับหลังหักจากเลเวล speed
+  return Math.max(MIN_CRAFT_MS, (BASE_CRAFT_MS - reduction) * getRenownCraftMult());
 }
 
 function getMoveSpeedPxPerSec() {

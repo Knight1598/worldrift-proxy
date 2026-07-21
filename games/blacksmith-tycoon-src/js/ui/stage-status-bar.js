@@ -14,12 +14,7 @@ function renderStageView() {
 function renderStageProgress() {
   const el = document.getElementById('stageRenovateProgress');
   const level = player.upgradeLevels.portion;
-  const isLast = player.stageIndex >= STAGES.length - 1;
-  if (isLast && level >= RENOVATE_GATE_LEVEL) {
-    el.textContent = `Lv ${level} 👑`;
-    el.classList.add('gate-met');
-    return;
-  }
+  // ด่านไม่รู้จบ: ไม่มี "ด่านสุดท้าย" อีกแล้ว โชว์ Lv X/15 สู่ Renovate เสมอ (พร้อมแล้วขึ้น 🔨→เขียว)
   el.textContent = `🔨 Lv ${Math.min(level, RENOVATE_GATE_LEVEL)}/${RENOVATE_GATE_LEVEL}`;
   el.classList.toggle('gate-met', level >= RENOVATE_GATE_LEVEL);
 }

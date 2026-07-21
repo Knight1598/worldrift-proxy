@@ -15,6 +15,10 @@ const STAGES = [
     color: '#e3d9f3', baseRevenue: 125,
     recipe: [{ material: 'herb', qty: 2 }] },
 ];
+// ด่านไม่รู้จบ: หลังด่านสุดท้ายวนกลับไปธีมเดิม แต่คูณ baseRevenue ต่อ "รอบ" (cycle) ที่วนครบ 3 ด่าน
+// stageIndex เดินต่อได้เรื่อยๆ ไม่มีเพดาน — getStage() (formulas.js) จัดการ mod + scale ให้เอง
+// เลข 6 = รอบถัดไปรายได้ x6 (ด่าน 4 = stall x6, ด่าน 7 = stall x36, ...) โตชันพอให้ตัวเลขไต่ไม่รู้จบ
+const STAGE_LOOP_REVENUE_MULT = 6;
 function getRandomCustomerImg() {
   const imgs = getStage().customerImgs;
   return imgs[Math.floor(Math.random() * imgs.length)];
@@ -102,6 +106,20 @@ const RENOVATE_REWARD_GEMS = 10;  // รางวัลเพชรตอน Ren
 const RENOWN_DIVISOR = 800;             // ปรับด้วย sim: เล่นจบเกม 1 รอบ (~119K gold) = ~12 renown (+24% รายได้)
 const PRESTIGE_MULT_PER_RENOWN = 0.02;  // renown 1 หน่วย = +2% รายได้ทุกสถานี (50 renown = x2)
 const PRESTIGE_MIN_GEMS_REWARD = 5;     // โบนัสเพชรก้อนเล็กตอน prestige (ให้รู้สึกคุ้มทุกรอบ ไม่ใช่แค่ตัวคูณ)
+
+// ===== ร้านชื่อเสียง (Renown Shop) — อัปเกรดถาวรซื้อด้วย renown อยู่ข้ามทุก prestige =====
+// เป็น meta-progression: renown ไม่ได้ให้แค่ตัวคูณ passive แต่เอาไปลงทุนต่อยอดได้ด้วย
+// effectPerLevel = ค่าผลต่อเลเวล (ความหมายต่างกันตาม key ดูที่ formulas.js) | cost = baseCost * costGrowth^level
+const RENOWN_UPGRADES = [
+  { key: 'income',     icon: '💰', name: 'สายเลือดพ่อค้า', desc: 'รายได้ทุกสถานี +6% ต่อเลเวล',
+    maxLevel: 25, baseCost: 3, costGrowth: 1.5, effectPerLevel: 0.06 },
+  { key: 'craft',      icon: '⚡', name: 'มือเทวดา',       desc: 'เวลาคราฟต์ -2% ต่อเลเวล (ถาวร)',
+    maxLevel: 20, baseCost: 4, costGrowth: 1.55, effectPerLevel: 0.02 },
+  { key: 'startStaff', icon: '🧑‍🔧', name: 'ทีมประจำร้าน',   desc: 'เริ่มแต่ละรอบพร้อมลูกมือ +1 คนต่อเลเวล',
+    maxLevel: 4,  baseCost: 8, costGrowth: 2.2,  effectPerLevel: 1 },
+  { key: 'gemBonus',   icon: '💎', name: 'สายบุญเพชร',     desc: 'ได้เพชรจากภารกิจ/ดาว +10% ต่อเลเวล',
+    maxLevel: 15, baseCost: 5, costGrowth: 1.6,  effectPerLevel: 0.10 },
+];
 
 // ===== หลายสถานีในด่านเดียว (Multi-Station แบบ Eatventure) =====
 // แต่ละด่านมี 3 สถานี: สถานีหลัก (ปลดล็อกอยู่แล้ว ใช้ระบบเลเวลสินค้าเดิม) + สถานีเสริม 2 ตัว

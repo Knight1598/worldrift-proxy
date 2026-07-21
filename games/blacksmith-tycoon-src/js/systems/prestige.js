@@ -24,7 +24,7 @@ function doPrestige() {
   player.stageIndex = 0;
   player.upgradeLevels = { speed: 0, portion: 0, signage: 0, decor: 0 };
   player.stationsExtra = defaultStationsExtra();
-  player.staffCount = 0;
+  player.staffCount = getStartStaffCount(); // อัปเกรด "ทีมประจำร้าน" — เริ่มพร้อมลูกมือติดตัว
   player.vaultLevel = 0;
   player.milestonesShown = {};
   player.missionIndex = 0;
@@ -42,4 +42,20 @@ function doPrestige() {
   playSfxStageComplete();
   spawnConfetti(60);
   return gain;
+}
+
+/* ===== ร้านชื่อเสียง (Renown Shop) — ซื้ออัปเกรดถาวรด้วย renown ===== */
+function buyRenownUpgrade(key) {
+  const def = getRenownUpgradeDef(key);
+  if (!def) return false;
+  const level = getRenownUpgradeLevel(key);
+  if (level >= def.maxLevel) return false;
+  const cost = getRenownUpgradeCost(key);
+  if (player.prestige.renown < cost) return false;
+  player.prestige.renown -= cost;
+  player.prestige.upgrades[key] = level + 1;
+  playSfxUpgrade();
+  GameEvents.emit(EVENTS.RENOWN_UPGRADE_BOUGHT, { key, level: level + 1 });
+  saveGame();
+  return true;
 }

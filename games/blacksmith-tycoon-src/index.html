@@ -165,7 +165,17 @@
     </div>
     <p class="prestige-warn">⚠️ Gold / ด่าน / อัปเกรด / สถานี / ลูกมือ จะรีเซ็ต — แต่ 💎 เพชร และ 🏅 ชื่อเสียง จะอยู่ครบ</p>
     <button class="btn-cta-mega" id="btnConfirmPrestige">🏅 เกิดใหม่!</button>
+    <button class="btn-secondary-modal" id="btnOpenRenownShop">🏪 ร้านชื่อเสียง — ใช้ 🏅 ซื้ออัปเกรดถาวร</button>
     <p class="prestige-gate-text" id="prestigeGateText"></p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="renownShopModal">
+  <div class="modal-box renown-shop-box">
+    <button class="modal-close-x" id="btnCloseRenownShop">✕</button>
+    <h2>🏪 ร้านชื่อเสียง</h2>
+    <p class="renown-shop-balance">มีชื่อเสียง <b id="renownShopBalance">0 🏅</b> — อัปเกรดพวกนี้อยู่ถาวร ไม่หายตอนเกิดใหม่</p>
+    <div class="renown-shop-list" id="renownShopList"></div>
   </div>
 </div>
 
@@ -206,6 +216,7 @@
 <script src="js/ui/stations.js"></script>
 <script src="js/ui/buff-roll.js"></script>
 <script src="js/ui/prestige-modal.js"></script>
+<script src="js/ui/renown-shop.js"></script>
 <script src="js/render.js"></script>
 <script src="js/main.js"></script>
 </body>

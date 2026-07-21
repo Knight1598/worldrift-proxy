@@ -16,10 +16,16 @@ function defaultIdentity() {
 function defaultStationsExtra() {
   return { s1: { unlocked: false, level: 0 }, s2: { unlocked: false, level: 0 } };
 }
+function defaultRenownUpgrades() {
+  const o = {};
+  RENOWN_UPGRADES.forEach(u => { o[u.key] = 0; });
+  return o;
+}
 function defaultPrestige() {
   // renown = ชื่อเสียงสะสมถาวร, goldAtCycleStart = snapshot totalGoldEarned ตอนเริ่มรอบปัจจุบัน
   // (goldThisCycle = totalGoldEarned - goldAtCycleStart), count = จำนวนครั้งที่เกิดใหม่
-  return { renown: 0, goldAtCycleStart: 0, count: 0 };
+  // upgrades = เลเวลอัปเกรดร้านชื่อเสียง (ดู RENOWN_UPGRADES / systems/prestige.js)
+  return { renown: 0, goldAtCycleStart: 0, count: 0, upgrades: defaultRenownUpgrades() };
 }
 
 let player = {
@@ -203,7 +209,10 @@ function loadGame() {
     missionIndex: Math.max(0, data.missionIndex || 0),
     missionProgress: Math.max(0, data.missionProgress || 0),
     stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
-    prestige: Object.assign(defaultPrestige(), data.prestige || {}),
+    // merge ระดับบน + เติม upgrades ที่ขาด (เซฟ v6 รุ่นแรกยังไม่มี field upgrades — เติมให้ครบทุก key)
+    prestige: Object.assign(defaultPrestige(), data.prestige || {}, {
+      upgrades: Object.assign(defaultRenownUpgrades(), (data.prestige && data.prestige.upgrades) || {}),
+    }),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),

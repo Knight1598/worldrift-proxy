@@ -13,7 +13,8 @@ function tickMissionProgress() {
   player.missionProgress += 1;
   const requirement = getMissionRequirement(player.missionIndex);
   if (player.missionProgress >= requirement) {
-    const reward = getMissionReward(player.missionIndex);
+    // x บุญเพชร (อัปเกรดร้านชื่อเสียง) — จ่ายเพชรจริงมากกว่ารางวัลฐานตามเลเวล gemBonus
+    const reward = Math.round(getMissionReward(player.missionIndex) * getGemGainMult());
     player.missionProgress = 0;
     player.missionIndex += 1;
     player.gems += reward;
