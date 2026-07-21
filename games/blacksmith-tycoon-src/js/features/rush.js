@@ -5,9 +5,9 @@
    ===================================================================== */
 function isRushActive() { return rushState.active; }
 
-// เวลาหลอดความอดทน (ms) — สั้นลงระหว่าง Rush ให้กดดันขึ้น (customer.js/updatePatienceBar เรียกตัวนี้)
+// เวลาหลอดความอดทน (ms) — คงที่ ไม่บีบให้กดดัน (idle ชิลล์) — Rush แค่ทำให้ลูกค้ามาเยอะขึ้น = รายได้พุ่ง ไม่ใช่ความเครียด
 function getPatienceDurationMs() {
-  return PATIENCE_DURATION_MS * (rushState.active ? RUSH_PATIENCE_MULT : 1);
+  return PATIENCE_DURATION_MS;
 }
 
 let rushTimerId = null;

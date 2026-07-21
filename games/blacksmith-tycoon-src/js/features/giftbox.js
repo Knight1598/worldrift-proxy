@@ -13,7 +13,7 @@ function spawnGiftBox() {
   updateSceneMetrics();
   const el = document.createElement('div');
   el.className = 'gift-box';
-  el.textContent = '🎁';
+  el.innerHTML = '<img src="../assets/chests/chest_good_closed.png" alt="chest">';
   // สุ่มตำแหน่งบนพื้นโซนกลาง (ไม่ทับ station แถวบน / เคาน์เตอร์แถวล่าง)
   el.style.left = (scene.width * (0.15 + Math.random() * 0.7)) + 'px';
   el.style.top = (scene.height * (0.42 + Math.random() * 0.25)) + 'px';
@@ -34,6 +34,8 @@ function openGiftBox(el) {
   const stageRect = document.getElementById('standStageView').getBoundingClientRect();
   const x = rect.left - stageRect.left, y = rect.top - stageRect.top;
   el.classList.add('opened');
+  const chestImg = el.querySelector('img');
+  if (chestImg) chestImg.src = '../assets/chests/chest_good_open.png'; // เปลี่ยนเป็นหีบเปิด
   setTimeout(() => { if (el.parentNode) el.remove(); }, 400);
   playSfxUpgrade();
   const roll = Math.random();

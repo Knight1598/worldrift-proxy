@@ -25,17 +25,18 @@ import pathlib
 
 GAMES_DIR = pathlib.Path(__file__).resolve().parent.parent
 SRC_FILE = GAMES_DIR / 'blacksmith-tycoon.html'
-ASSET_DIR = GAMES_DIR / 'assets' / 'blacksmith'
+ASSET_ROOT = GAMES_DIR / 'assets'
 OUT_FILE = GAMES_DIR / 'blacksmith-tycoon-src' / 'blacksmith-tycoon.artifact.html'
 
 
 def main():
     html = SRC_FILE.read_text(encoding='utf-8')
-    refs = sorted(set(re.findall(r'assets/blacksmith/([a-zA-Z0-9_]+\.png)', html)))
-    for fname in refs:
-        data = (ASSET_DIR / fname).read_bytes()
+    # inline ทุก assets/<โฟลเดอร์>/<ไฟล์>.png (ไม่จำกัดแค่ blacksmith/ อีกต่อไป — รองรับ chests/monsters/ui/equipment ฯลฯ)
+    refs = sorted(set(re.findall(r'assets/([a-zA-Z0-9_]+)/([a-zA-Z0-9_]+\.png)', html)))
+    for sub, fname in refs:
+        data = (ASSET_ROOT / sub / fname).read_bytes()
         b64 = base64.b64encode(data).decode('ascii')
-        html = html.replace(f'assets/blacksmith/{fname}', f'data:image/png;base64,{b64}')
+        html = html.replace(f'assets/{sub}/{fname}', f'data:image/png;base64,{b64}')
     OUT_FILE.write_text(html, encoding='utf-8')
     print(f'Inlined {len(refs)} assets -> {OUT_FILE} ({len(html)} bytes)')
     print('Publish this file (not games/blacksmith-tycoon.html) via the Artifact tool.')

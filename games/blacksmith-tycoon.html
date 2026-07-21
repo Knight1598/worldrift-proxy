@@ -270,6 +270,7 @@
     border-left: 1px solid rgba(255,255,255,0.18);
     font-size: 0.68rem;
   }
+  .gem-counter .gem-icon { width: 15px; height: 15px; image-rendering: pixelated; vertical-align: middle; margin-right: 1px; }
   /* ชื่อเสียง 🏅 — โชว์เฉพาะเมื่อเคยเกิดใหม่แล้ว (renderRenown เพิ่ม .show) กัน HUD รกช่วงต้นเกม */
   .renown-counter {
     display: none;
@@ -570,9 +571,9 @@
     text-shadow: 2px 2px 0 #000, 0 0 10px rgba(255,140,60,0.7);
   }
   .combo-indicator.show { display: block; }
-  .combo-indicator .combo-x { color: #ffca5a; font-size: 0.7rem; letter-spacing: 1px; }
-  .combo-indicator .combo-num { color: #ff8a3d; font-size: 1.9rem; vertical-align: middle; }
-  .combo-indicator .combo-bonus { display: block; color: #ffe08a; font-size: 0.66rem; margin-top: -2px; }
+  .combo-indicator .combo-x { color: #ffd88a; font-size: 0.62rem; letter-spacing: 1px; }
+  .combo-indicator .combo-num { color: #ffca5a; font-size: 1.5rem; vertical-align: middle; }
+  .combo-indicator .combo-bonus { display: block; color: #ffe8b0; font-size: 0.6rem; margin-top: -2px; }
   .combo-indicator.combo-pop { animation: comboPop 0.32s cubic-bezier(.22,1,.36,1); }
   @keyframes comboPop {
     0% { transform: scale(0.7); } 55% { transform: scale(1.22); } 100% { transform: scale(1); }
@@ -595,14 +596,14 @@
     font-weight: bold;
     color: #fff;
     text-shadow: 2px 2px 0 #000;
-    padding: 10px 6px;
-    background: linear-gradient(90deg, rgba(255,77,77,0) 0%, rgba(255,77,77,0.92) 20%, rgba(255,138,61,0.92) 80%, rgba(255,138,61,0) 100%);
+    padding: 9px 6px;
+    background: linear-gradient(90deg, rgba(255,196,90,0) 0%, rgba(255,176,66,0.9) 22%, rgba(255,206,120,0.9) 78%, rgba(255,196,90,0) 100%);
+    color: #3a260f; text-shadow: 1px 1px 0 rgba(255,255,255,0.4);
     opacity: 0;
-    transform: translateX(-30px) scale(0.9);
-    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(.22,1,.36,1);
+    transform: translateY(-8px) scale(0.96);
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(.22,1,.36,1);
   }
-  .rush-banner.show { opacity: 1; transform: translateX(0) scale(1); animation: rushBannerPulse 0.7s ease-in-out infinite; }
-  @keyframes rushBannerPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
+  .rush-banner.show { opacity: 1; transform: translateY(0) scale(1); }
 
   /* เหรียญที่ลูกค้าทิ้งไว้รอ worker มาเก็บ */
   .coin-drop {
@@ -983,6 +984,7 @@
     filter: drop-shadow(0 0 6px gold);
     transition: left linear;
   }
+  .golden-goblin img { width: 48px; height: 48px; image-rendering: pixelated; display: block; }
   .golden-goblin.caught {
     transition: none;
     animation: goblinCaughtPop 0.5s ease forwards;
@@ -1081,6 +1083,7 @@
     filter: drop-shadow(0 0 6px rgba(255,215,106,0.8));
     animation: giftBob 0.7s ease-in-out infinite;
   }
+  .gift-box img { width: 44px; height: 40px; image-rendering: pixelated; display: block; }
   @keyframes giftBob {
     0%, 100% { transform: translateY(0) rotate(-4deg); }
     50%      { transform: translateY(-7px) rotate(4deg); }
@@ -1290,7 +1293,7 @@
   <div class="hud-bar">
     <div class="hud-currency-group">
       <div class="gold-counter"><img class="coin-icon" src="assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
-      <div class="gem-counter" id="gemCounter" title="เพชร — ได้จาก Order Missions ใช้สุ่มบัพ">💎<span id="gemValue" class="pixel-num">0</span></div>
+      <div class="gem-counter" id="gemCounter" title="เพชร — ได้จากภารกิจ/ความสำเร็จ ใช้อัปเกรดอุปกรณ์"><img class="gem-icon" src="assets/ui/gem_blue.png" alt="gem"><span id="gemValue" class="pixel-num">0</span></div>
       <div class="renown-counter" id="renownCounter" title="ชื่อเสียง — จากการเกิดใหม่ ให้ตัวคูณรายได้ถาวร">🏅<span id="renownValue" class="pixel-num">0</span></div>
     </div>
     <div class="hud-title">⚒️ Blacksmith Tycoon</div>
@@ -1307,7 +1310,7 @@
 
   <!-- Active Rush: ตัวเลขคอมโบตัวโต (โผล่ตอนคอมโบ >= 2) + แบนเนอร์ Rush -->
   <div class="combo-indicator" id="comboIndicator"></div>
-  <div class="rush-banner" id="rushBanner">🔥 RUSH! ลูกค้ารุมเข้าร้าน — กดผลิตรัวๆ!</div>
+  <div class="rush-banner" id="rushBanner">✨ ช่วงขายดี! ลูกค้าแน่นร้าน</div>
 
   <!-- ป้ายเป้าหมายนำทาง (Guided Objective Chain) — ค้างเหนือปุ่ม FAB ชี้นำผู้เล่นใหม่ทีละสเต็ป -->
   <div class="objective-banner" id="objectiveBanner">
@@ -2876,21 +2879,12 @@ function hideOrderBubble(cust) {
   cust.el.querySelector('.customer-patience-bg').classList.remove('show');
 }
 function updatePatienceBar(cust) {
+  // เกม idle ชิลล์: หลอดความอดทนเป็นแค่ภาพประกอบ ไม่มีบทลงโทษ (ลูกค้าไม่หนี ไม่เสียทิป) — เล่นเพลินๆ ไม่กดดัน
   const duration = cust.patienceDurationMs || PATIENCE_DURATION_MS;
   const elapsed = performance.now() - cust.patienceStartAt;
   const pct = Math.max(0, 1 - elapsed / duration);
   const fill = cust.el.querySelector('.customer-patience-fill');
-  if (fill) {
-    fill.style.width = (pct * 100) + '%';
-    fill.classList.toggle('patience-low', pct <= 0.35); // แดง+กะพริบตอนใกล้หมด (สื่อความเร่งด่วน)
-  }
-  // ปล่อยหลอดหมดขณะกำลังเสิร์ฟ = พลาด! คอมโบขาด + เสียทิป + ลูกค้าบึ้ง (ยิงครั้งเดียวต่อลูกค้า)
-  if (pct <= 0 && !cust.patienceExpired) {
-    cust.patienceExpired = true;
-    cust.orderTip = 0;
-    cust.el.classList.add('angry');
-    GameEvents.emit(EVENTS.ORDER_MISSED, { cust });
-  }
+  if (fill) fill.style.width = (pct * 100) + '%';
 }
 function removeCustomerEl(cust) {
   cust.el.remove();
@@ -3157,9 +3151,9 @@ GameEvents.on(EVENTS.ORDER_MISSED, () => breakCombo()); // ปล่อยหล
    ===================================================================== */
 function isRushActive() { return rushState.active; }
 
-// เวลาหลอดความอดทน (ms) — สั้นลงระหว่าง Rush ให้กดดันขึ้น (customer.js/updatePatienceBar เรียกตัวนี้)
+// เวลาหลอดความอดทน (ms) — คงที่ ไม่บีบให้กดดัน (idle ชิลล์) — Rush แค่ทำให้ลูกค้ามาเยอะขึ้น = รายได้พุ่ง ไม่ใช่ความเครียด
 function getPatienceDurationMs() {
-  return PATIENCE_DURATION_MS * (rushState.active ? RUSH_PATIENCE_MULT : 1);
+  return PATIENCE_DURATION_MS;
 }
 
 let rushTimerId = null;
@@ -3207,7 +3201,7 @@ function spawnGoblin() {
   updateSceneMetrics();
   const el = document.createElement('div');
   el.className = 'golden-goblin';
-  el.textContent = '👺';
+  el.innerHTML = '<img src="assets/monsters/goblin.png" alt="goblin">';
   const y = scene.height * (0.3 + Math.random() * 0.3);
   el.style.top = y + 'px';
   const dir = Math.random() < 0.5 ? 1 : -1; // 1 = วิ่งจากซ้ายไปขวา, -1 = ขวาไปซ้าย
@@ -3264,7 +3258,7 @@ function spawnGiftBox() {
   updateSceneMetrics();
   const el = document.createElement('div');
   el.className = 'gift-box';
-  el.textContent = '🎁';
+  el.innerHTML = '<img src="assets/chests/chest_good_closed.png" alt="chest">';
   // สุ่มตำแหน่งบนพื้นโซนกลาง (ไม่ทับ station แถวบน / เคาน์เตอร์แถวล่าง)
   el.style.left = (scene.width * (0.15 + Math.random() * 0.7)) + 'px';
   el.style.top = (scene.height * (0.42 + Math.random() * 0.25)) + 'px';
@@ -3285,6 +3279,8 @@ function openGiftBox(el) {
   const stageRect = document.getElementById('standStageView').getBoundingClientRect();
   const x = rect.left - stageRect.left, y = rect.top - stageRect.top;
   el.classList.add('opened');
+  const chestImg = el.querySelector('img');
+  if (chestImg) chestImg.src = 'assets/chests/chest_good_open.png'; // เปลี่ยนเป็นหีบเปิด
   setTimeout(() => { if (el.parentNode) el.remove(); }, 400);
   playSfxUpgrade();
   const roll = Math.random();
@@ -3876,21 +3872,13 @@ function renderCombo() {
   el.classList.remove('combo-pop'); void el.offsetWidth; el.classList.add('combo-pop'); // เด้งทุกครั้งที่ขึ้น
 }
 
-GameEvents.on(EVENTS.COMBO_CHANGED, (e) => {
-  const el = document.getElementById('comboIndicator');
-  if (e.combo === 0 && el && el.classList.contains('show')) {
-    // คอมโบขาด — สะบัดสั้นๆ ให้รู้สึก "หลุด" ก่อนซ่อน
-    el.classList.remove('combo-pop'); el.classList.add('combo-break');
-    setTimeout(() => { el.classList.remove('combo-break'); renderCombo(); }, 260);
-    return;
-  }
-  renderCombo();
-});
+// idle ชิลล์: คอมโบเป็นโบนัสเบาๆ ไม่มีดราม่าตอนหลุด — แค่ค่อยๆ หายไปเงียบๆ
+GameEvents.on(EVENTS.COMBO_CHANGED, () => renderCombo());
 
 GameEvents.on(EVENTS.RUSH_STARTED, () => {
   const b = document.getElementById('rushBanner');
   if (b) { b.classList.add('show'); }
-  playSfxStageComplete(); // ยืมเสียงรัวเดิมประกาศ Rush
+  playSfxCashRegister(); // เสียงเบาๆ แบบดีใจ(ขายดี) ไม่ใช่เสียงเตือนภัย
 });
 GameEvents.on(EVENTS.RUSH_ENDED, () => {
   const b = document.getElementById('rushBanner');

@@ -64,21 +64,12 @@ function hideOrderBubble(cust) {
   cust.el.querySelector('.customer-patience-bg').classList.remove('show');
 }
 function updatePatienceBar(cust) {
+  // เกม idle ชิลล์: หลอดความอดทนเป็นแค่ภาพประกอบ ไม่มีบทลงโทษ (ลูกค้าไม่หนี ไม่เสียทิป) — เล่นเพลินๆ ไม่กดดัน
   const duration = cust.patienceDurationMs || PATIENCE_DURATION_MS;
   const elapsed = performance.now() - cust.patienceStartAt;
   const pct = Math.max(0, 1 - elapsed / duration);
   const fill = cust.el.querySelector('.customer-patience-fill');
-  if (fill) {
-    fill.style.width = (pct * 100) + '%';
-    fill.classList.toggle('patience-low', pct <= 0.35); // แดง+กะพริบตอนใกล้หมด (สื่อความเร่งด่วน)
-  }
-  // ปล่อยหลอดหมดขณะกำลังเสิร์ฟ = พลาด! คอมโบขาด + เสียทิป + ลูกค้าบึ้ง (ยิงครั้งเดียวต่อลูกค้า)
-  if (pct <= 0 && !cust.patienceExpired) {
-    cust.patienceExpired = true;
-    cust.orderTip = 0;
-    cust.el.classList.add('angry');
-    GameEvents.emit(EVENTS.ORDER_MISSED, { cust });
-  }
+  if (fill) fill.style.width = (pct * 100) + '%';
 }
 function removeCustomerEl(cust) {
   cust.el.remove();

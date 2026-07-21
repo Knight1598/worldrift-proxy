@@ -16,7 +16,7 @@ function spawnGoblin() {
   updateSceneMetrics();
   const el = document.createElement('div');
   el.className = 'golden-goblin';
-  el.textContent = '👺';
+  el.innerHTML = '<img src="../assets/monsters/goblin.png" alt="goblin">';
   const y = scene.height * (0.3 + Math.random() * 0.3);
   el.style.top = y + 'px';
   const dir = Math.random() < 0.5 ? 1 : -1; // 1 = วิ่งจากซ้ายไปขวา, -1 = ขวาไปซ้าย

@@ -14,21 +14,13 @@ function renderCombo() {
   el.classList.remove('combo-pop'); void el.offsetWidth; el.classList.add('combo-pop'); // เด้งทุกครั้งที่ขึ้น
 }
 
-GameEvents.on(EVENTS.COMBO_CHANGED, (e) => {
-  const el = document.getElementById('comboIndicator');
-  if (e.combo === 0 && el && el.classList.contains('show')) {
-    // คอมโบขาด — สะบัดสั้นๆ ให้รู้สึก "หลุด" ก่อนซ่อน
-    el.classList.remove('combo-pop'); el.classList.add('combo-break');
-    setTimeout(() => { el.classList.remove('combo-break'); renderCombo(); }, 260);
-    return;
-  }
-  renderCombo();
-});
+// idle ชิลล์: คอมโบเป็นโบนัสเบาๆ ไม่มีดราม่าตอนหลุด — แค่ค่อยๆ หายไปเงียบๆ
+GameEvents.on(EVENTS.COMBO_CHANGED, () => renderCombo());
 
 GameEvents.on(EVENTS.RUSH_STARTED, () => {
   const b = document.getElementById('rushBanner');
   if (b) { b.classList.add('show'); }
-  playSfxStageComplete(); // ยืมเสียงรัวเดิมประกาศ Rush
+  playSfxCashRegister(); // เสียงเบาๆ แบบดีใจ(ขายดี) ไม่ใช่เสียงเตือนภัย
 });
 GameEvents.on(EVENTS.RUSH_ENDED, () => {
   const b = document.getElementById('rushBanner');
