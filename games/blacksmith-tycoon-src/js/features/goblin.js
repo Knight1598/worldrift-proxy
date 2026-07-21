@@ -1,11 +1,11 @@
 /* =====================================================================
    Golden Goblin — ทุกๆ 2-3 นาที มี NPC วิ่งผ่านฉากอย่างรวดเร็ว แตะทันได้รางวัลก้อนใหญ่
    (ใช้อิโมจิแทน sprite ใหม่ เพื่อไม่ต้องตัด asset เพิ่มในสโคปนี้)
+
+   รางวัลอิง estimateIncomePerMinute() จาก systems/income-tracker.js (อัตรารายได้จริงล่าสุด
+   ถ้ามี sample พอ ไม่งั้น fallback เป็นสูตรทฤษฎีเดียวกับที่ Offline Earnings ใช้ -- รวมเป็นจุดเดียว
+   แทนที่จะคำนวณสูตรซ้ำคนละที่เหมือนเดิม)
    ===================================================================== */
-function estimateIncomePerMinute() {
-  // อิงสูตร throughput เดียวกับที่ใช้คำนวณ Offline Earnings (deterministic ไม่พึ่ง DOM)
-  return getThroughputPerMs() * getRevenuePerSale() * 60000;
-}
 let goblinTimerId = null;
 function scheduleGoblin() {
   if (goblinTimerId) clearTimeout(goblinTimerId);

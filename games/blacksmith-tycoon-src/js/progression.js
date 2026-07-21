@@ -84,13 +84,16 @@ function advanceStage() {
 }
 
 /* =====================================================================
-   Offline Earnings (ปลดล็อกหลังจ้างพนักงานร้านแรกสำเร็จ) — อิงตามรอบการผลิตจริงของ worker คูณเวลาที่ออฟไลน์
+   Offline Earnings (ปลดล็อกหลังจ้างพนักงานร้านแรกสำเร็จ) — อิงอัตรารายได้ปัจจุบันคูณเวลาที่ออฟไลน์
+   ใช้ estimateIncomePerMinute() ตัวเดียวกับ Golden Goblin (systems/income-tracker.js) แทนสูตรที่
+   เคยคำนวณแยกกันคนละที่ — ในทางปฏิบัติจุดนี้ยังได้ค่าทฤษฎีเหมือนเดิมเสมอ เพราะฟังก์ชันนี้ถูกเรียกตอน
+   บูตเกม (ก่อนมี COIN_COLLECTED sample ใดๆ สะสมเลย) จึง fallback เข้าสูตรทฤษฎีทุกครั้งโดยธรรมชาติ
    ===================================================================== */
 function applyOfflineEarnings() {
   if (player.staffCount === 0) return; // ปลดล็อกหลังจ้างลูกมือคนแรก เหมือนดีไซน์เดิม
   const elapsedMs = Math.min(Date.now() - player.lastSeenAt, getOfflineMaxHours() * 3600 * 1000);
   if (elapsedMs < 30000) return; // น้อยกว่า 30 วินาทีไม่ต้องโชว์ ป้องกันรีเฟรชถี่ๆ แล้วเจอ modal ทุกครั้ง
-  const earned = Math.floor(elapsedMs * getThroughputPerMs() * getRevenuePerSale() * OFFLINE_EFFICIENCY);
+  const earned = Math.floor((elapsedMs / 60000) * estimateIncomePerMinute() * OFFLINE_EFFICIENCY);
   if (earned <= 0) return;
   player.gold += earned;
   player.stats.totalGoldEarned += earned;
