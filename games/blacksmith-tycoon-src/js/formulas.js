@@ -123,13 +123,14 @@ function getSpawnIntervalMs() {
   const level = player.upgradeLevels.signage;
   const reduction = level * SIGNAGE_SPAWN_MS_REDUCTION * getMilestoneMultiplier(level);
   let ms = Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - reduction);
+  if (isRushActive()) ms = Math.max(450, ms * RUSH_SPAWN_MULT); // Rush: ลูกค้ารุมเข้ามาถี่ขึ้นมาก (ทะลุพื้นปกติได้)
   return ms;
 }
 
 function getMaxQueueSize() {
   const level = player.upgradeLevels.signage;
   const bonus = level * SIGNAGE_QUEUE_BONUS * getMilestoneMultiplier(level);
-  let size = Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus));
+  let size = Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus) + (isRushActive() ? RUSH_QUEUE_BONUS : 0));
   return size;
 }
 

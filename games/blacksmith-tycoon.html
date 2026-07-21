@@ -549,7 +549,60 @@
     opacity: 0; transition: opacity 0.15s ease;
   }
   .customer-patience-bg.show { opacity: 1; }
-  .customer-patience-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #6bbf6b, #ffd76a); }
+  .customer-patience-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #6bbf6b, #ffd76a); transition: width 0.12s linear; }
+  /* ใกล้หมดความอดทน — แดง + กะพริบ สื่อความเร่งด่วน (Active Rush) */
+  .customer-patience-fill.patience-low { background: linear-gradient(90deg, #ff4d4d, #ff8a3d); animation: patienceLowPulse 0.5s ease-in-out infinite; }
+  @keyframes patienceLowPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
+  /* ลูกค้าบึ้ง (ปล่อยหลอดหมด) — สั่นหัว + โทนแดง สื่อ "พลาด" */
+  .customer.angry .customer-body { animation: customerAngry 0.4s ease-in-out infinite; }
+  .customer.angry .customer-img { filter: drop-shadow(0 0 4px #ff4d4d) saturate(1.3); }
+  @keyframes customerAngry { 0%,100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+
+  /* ===== Active Rush: ตัวเลขคอมโบตัวโต (กลางบน) ===== */
+  .combo-indicator {
+    position: absolute;
+    top: 74px; left: 0; right: 0;
+    z-index: 15;
+    text-align: center;
+    pointer-events: none;
+    display: none;
+    font-weight: bold;
+    text-shadow: 2px 2px 0 #000, 0 0 10px rgba(255,140,60,0.7);
+  }
+  .combo-indicator.show { display: block; }
+  .combo-indicator .combo-x { color: #ffca5a; font-size: 0.7rem; letter-spacing: 1px; }
+  .combo-indicator .combo-num { color: #ff8a3d; font-size: 1.9rem; vertical-align: middle; }
+  .combo-indicator .combo-bonus { display: block; color: #ffe08a; font-size: 0.66rem; margin-top: -2px; }
+  .combo-indicator.combo-pop { animation: comboPop 0.32s cubic-bezier(.22,1,.36,1); }
+  @keyframes comboPop {
+    0% { transform: scale(0.7); } 55% { transform: scale(1.22); } 100% { transform: scale(1); }
+  }
+  .combo-indicator.combo-break { animation: comboBreak 0.26s ease; color: #ff5555; }
+  @keyframes comboBreak {
+    0% { transform: translateX(0) scale(1); opacity: 1; }
+    25% { transform: translateX(-6px) rotate(-3deg); } 75% { transform: translateX(6px) rotate(3deg); }
+    100% { transform: translateX(0) scale(0.85); opacity: 0.2; }
+  }
+
+  /* ===== Active Rush: แบนเนอร์ Rush (สไลด์เข้ากลางจอ) ===== */
+  .rush-banner {
+    position: absolute;
+    top: 38%; left: 0; right: 0;
+    z-index: 25;
+    text-align: center;
+    pointer-events: none;
+    font-size: 0.95rem;
+    font-weight: bold;
+    color: #fff;
+    text-shadow: 2px 2px 0 #000;
+    padding: 10px 6px;
+    background: linear-gradient(90deg, rgba(255,77,77,0) 0%, rgba(255,77,77,0.92) 20%, rgba(255,138,61,0.92) 80%, rgba(255,138,61,0) 100%);
+    opacity: 0;
+    transform: translateX(-30px) scale(0.9);
+    transition: opacity 0.25s ease, transform 0.25s cubic-bezier(.22,1,.36,1);
+  }
+  .rush-banner.show { opacity: 1; transform: translateX(0) scale(1); animation: rushBannerPulse 0.7s ease-in-out infinite; }
+  @keyframes rushBannerPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.25); } }
 
   /* เหรียญที่ลูกค้าทิ้งไว้รอ worker มาเก็บ */
   .coin-drop {
@@ -1252,6 +1305,10 @@
   </div>
   <div class="material-stock-panel" id="materialStockPanel"></div>
 
+  <!-- Active Rush: ตัวเลขคอมโบตัวโต (โผล่ตอนคอมโบ >= 2) + แบนเนอร์ Rush -->
+  <div class="combo-indicator" id="comboIndicator"></div>
+  <div class="rush-banner" id="rushBanner">🔥 RUSH! ลูกค้ารุมเข้าร้าน — กดผลิตรัวๆ!</div>
+
   <!-- ป้ายเป้าหมายนำทาง (Guided Objective Chain) — ค้างเหนือปุ่ม FAB ชี้นำผู้เล่นใหม่ทีละสเต็ป -->
   <div class="objective-banner" id="objectiveBanner">
     <div class="objective-icon" id="objectiveIcon">🍽️</div>
@@ -1487,6 +1544,10 @@ const EVENTS = {
   ACHIEVEMENT_CLAIMED: 'achievement:claimed', // claimAchievement() — { key }
   DAILY_CLAIMED:       'daily:claimed',       // claimDaily() — { streak, reward }
   OBJECTIVE_COMPLETED: 'objective:completed', // checkObjectives() — { key, reward } (เควสนำทาง ดู systems/objectives.js)
+  COMBO_CHANGED:      'combo:changed',       // registerServe()/breakCombo() — { combo } (Active Rush ดู features/combo.js)
+  RUSH_STARTED:       'rush:started',        // startRush() — {}
+  RUSH_ENDED:         'rush:ended',          // endRush() — {}
+  ORDER_MISSED:       'order:missed',        // ลูกค้าหมดความอดทนขณะกำลังเสิร์ฟ — { cust } (คอมโบขาด+เสียทิป)
 };
 </script>
 <script>
@@ -1654,7 +1715,10 @@ const SIGNAGE_QUEUE_BONUS = 0.2; // ต่อเลเวล (ปัดเศษ
 const MAX_QUEUE_SIZE = 20; // เพดานกันคิวยาวจนล้นจอ
 
 const CUSTOMER_WALK_SPEED_PX = 70; // ความเร็วเดินของลูกค้า คงที่ ไม่ผูกกับอัปเกรด (สเปกระบุให้อัปเกรดความเร็วมีผลแค่ผู้เล่น/พนักงาน)
-const PATIENCE_DURATION_MS = 9000; // หลอดความอดทนเชิงภาพล้วนๆ ไม่มีผลลงโทษถ้าหมด (ไม่ได้ระบุ fail-state ไว้ในสเปก)
+// หลอดความอดทน: ตอนนี้ "มีผลจริง" แล้ว (Active Rush) — ปล่อยหมดขณะกำลังเสิร์ฟ = คอมโบขาด + เสียทิป ลูกค้าบึ้ง
+// ตั้ง 11 วิให้ worker เดียวแบบ auto เสิร์ฟทันพอดี (เดินไป+คราฟต์+เดินกลับ ~7.8 วิ) แต่ช่วง Rush หด x0.6 = 6.6 วิ
+// ทำให้ "ต้องกดผลิต" เร่งของถึงจะทันหลอด (getPatienceDurationMs() ใน features/rush.js คิดตัวคูณ Rush ให้)
+const PATIENCE_DURATION_MS = 11000;
 const APPROX_ORDER_TRAVEL_PX = 240; // ลดลงหลังตัดขาเดินเก็บเหรียญ (COLLECT) ออกจากรอบงาน // ระยะทางเดินโดยประมาณต่อ 1 ออเดอร์ (ไป station + ไปส่งที่คิว + ไปเก็บเหรียญ) ใช้คำนวณ throughput แบบไม่พึ่ง DOM เพื่อให้ deterministic
 
 // ===== Renovate (ขึ้นด่านแบบ Eatventure) =====
@@ -1769,8 +1833,27 @@ const OBJECTIVE_CHAIN = [
 
 // ===== แตะฉากช่วย "โหมไฟเตา" (Active-tap) — แตะพื้นที่ว่างในฉากตอนพนักงานกำลังคราฟต์ เร่ง craft ให้เร็วขึ้น =====
 // ให้มี "อะไรให้ทำด้วยมือ" ในช่วงต้นก่อนเกมจะกลายเป็น idle เต็มตัว + สอนกลายๆ ว่าการมีส่วนร่วมมันคุ้ม
-const STOKE_CRAFT_MS = 150;   // แตะ 1 ครั้ง = ดัน craftElapsed ของทุก worker ที่กำลังคราฟต์ไปข้างหน้าเท่านี้
-const STOKE_SPARK_COUNT = 4;  // จำนวนประกายไฟที่กระเด็นออกจากจุดที่แตะ (ฟีดแบ็กภาพ)
+// เพิ่มจาก 150 -> 650: "กดผลิตสินค้า" เป็นแกนหลักของการเล่นแบบ Active Rush — แตะ 1 ครั้งดันคราฟต์
+// ไปเยอะ(~1/4 ของคราฟต์ฐาน) ให้ผู้เล่นเร่งของทันออเดอร์ที่รุมเข้ามาได้ด้วยมือ (auto ยังทำงานช้าๆ เป็น fallback ตอน idle)
+const STOKE_CRAFT_MS = 650;   // แตะ 1 ครั้ง = ดัน craftElapsed ของทุก worker ที่กำลังคราฟต์ไปข้างหน้าเท่านี้
+const STOKE_SPARK_COUNT = 5;  // จำนวนประกายไฟที่กระเด็นออกจากจุดที่แตะ (ฟีดแบ็กภาพ)
+
+// ===== Combo (เสิร์ฟต่อเนื่องให้ทันเวลา) — แกนความ "ต้องรักษาจังหวะ" ของ Active Rush =====
+// เสิร์ฟออเดอร์สำเร็จภายใน COMBO_WINDOW จากครั้งก่อน = คอมโบ +1 (ตัวคูณเงิน + เติม Fever ไวขึ้น)
+// ปล่อยให้ขาดช่วง หรือปล่อยหลอดความอดทนหมด = คอมโบขาด (เริ่มนับใหม่) — ทำให้ "เร็ว+ไม่พลาด" มีรางวัลจริง
+const COMBO_WINDOW_MS = 3500;     // ต้องเสิร์ฟครั้งถัดไปภายในเวลานี้ ไม่งั้นคอมโบรีเซ็ต
+const COMBO_GOLD_BONUS = 0.05;    // +5% เงินต่อ 1 คอมโบ (เหนือคอมโบแรก)
+const COMBO_MAX_BONUS = 1.5;      // เพดานโบนัสเงินจากคอมโบ (+150% ที่คอมโบ ~31)
+const COMBO_FEVER_BONUS = 0.04;   // เติมหลอด Fever ไวขึ้น +4% ต่อคอมโบ
+const COMBO_MAX_FEVER_BONUS = 1.0;
+
+// ===== Rush Hour (ลูกค้ารุมเป็นระลอก) — ช่วงกดดันที่ลูกค้ามาถี่ + หลอดหมดไว ต้องกดผลิตรัวๆ =====
+const RUSH_INTERVAL_MIN_MS = 38000; // เว้นช่วงก่อน Rush ถัดไป (สุ่มในช่วง)
+const RUSH_INTERVAL_MAX_MS = 60000;
+const RUSH_DURATION_MS = 12000;     // Rush อยู่นานเท่านี้
+const RUSH_SPAWN_MULT = 0.35;       // ระหว่าง Rush ลูกค้ามาถี่ขึ้น (spawn interval x นี้)
+const RUSH_PATIENCE_MULT = 0.6;     // ระหว่าง Rush หลอดความอดทนหมดไวขึ้น (duration x นี้)
+const RUSH_QUEUE_BONUS = 3;         // ระหว่าง Rush รับคิวได้มากขึ้น (ลูกค้ารุมเข้าเยอะ)
 
 // ===== Multi-Staff System =====
 const MAX_STAFF_COUNT = 4; // จ้างลูกมือได้สูงสุด 4 คน (รวมผู้เล่นเอง = 5 คนพร้อมกันในร้าน)
@@ -1949,8 +2032,13 @@ let player = {
   objectiveIndex: 0,                     // เควสนำทางลำดับที่กำลังทำอยู่ (ดู systems/objectives.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true, musicEnabled: true },
-  stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0 },
+  stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 },
 };
+
+// Combo (Active Rush) เป็น session state ล้วนๆ ไม่ persist — เริ่มนับใหม่ทุกครั้งที่เข้าเกม (ดู features/combo.js)
+let comboState = { count: 0, expiresAt: 0 };
+// Rush Hour เป็น session state เช่นกัน (ดู features/rush.js)
+let rushState = { active: false, endsAt: 0 };
 
 // Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
 let feverState = { progress: 0, active: false, endsAt: 0 };
@@ -2128,7 +2216,7 @@ function loadGame() {
     objectiveIndex: Math.max(0, data.objectiveIndex || 0),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
-    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0 }, data.stats || {}),
+    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 }, data.stats || {}),
   });
   if (needsResave) {
     saveGame(); // เขียนเป็น v6 ทันทีหลัง migrate สำเร็จ
@@ -2262,13 +2350,14 @@ function getSpawnIntervalMs() {
   const level = player.upgradeLevels.signage;
   const reduction = level * SIGNAGE_SPAWN_MS_REDUCTION * getMilestoneMultiplier(level);
   let ms = Math.max(MIN_SPAWN_INTERVAL_MS, BASE_SPAWN_INTERVAL_MS - reduction);
+  if (isRushActive()) ms = Math.max(450, ms * RUSH_SPAWN_MULT); // Rush: ลูกค้ารุมเข้ามาถี่ขึ้นมาก (ทะลุพื้นปกติได้)
   return ms;
 }
 
 function getMaxQueueSize() {
   const level = player.upgradeLevels.signage;
   const bonus = level * SIGNAGE_QUEUE_BONUS * getMilestoneMultiplier(level);
-  let size = Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus));
+  let size = Math.min(MAX_QUEUE_SIZE, BASE_MAX_QUEUE + Math.round(bonus) + (isRushActive() ? RUSH_QUEUE_BONUS : 0));
   return size;
 }
 
@@ -2643,6 +2732,7 @@ function tickWorkers(dt) {
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);
         cust.patienceStartAt = performance.now();
+        cust.patienceDurationMs = getPatienceDurationMs(); // snapshot ตอนเริ่มเสิร์ฟ (สั้นลงถ้าอยู่ช่วง Rush)
         showOrderBubble(cust);
         w.orderId = cust.id;
         w.state = 'WALK_TO_STATION';
@@ -2786,10 +2876,21 @@ function hideOrderBubble(cust) {
   cust.el.querySelector('.customer-patience-bg').classList.remove('show');
 }
 function updatePatienceBar(cust) {
+  const duration = cust.patienceDurationMs || PATIENCE_DURATION_MS;
   const elapsed = performance.now() - cust.patienceStartAt;
-  const pct = Math.max(0, 1 - elapsed / PATIENCE_DURATION_MS);
+  const pct = Math.max(0, 1 - elapsed / duration);
   const fill = cust.el.querySelector('.customer-patience-fill');
-  if (fill) fill.style.width = (pct * 100) + '%';
+  if (fill) {
+    fill.style.width = (pct * 100) + '%';
+    fill.classList.toggle('patience-low', pct <= 0.35); // แดง+กะพริบตอนใกล้หมด (สื่อความเร่งด่วน)
+  }
+  // ปล่อยหลอดหมดขณะกำลังเสิร์ฟ = พลาด! คอมโบขาด + เสียทิป + ลูกค้าบึ้ง (ยิงครั้งเดียวต่อลูกค้า)
+  if (pct <= 0 && !cust.patienceExpired) {
+    cust.patienceExpired = true;
+    cust.orderTip = 0;
+    cust.el.classList.add('angry');
+    GameEvents.emit(EVENTS.ORDER_MISSED, { cust });
+  }
 }
 function removeCustomerEl(cust) {
   cust.el.remove();
@@ -2859,8 +2960,9 @@ function pickupCoin(coin) {
   // ที่อัปเดตยอดสะสม แทนตัวเลข 5 อันซ้อนทับกันอ่านไม่ออก (ดู ui/floating-text.js)
   spawnCoinFloatText(coin.x, coin.y, Math.round(coin.value), coin.tip);
   player.stats.totalCustomersServed += 1;
-  // ยิง event แทนให้ไฟล์นี้ต้องรู้จัก Order Missions เอง — systems/missions.js subscribe เอง
-  GameEvents.emit(EVENTS.ORDER_SERVED, {});
+  // ยิง event แทนให้ไฟล์นี้ต้องรู้จัก Order Missions/Combo เอง — systems/missions.js + features/combo.js subscribe เอง
+  GameEvents.emit(EVENTS.ORDER_SERVED, {}); // registerServe() รันตรงนี้ คอมโบอัปเดตก่อน snapshot ด้านล่าง
+  coin.comboMult = getComboMult(); // ล็อกตัวคูณคอมโบ ณ ตอนเสิร์ฟ ไว้ใช้ตอนเหรียญบินถึงกระเป๋า
   startCoinFlight(coin);
 }
 
@@ -2918,7 +3020,8 @@ function tickFlyingCoins(dt) {
 }
 
 function finishCoinFlight(coin) {
-  const total = coin.value + coin.tip;
+  // ตัวคูณคอมโบที่ล็อกไว้ตอนเสิร์ฟ (Active Rush) — คอมโบ 1 = x1 พอดี ไม่กระทบออเดอร์เดี่ยว
+  const total = Math.round((coin.value + coin.tip) * (coin.comboMult || 1));
   player.gold += total;
   player.stats.totalGoldEarned += total;
   coin.el.remove();
@@ -2978,7 +3081,7 @@ function isFeverActive() {
 }
 function addFeverProgress(amount) {
   if (feverState.active) return; // ระหว่าง Fever ไม่ต้องสะสมซ้ำ (เต็มแล้วรอใช้ให้หมดก่อน)
-  feverState.progress = Math.min(1, feverState.progress + amount);
+  feverState.progress = Math.min(1, feverState.progress + amount * getComboFeverMult()); // คอมโบสูง = Fever มาไวขึ้น
   // ยิง event แทนเรียก renderFeverBar() (ui/hud.js) ข้ามโดเมนตรงๆ — features/ ไม่ควรรู้จัก DOM ของ HUD
   GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: feverState.progress });
 }
@@ -3004,6 +3107,86 @@ function tickFever() {
 // ไม่ต้องรู้จัก Fever Mode เลยด้วยซ้ำ
 GameEvents.on(EVENTS.ORDER_DELIVERED, () => addFeverProgress(FEVER_FILL_PER_ORDER));
 
+</script>
+<script>
+/* =====================================================================
+   Combo (Active Rush) — เสิร์ฟออเดอร์ต่อเนื่องให้ทันเวลาเพื่อสะสมคอมโบ ตัวคูณเงิน + เติม Fever ไวขึ้น
+   คอมโบขาดเมื่อ (1) เว้นช่วงเกิน COMBO_WINDOW_MS หรือ (2) ปล่อยหลอดความอดทนลูกค้าหมดขณะกำลังเสิร์ฟ
+   comboState เป็น session state ล้วนๆ (ประกาศที่ state.js เหมือน feverState) ไม่ persist ผ่าน save
+   ===================================================================== */
+function getComboCount() { return comboState.count; }
+
+// ตัวคูณเงินจากคอมโบ — คอมโบแรก (1) = x1 พอดี (กันกระทบเทสต์ที่เช็คเงินออเดอร์เดียวเป๊ะ) แล้วไต่ขึ้นทีละ 5%
+function getComboMult() {
+  return 1 + Math.min(COMBO_MAX_BONUS, Math.max(0, comboState.count - 1) * COMBO_GOLD_BONUS);
+}
+// ตัวคูณอัตราเติมหลอด Fever จากคอมโบ (ยิ่งคอมโบสูง Fever มาไวขึ้น — รางวัลของการเล่นแอคทีฟ)
+function getComboFeverMult() {
+  return 1 + Math.min(COMBO_MAX_FEVER_BONUS, Math.max(0, comboState.count - 1) * COMBO_FEVER_BONUS);
+}
+
+// เรียกทุกครั้งที่เสิร์ฟออเดอร์สำเร็จ (ORDER_SERVED) — ต่อคอมโบถ้ายังอยู่ในหน้าต่างเวลา ไม่งั้นเริ่มนับใหม่ที่ 1
+function registerServe() {
+  const now = performance.now();
+  comboState.count = (now <= comboState.expiresAt) ? comboState.count + 1 : 1;
+  comboState.expiresAt = now + COMBO_WINDOW_MS;
+  if (comboState.count > (player.stats.bestCombo || 0)) player.stats.bestCombo = comboState.count;
+  GameEvents.emit(EVENTS.COMBO_CHANGED, { combo: comboState.count });
+}
+
+function breakCombo() {
+  if (comboState.count === 0) return;
+  comboState.count = 0;
+  comboState.expiresAt = 0;
+  GameEvents.emit(EVENTS.COMBO_CHANGED, { combo: 0 });
+}
+
+// เรียกทุกเฟรมจาก gameTick — คอมโบหมดอายุเองถ้าเว้นช่วงนานเกิน (ไม่ได้เสิร์ฟต่อเนื่อง)
+function tickCombo() {
+  if (comboState.count > 0 && performance.now() > comboState.expiresAt) breakCombo();
+}
+
+GameEvents.on(EVENTS.ORDER_SERVED, () => registerServe());
+GameEvents.on(EVENTS.ORDER_MISSED, () => breakCombo()); // ปล่อยหลอดหมด = คอมโบขาดทันที
+</script>
+<script>
+/* =====================================================================
+   Rush Hour (Active Rush) — ลูกค้ารุมเข้ามาเป็นระลอกเป็นช่วงๆ: มาถี่ขึ้น + รับคิวได้มากขึ้น +
+   หลอดความอดทนหมดไวขึ้น → บีบให้ผู้เล่นกดผลิตรัวๆ เพื่อเสิร์ฟให้ทัน (คอมโบพุ่ง / พลาดคอมโบขาด)
+   rushState เป็น session state ล้วนๆ (ประกาศที่ state.js) ไม่ persist ผ่าน save
+   ===================================================================== */
+function isRushActive() { return rushState.active; }
+
+// เวลาหลอดความอดทน (ms) — สั้นลงระหว่าง Rush ให้กดดันขึ้น (customer.js/updatePatienceBar เรียกตัวนี้)
+function getPatienceDurationMs() {
+  return PATIENCE_DURATION_MS * (rushState.active ? RUSH_PATIENCE_MULT : 1);
+}
+
+let rushTimerId = null;
+function scheduleNextRush() {
+  if (rushTimerId) clearTimeout(rushTimerId);
+  const delay = RUSH_INTERVAL_MIN_MS + Math.random() * (RUSH_INTERVAL_MAX_MS - RUSH_INTERVAL_MIN_MS);
+  rushTimerId = setTimeout(startRush, delay);
+}
+
+function startRush() {
+  rushState.active = true;
+  rushState.endsAt = performance.now() + RUSH_DURATION_MS;
+  GameEvents.emit(EVENTS.RUSH_STARTED, {});
+  scheduleNextCustomer(); // รีสตาร์ตตัวจับเวลา spawn ให้ใช้ interval สั้นของ Rush ทันที (ดู getSpawnIntervalMs)
+}
+
+function endRush() {
+  rushState.active = false;
+  GameEvents.emit(EVENTS.RUSH_ENDED, {});
+  scheduleNextCustomer(); // กลับไปใช้ interval ปกติ
+  scheduleNextRush();
+}
+
+// เรียกทุกเฟรมจาก gameTick — จบ Rush เมื่อหมดเวลา
+function tickRush() {
+  if (rushState.active && performance.now() >= rushState.endsAt) endRush();
+}
 </script>
 <script>
 /* =====================================================================
@@ -3675,6 +3858,44 @@ function showMilestoneToast(displayName, level, mult) {
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1900);
 }
+</script>
+<script>
+/* =====================================================================
+   Active Rush HUD — ตัวเลขคอมโบตัวโต + แบนเนอร์ Rush (ตรรกะอยู่ที่ features/combo.js + features/rush.js)
+   คอมโบโชว์เมื่อ >= 2, เด้งทุกครั้งที่ต่อคอมโบ, สั่น+จางตอนคอมโบขาด | Rush banner สไลด์เข้า/ออกตามอีเวนต์
+   ===================================================================== */
+function renderCombo() {
+  const el = document.getElementById('comboIndicator');
+  if (!el) return;
+  const combo = getComboCount();
+  if (combo < 2) { el.classList.remove('show'); return; }
+  const bonusPct = Math.round((getComboMult() - 1) * 100);
+  el.innerHTML = '<span class="combo-x">COMBO</span> <span class="combo-num">x' + combo + '</span>'
+    + '<span class="combo-bonus">+' + bonusPct + '% 🪙</span>';
+  el.classList.add('show');
+  el.classList.remove('combo-pop'); void el.offsetWidth; el.classList.add('combo-pop'); // เด้งทุกครั้งที่ขึ้น
+}
+
+GameEvents.on(EVENTS.COMBO_CHANGED, (e) => {
+  const el = document.getElementById('comboIndicator');
+  if (e.combo === 0 && el && el.classList.contains('show')) {
+    // คอมโบขาด — สะบัดสั้นๆ ให้รู้สึก "หลุด" ก่อนซ่อน
+    el.classList.remove('combo-pop'); el.classList.add('combo-break');
+    setTimeout(() => { el.classList.remove('combo-break'); renderCombo(); }, 260);
+    return;
+  }
+  renderCombo();
+});
+
+GameEvents.on(EVENTS.RUSH_STARTED, () => {
+  const b = document.getElementById('rushBanner');
+  if (b) { b.classList.add('show'); }
+  playSfxStageComplete(); // ยืมเสียงรัวเดิมประกาศ Rush
+});
+GameEvents.on(EVENTS.RUSH_ENDED, () => {
+  const b = document.getElementById('rushBanner');
+  if (b) b.classList.remove('show');
+});
 </script>
 <script>
 /* =====================================================================
@@ -4719,6 +4940,8 @@ function gameTick(ts) {
   lastTickTime = ts;
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
   tickFever();
+  tickCombo();
+  tickRush();
   tickMaterialRegen(dt);
   tickWorkers(dt);
   tickCustomers(dt);
@@ -4806,6 +5029,7 @@ initWorkers();
 scheduleNextCustomer();
 scheduleGoblin();
 scheduleGiftBox();
+scheduleNextRush(); // Active Rush: ตั้งเวลาให้ลูกค้ารุมเข้ามาเป็นระลอก
 rafId = requestAnimationFrame(gameTick);
 
 // สอนเล่นครั้งแรก (ผู้เล่นใหม่) — โชว์หลังบูตเสร็จ

@@ -43,6 +43,10 @@
   </div>
   <div class="material-stock-panel" id="materialStockPanel"></div>
 
+  <!-- Active Rush: ตัวเลขคอมโบตัวโต (โผล่ตอนคอมโบ >= 2) + แบนเนอร์ Rush -->
+  <div class="combo-indicator" id="comboIndicator"></div>
+  <div class="rush-banner" id="rushBanner">🔥 RUSH! ลูกค้ารุมเข้าร้าน — กดผลิตรัวๆ!</div>
+
   <!-- ป้ายเป้าหมายนำทาง (Guided Objective Chain) — ค้างเหนือปุ่ม FAB ชี้นำผู้เล่นใหม่ทีละสเต็ป -->
   <div class="objective-banner" id="objectiveBanner">
     <div class="objective-icon" id="objectiveIcon">🍽️</div>
@@ -237,6 +241,8 @@
 <script src="js/entities/economy.js"></script>
 <script src="js/entities/materials.js"></script>
 <script src="js/features/fever.js"></script>
+<script src="js/features/combo.js"></script>
+<script src="js/features/rush.js"></script>
 <script src="js/features/goblin.js"></script>
 <script src="js/features/giftbox.js"></script>
 <script src="js/systems/income-tracker.js"></script>
@@ -249,6 +255,7 @@
 <script src="js/systems/objectives.js"></script>
 <script src="js/progression.js"></script>
 <script src="js/ui/floating-text.js"></script>
+<script src="js/ui/active-rush-hud.js"></script>
 <script src="js/ui/hud.js"></script>
 <script src="js/ui/stage-status-bar.js"></script>
 <script src="js/ui/upgrade-list.js"></script>

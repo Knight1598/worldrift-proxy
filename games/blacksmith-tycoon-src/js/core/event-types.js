@@ -27,4 +27,8 @@ const EVENTS = {
   ACHIEVEMENT_CLAIMED: 'achievement:claimed', // claimAchievement() — { key }
   DAILY_CLAIMED:       'daily:claimed',       // claimDaily() — { streak, reward }
   OBJECTIVE_COMPLETED: 'objective:completed', // checkObjectives() — { key, reward } (เควสนำทาง ดู systems/objectives.js)
+  COMBO_CHANGED:      'combo:changed',       // registerServe()/breakCombo() — { combo } (Active Rush ดู features/combo.js)
+  RUSH_STARTED:       'rush:started',        // startRush() — {}
+  RUSH_ENDED:         'rush:ended',          // endRush() — {}
+  ORDER_MISSED:       'order:missed',        // ลูกค้าหมดความอดทนขณะกำลังเสิร์ฟ — { cust } (คอมโบขาด+เสียทิป)
 };

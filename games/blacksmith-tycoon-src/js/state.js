@@ -55,8 +55,13 @@ let player = {
   objectiveIndex: 0,                     // เควสนำทางลำดับที่กำลังทำอยู่ (ดู systems/objectives.js)
   lastSeenAt: Date.now(),
   settings: { soundEnabled: true, musicEnabled: true },
-  stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0 },
+  stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 },
 };
+
+// Combo (Active Rush) เป็น session state ล้วนๆ ไม่ persist — เริ่มนับใหม่ทุกครั้งที่เข้าเกม (ดู features/combo.js)
+let comboState = { count: 0, expiresAt: 0 };
+// Rush Hour เป็น session state เช่นกัน (ดู features/rush.js)
+let rushState = { active: false, endsAt: 0 };
 
 // Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
 let feverState = { progress: 0, active: false, endsAt: 0 };
@@ -234,7 +239,7 @@ function loadGame() {
     objectiveIndex: Math.max(0, data.objectiveIndex || 0),
     lastSeenAt: data.lastSeenAt || Date.now(),
     settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
-    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0 }, data.stats || {}),
+    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 }, data.stats || {}),
   });
   if (needsResave) {
     saveGame(); // เขียนเป็น v6 ทันทีหลัง migrate สำเร็จ

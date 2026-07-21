@@ -7,7 +7,7 @@ function isFeverActive() {
 }
 function addFeverProgress(amount) {
   if (feverState.active) return; // ระหว่าง Fever ไม่ต้องสะสมซ้ำ (เต็มแล้วรอใช้ให้หมดก่อน)
-  feverState.progress = Math.min(1, feverState.progress + amount);
+  feverState.progress = Math.min(1, feverState.progress + amount * getComboFeverMult()); // คอมโบสูง = Fever มาไวขึ้น
   // ยิง event แทนเรียก renderFeverBar() (ui/hud.js) ข้ามโดเมนตรงๆ — features/ ไม่ควรรู้จัก DOM ของ HUD
   GameEvents.emit(EVENTS.FEVER_PROGRESS, { progress: feverState.progress });
 }

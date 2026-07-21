@@ -20,6 +20,8 @@ function gameTick(ts) {
   lastTickTime = ts;
   dt = Math.min(dt, 100); // กันดีเลย์กระโดดยาวตอนสลับแท็บ/lag spike
   tickFever();
+  tickCombo();
+  tickRush();
   tickMaterialRegen(dt);
   tickWorkers(dt);
   tickCustomers(dt);
@@ -107,6 +109,7 @@ initWorkers();
 scheduleNextCustomer();
 scheduleGoblin();
 scheduleGiftBox();
+scheduleNextRush(); // Active Rush: ตั้งเวลาให้ลูกค้ารุมเข้ามาเป็นระลอก
 rafId = requestAnimationFrame(gameTick);
 
 // สอนเล่นครั้งแรก (ผู้เล่นใหม่) — โชว์หลังบูตเสร็จ

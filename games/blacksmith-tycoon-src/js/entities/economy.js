@@ -40,8 +40,9 @@ function pickupCoin(coin) {
   // ที่อัปเดตยอดสะสม แทนตัวเลข 5 อันซ้อนทับกันอ่านไม่ออก (ดู ui/floating-text.js)
   spawnCoinFloatText(coin.x, coin.y, Math.round(coin.value), coin.tip);
   player.stats.totalCustomersServed += 1;
-  // ยิง event แทนให้ไฟล์นี้ต้องรู้จัก Order Missions เอง — systems/missions.js subscribe เอง
-  GameEvents.emit(EVENTS.ORDER_SERVED, {});
+  // ยิง event แทนให้ไฟล์นี้ต้องรู้จัก Order Missions/Combo เอง — systems/missions.js + features/combo.js subscribe เอง
+  GameEvents.emit(EVENTS.ORDER_SERVED, {}); // registerServe() รันตรงนี้ คอมโบอัปเดตก่อน snapshot ด้านล่าง
+  coin.comboMult = getComboMult(); // ล็อกตัวคูณคอมโบ ณ ตอนเสิร์ฟ ไว้ใช้ตอนเหรียญบินถึงกระเป๋า
   startCoinFlight(coin);
 }
 
@@ -99,7 +100,8 @@ function tickFlyingCoins(dt) {
 }
 
 function finishCoinFlight(coin) {
-  const total = coin.value + coin.tip;
+  // ตัวคูณคอมโบที่ล็อกไว้ตอนเสิร์ฟ (Active Rush) — คอมโบ 1 = x1 พอดี ไม่กระทบออเดอร์เดี่ยว
+  const total = Math.round((coin.value + coin.tip) * (coin.comboMult || 1));
   player.gold += total;
   player.stats.totalGoldEarned += total;
   coin.el.remove();

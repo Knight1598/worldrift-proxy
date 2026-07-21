@@ -149,6 +149,7 @@ function tickWorkers(dt) {
           ? Math.round(cust.orderRevenue * VIP_TIP_RATIO)
           : (Math.random() < getTipChance() ? Math.round(cust.orderRevenue * (0.5 + Math.random())) : 0);
         cust.patienceStartAt = performance.now();
+        cust.patienceDurationMs = getPatienceDurationMs(); // snapshot ตอนเริ่มเสิร์ฟ (สั้นลงถ้าอยู่ช่วง Rush)
         showOrderBubble(cust);
         w.orderId = cust.id;
         w.state = 'WALK_TO_STATION';
