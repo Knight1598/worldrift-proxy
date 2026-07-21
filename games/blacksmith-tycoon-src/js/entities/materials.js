@@ -8,9 +8,12 @@ function hasEnoughMaterials(recipe) {
 }
 
 function consumeMaterials(recipe) {
+  // hasEnoughMaterials() ถูกเช็คแค่ตอน "เริ่ม" คราฟต์ (worker.js) ไม่ใช่ตอนนี้ -- ถ้ามีหลาย worker
+  // (multi-staff สูงสุด 5 คน) เริ่มคราฟต์พร้อมกันตอนคลังพอ แล้วมาเบิกจริงพร้อมกันตอนคราฟต์เสร็จ อาจเบิกรวมกันเกินคลังที่เหลือ
+  // clamp ไว้ที่ 0 กันคลังติดลบ (เลขติดลบใน UI ดูเป็นบั๊ก) แทนที่จะไปยกเลิกคราฟต์ที่ทำไปแล้วครึ่งทาง
   recipe.forEach(r => {
     const inv = player.inventory[r.material];
-    inv.stock -= r.qty;
+    inv.stock = Math.max(0, inv.stock - r.qty);
     GameEvents.emit(EVENTS.MATERIAL_CONSUMED, { material: r.material, qty: r.qty, remaining: inv.stock });
   });
 }

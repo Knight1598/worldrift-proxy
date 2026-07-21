@@ -55,3 +55,6 @@ function refreshProductLevelModalIfOpen() {
 }
 GameEvents.on(EVENTS.COIN_COLLECTED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
+// บัพ "ลดกระหน่ำ" เปลี่ยนราคาที่ getUpgradeCost('portion') คืนค่าเหมือนกัน -- รีเฟรชตอนเริ่ม/หมดบัพ (ดู upgrade-list.js)
+GameEvents.on(EVENTS.BUFF_ROLLED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
+GameEvents.on(EVENTS.BUFF_ENDED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });

@@ -82,3 +82,6 @@ GameEvents.on(EVENTS.COIN_COLLECTED, () => renderPermUpgradeList());
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderPermUpgradeList());
 GameEvents.on(EVENTS.STAFF_HIRED, () => renderPermUpgradeList());
 GameEvents.on(EVENTS.VAULT_UPGRADED, () => renderPermUpgradeList());
+// บัพ "ลดกระหน่ำ" เปลี่ยนราคาจ้างลูกมือ/อัปคลังออฟไลน์ -- รีเฟรชราคาที่โชว์ทันทีตอนเริ่ม/หมดบัพ (ดู upgrade-list.js)
+GameEvents.on(EVENTS.BUFF_ROLLED, () => renderPermUpgradeList());
+GameEvents.on(EVENTS.BUFF_ENDED, () => renderPermUpgradeList());

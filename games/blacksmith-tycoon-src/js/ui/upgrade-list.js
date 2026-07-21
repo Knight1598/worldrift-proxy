@@ -43,3 +43,7 @@ function renderUpgradeList() {
 
 GameEvents.on(EVENTS.COIN_COLLECTED, () => renderUpgradeList());
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderUpgradeList());
+// บัพ "ลดกระหน่ำ" (discount) เปลี่ยนราคาที่ getUpgradeCost() คืนค่า -- ต้องรีเฟรชราคาที่โชว์ทันทีตอนเริ่ม/หมดบัพ
+// ไม่งั้นราคาที่เห็นค้างเป็นค่าก่อนหน้าจนกว่าจะบังเอิญมี COIN_COLLECTED/UPGRADE_PURCHASED มาเรียก re-render ให้
+GameEvents.on(EVENTS.BUFF_ROLLED, () => renderUpgradeList());
+GameEvents.on(EVENTS.BUFF_ENDED, () => renderUpgradeList());

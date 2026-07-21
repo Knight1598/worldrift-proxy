@@ -1887,9 +1887,12 @@ function hasEnoughMaterials(recipe) {
 }
 
 function consumeMaterials(recipe) {
+  // hasEnoughMaterials() ถูกเช็คแค่ตอน "เริ่ม" คราฟต์ (worker.js) ไม่ใช่ตอนนี้ -- ถ้ามีหลาย worker
+  // (multi-staff สูงสุด 5 คน) เริ่มคราฟต์พร้อมกันตอนคลังพอ แล้วมาเบิกจริงพร้อมกันตอนคราฟต์เสร็จ อาจเบิกรวมกันเกินคลังที่เหลือ
+  // clamp ไว้ที่ 0 กันคลังติดลบ (เลขติดลบใน UI ดูเป็นบั๊ก) แทนที่จะไปยกเลิกคราฟต์ที่ทำไปแล้วครึ่งทาง
   recipe.forEach(r => {
     const inv = player.inventory[r.material];
-    inv.stock -= r.qty;
+    inv.stock = Math.max(0, inv.stock - r.qty);
     GameEvents.emit(EVENTS.MATERIAL_CONSUMED, { material: r.material, qty: r.qty, remaining: inv.stock });
   });
 }
@@ -2405,6 +2408,10 @@ function renderUpgradeList() {
 
 GameEvents.on(EVENTS.COIN_COLLECTED, () => renderUpgradeList());
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderUpgradeList());
+// บัพ "ลดกระหน่ำ" (discount) เปลี่ยนราคาที่ getUpgradeCost() คืนค่า -- ต้องรีเฟรชราคาที่โชว์ทันทีตอนเริ่ม/หมดบัพ
+// ไม่งั้นราคาที่เห็นค้างเป็นค่าก่อนหน้าจนกว่าจะบังเอิญมี COIN_COLLECTED/UPGRADE_PURCHASED มาเรียก re-render ให้
+GameEvents.on(EVENTS.BUFF_ROLLED, () => renderUpgradeList());
+GameEvents.on(EVENTS.BUFF_ENDED, () => renderUpgradeList());
 </script>
 <script>
 /* =====================================================================
@@ -2491,6 +2498,9 @@ GameEvents.on(EVENTS.COIN_COLLECTED, () => renderPermUpgradeList());
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => renderPermUpgradeList());
 GameEvents.on(EVENTS.STAFF_HIRED, () => renderPermUpgradeList());
 GameEvents.on(EVENTS.VAULT_UPGRADED, () => renderPermUpgradeList());
+// บัพ "ลดกระหน่ำ" เปลี่ยนราคาจ้างลูกมือ/อัปคลังออฟไลน์ -- รีเฟรชราคาที่โชว์ทันทีตอนเริ่ม/หมดบัพ (ดู upgrade-list.js)
+GameEvents.on(EVENTS.BUFF_ROLLED, () => renderPermUpgradeList());
+GameEvents.on(EVENTS.BUFF_ENDED, () => renderPermUpgradeList());
 </script>
 <script>
 /* =====================================================================
@@ -2550,6 +2560,9 @@ function refreshProductLevelModalIfOpen() {
 }
 GameEvents.on(EVENTS.COIN_COLLECTED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 GameEvents.on(EVENTS.UPGRADE_PURCHASED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
+// บัพ "ลดกระหน่ำ" เปลี่ยนราคาที่ getUpgradeCost('portion') คืนค่าเหมือนกัน -- รีเฟรชตอนเริ่ม/หมดบัพ (ดู upgrade-list.js)
+GameEvents.on(EVENTS.BUFF_ROLLED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
+GameEvents.on(EVENTS.BUFF_ENDED, () => { renderProductBadge(); refreshProductLevelModalIfOpen(); });
 </script>
 <script>
 /* =====================================================================
