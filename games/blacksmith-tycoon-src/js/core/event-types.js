@@ -25,4 +25,6 @@ const EVENTS = {
   GIFT_OPENED:        'gift:opened',        // openGiftBox() — { kind }
   PRESTIGE_DONE:      'prestige:done',      // doPrestige() — { renownGained, totalRenown }
   RENOWN_UPGRADE_BOUGHT: 'renown:upgraded', // buyRenownUpgrade() — { key, level }
+  ACHIEVEMENT_CLAIMED: 'achievement:claimed', // claimAchievement() — { key }
+  DAILY_CLAIMED:       'daily:claimed',       // claimDaily() — { streak, reward }
 };

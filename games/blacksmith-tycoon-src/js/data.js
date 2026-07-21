@@ -160,6 +160,30 @@ const GIFTBOX_LINGER_MS = 12000; // อยู่บนจอนานเท่�
 const ORDER_QTY_2_CHANCE = 0.18;
 const ORDER_QTY_3_CHANCE = 0.06;
 
+// ===== Achievements (ความสำเร็จ) — เป้าหมายระยะยาว ให้รางวัลเพชร/ชื่อเสียงตอนกดรับ =====
+// check() อ่านจากค่าที่ track อยู่แล้ว (stats/prestige) ไม่ต้องเพิ่ม counter ใหม่ | reward = {gems} หรือ {renown}
+const ACHIEVEMENTS = [
+  { key: 'serve50',    icon: '🍽️', name: 'พ่อค้ามือใหม่',   desc: 'เสิร์ฟลูกค้าครบ 50 คน',        reward: { gems: 5 },     goal: () => player.stats.totalCustomersServed, target: 50 },
+  { key: 'serve1k',    icon: '🧑‍🍳', name: 'เจ้าของร้านตัวจริง', desc: 'เสิร์ฟลูกค้าครบ 1,000 คน',     reward: { gems: 20 },    goal: () => player.stats.totalCustomersServed, target: 1000 },
+  { key: 'serve10k',   icon: '👑', name: 'ตำนานร้านค้า',    desc: 'เสิร์ฟลูกค้าครบ 10,000 คน',   reward: { gems: 60 },    goal: () => player.stats.totalCustomersServed, target: 10000 },
+  { key: 'gold100k',   icon: '💰', name: 'เงินแสน',        desc: 'หาเงินรวม 100,000 Gold',      reward: { gems: 10 },    goal: () => player.stats.totalGoldEarned, target: 100000 },
+  { key: 'gold10m',    icon: '💎', name: 'เศรษฐีพันล้าน',   desc: 'หาเงินรวม 10,000,000 Gold',   reward: { gems: 40 },    goal: () => player.stats.totalGoldEarned, target: 10000000 },
+  { key: 'prestige1',  icon: '🏅', name: 'ชาติใหม่',        desc: 'เกิดใหม่ครั้งแรก',             reward: { gems: 15 },    goal: () => player.prestige.count, target: 1 },
+  { key: 'prestige10', icon: '🌟', name: 'วนเวียนไม่รู้จบ',  desc: 'เกิดใหม่ครบ 10 ครั้ง',        reward: { renown: 10 },  goal: () => player.prestige.count, target: 10 },
+  { key: 'renown100',  icon: '🎖️', name: 'ผู้มากบารมี',     desc: 'สะสมชื่อเสียงถึง 100 🏅',     reward: { gems: 50 },    goal: () => player.prestige.renown, target: 100 },
+];
+
+// ===== Daily Reward (รางวัลล็อกอินรายวัน) — เปิดเกมวันใหม่ได้เพชร ยิ่งต่อเนื่องยิ่งเยอะ (streak) =====
+const DAILY_REWARDS = [3, 4, 5, 6, 8, 10, 15]; // เพชรของ streak วันที่ 1..7 (วันที่ 7+ วนกลับสูงสุด)
+
+// ===== Tutorial (สอนเล่นครั้งแรก) — ป๊อปอัพต้อนรับอธิบาย core loop สั้นๆ =====
+const TUTORIAL_STEPS = [
+  { icon: '👋', title: 'ยินดีต้อนรับสู่ร้านตีเหล็ก!', body: 'ลูกค้าจะเดินเข้ามาสั่งของ พนักงานจะไปคราฟต์ที่สถานีแล้วนำมาส่ง ได้เงินเป็น Gold 🪙' },
+  { icon: '⬆️', title: 'อัปเกรดร้าน', body: 'แตะปุ่ม ⬆️ ขวาล่างเพื่ออัปเกรด (เร็วขึ้น/ลูกค้าเยอะขึ้น/จ้างลูกมือ) และแตะโต๊ะสถานีเพื่ออัปคุณภาพสินค้า' },
+  { icon: '🔨', title: 'ขยับขยาย (Renovate)', body: 'อัปคุณภาพสินค้าถึง Lv 15 แล้วกดปุ่ม 🔨 ซ้ายล่างเพื่อเปิดร้านใหม่ที่ใหญ่ขึ้น รายได้สูงขึ้น' },
+  { icon: '🏅', title: 'เกิดใหม่ (Prestige)', body: 'เมื่อรวยพอ กด "เกิดใหม่" เริ่มร้านใหม่แลกชื่อเสียงที่เพิ่มรายได้ถาวร — เล่นได้ไม่รู้จบ!' },
+];
+
 // ===== Multi-Staff System =====
 const MAX_STAFF_COUNT = 4; // จ้างลูกมือได้สูงสุด 4 คน (รวมผู้เล่นเอง = 5 คนพร้อมกันในร้าน)
 const HIRE_HELPER_BASE_COST_MULT = 200;

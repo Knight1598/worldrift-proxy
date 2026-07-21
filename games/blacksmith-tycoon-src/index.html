@@ -32,7 +32,10 @@
       <div class="renown-counter" id="renownCounter" title="ชื่อเสียง — จากการเกิดใหม่ ให้ตัวคูณรายได้ถาวร">🏅<span id="renownValue" class="pixel-num">0</span></div>
     </div>
     <div class="hud-title">⚒️ Blacksmith Tycoon</div>
-    <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
+    <div class="hud-btn-group">
+      <button class="btn-tertiary" id="btnOpenRewards" title="รางวัล & ความสำเร็จ">🏆<span class="hud-badge" id="rewardsBadge"></span></button>
+      <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
+    </div>
   </div>
   <div class="fever-bar-wrap" id="feverBarWrap" title="สะสมคอมโบจากการส่งออเดอร์สำเร็จ เต็มแล้วแตะเพื่อเข้าสู่ Fever Mode">
     <div class="fever-bar-bg"><div class="fever-bar-fill" id="feverBarFill"></div></div>
@@ -125,12 +128,43 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="rewardsModal">
+  <div class="modal-box rewards-box">
+    <button class="modal-close-x" id="btnCloseRewards">✕</button>
+    <h2>🏆 รางวัล</h2>
+    <div class="rewards-scroll">
+      <div class="section-label">รางวัลล็อกอินรายวัน</div>
+      <div class="daily-panel" id="dailyPanel"></div>
+      <div class="section-label">ความสำเร็จ</div>
+      <div class="achievement-list" id="achievementList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="tutorialModal">
+  <div class="modal-box tutorial-box">
+    <div class="tutorial-emoji" id="tutorialIcon">👋</div>
+    <h2 id="tutorialTitle"></h2>
+    <p id="tutorialBody"></p>
+    <div class="tutorial-dots" id="tutorialDots"></div>
+    <button class="btn-cta-mega" id="btnTutorialNext">ต่อไป</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="settingsModal">
   <div class="modal-box">
     <h2>⚙️ ตั้งค่า</h2>
     <div class="settings-row">
-      <span>เสียง</span>
+      <span>เสียงเอฟเฟกต์</span>
       <button id="btnToggleSound">เปิดอยู่</button>
+    </div>
+    <div class="settings-row">
+      <span>เพลงประกอบ</span>
+      <button id="btnToggleMusic">เปิดอยู่</button>
+    </div>
+    <div class="settings-row">
+      <span>ดูวิธีเล่นอีกครั้ง</span>
+      <button id="btnReplayTutorial">ดู</button>
     </div>
     <div class="settings-row">
       <span>รีเซ็ตเกม</span>
@@ -200,6 +234,8 @@
 <script src="js/systems/missions.js"></script>
 <script src="js/systems/buffs.js"></script>
 <script src="js/systems/prestige.js"></script>
+<script src="js/systems/achievements.js"></script>
+<script src="js/systems/daily.js"></script>
 <script src="js/progression.js"></script>
 <script src="js/ui/floating-text.js"></script>
 <script src="js/ui/hud.js"></script>
@@ -217,6 +253,8 @@
 <script src="js/ui/buff-roll.js"></script>
 <script src="js/ui/prestige-modal.js"></script>
 <script src="js/ui/renown-shop.js"></script>
+<script src="js/ui/rewards-modal.js"></script>
+<script src="js/ui/tutorial.js"></script>
 <script src="js/render.js"></script>
 <script src="js/main.js"></script>
 </body>

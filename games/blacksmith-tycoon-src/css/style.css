@@ -1085,3 +1085,46 @@
   .renown-card { background: linear-gradient(135deg, #332810, #201908); border-color: #7a5b18; }
   .renown-card .upgrade-name { color: #ffe08a; }
   .renown-card .buy-btn--affordable { background: linear-gradient(180deg, #ffe08a, #d99a1f); color: #3a2a00; }
+
+  /* ===== Tier 3: ปุ่ม HUD (🏆/⚙️) + จุดแดงแจ้งเตือน ===== */
+  .hud-btn-group { display: inline-flex; gap: 6px; flex-shrink: 0; }
+  .btn-tertiary { position: relative; }
+  .hud-badge {
+    display: none;
+    position: absolute; top: -3px; right: -3px;
+    width: 11px; height: 11px;
+    background: var(--danger);
+    border: 2px solid var(--ui-bg);
+    border-radius: 50%;
+  }
+  .hud-badge.show { display: block; animation: badgePulse 1.1s ease-in-out infinite; }
+  @keyframes badgePulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+
+  /* ===== Rewards modal (รางวัลรายวัน + ความสำเร็จ) ===== */
+  .rewards-box { position: relative; padding: 30px 10px 12px; background: var(--ui-bg); border-color: #c9941f; max-height: 82vh; display: flex; flex-direction: column; }
+  .rewards-box h2 { color: #ffcf5a; font-size: 1rem; margin: 0 0 8px; }
+  .rewards-scroll { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 2px 6px; text-align: left; }
+
+  .daily-panel { margin-bottom: 4px; }
+  .daily-card {
+    display: flex; align-items: center; gap: 8px;
+    background: linear-gradient(135deg, #2e2a12, #1c1808);
+    border: 3px solid #7a5b18; border-radius: 3px; padding: 8px 10px;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.5);
+  }
+  .daily-card--ready { border-color: #ffcf5a; animation: prestigeReadyPulse 1.3s ease-in-out infinite; }
+  .daily-info { flex: 1; min-width: 0; }
+  .daily-title { font-weight: bold; font-size: 0.78rem; color: #ffe08a; }
+  .daily-sub { font-size: 0.6rem; color: var(--text-dim); margin-top: 1px; }
+
+  .achievement-list { display: flex; flex-direction: column; gap: 6px; }
+  .achievement-card--claimed { opacity: 0.6; }
+  .achievement-bar { height: 6px; background: #4a4033; border-radius: 3px; overflow: hidden; margin: 4px 0 2px; }
+  .achievement-bar-fill { height: 100%; background: linear-gradient(90deg, #6bbf6b, #ffd76a); transition: width 0.3s ease; }
+
+  /* ===== Tutorial modal ===== */
+  .tutorial-box { text-align: center; }
+  .tutorial-emoji { font-size: 2.6rem; margin-bottom: 6px; }
+  .tutorial-dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0; }
+  .tutorial-dot { width: 8px; height: 8px; border-radius: 50%; background: #d8cdb8; }
+  .tutorial-dot.active { background: var(--primary); transform: scale(1.25); }

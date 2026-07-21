@@ -42,8 +42,11 @@ let player = {
   missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
   stationsExtra: defaultStationsExtra(), // สถานีเสริมของด่านปัจจุบัน (Multi-Station ดู ui/stations.js)
   prestige: defaultPrestige(),           // ชื่อเสียง/เกิดใหม่ (ดู systems/prestige.js)
+  achievements: { claimed: {} },         // { claimed: { key: true } } — ความสำเร็จที่กดรับรางวัลแล้ว
+  daily: { lastClaimDay: null, streak: 0 }, // รางวัลล็อกอินรายวัน (lastClaimDay = 'YYYY-M-D')
+  tutorialSeen: false,                   // เคยดูป๊อปอัพสอนเล่นครั้งแรกแล้วหรือยัง
   lastSeenAt: Date.now(),
-  settings: { soundEnabled: true },
+  settings: { soundEnabled: true, musicEnabled: true },
   stats: { totalCustomersServed: 0, totalGoldEarned: 0 },
 };
 
@@ -77,6 +80,9 @@ function saveGame() {
     missionProgress: player.missionProgress,
     stationsExtra: player.stationsExtra,
     prestige: player.prestige,
+    achievements: player.achievements,
+    daily: player.daily,
+    tutorialSeen: player.tutorialSeen,
     lastSeenAt: Date.now(),
     settings: player.settings,
     stats: player.stats,
@@ -97,7 +103,7 @@ function migrateFromV1(rawV1) {
     vaultLevel: 0,
     milestonesShown: {},
     lastSeenAt: data.lastSeenAt || Date.now(),
-    settings: Object.assign({ soundEnabled: true }, data.settings || {}),
+    settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
   };
 }
@@ -213,8 +219,12 @@ function loadGame() {
     prestige: Object.assign(defaultPrestige(), data.prestige || {}, {
       upgrades: Object.assign(defaultRenownUpgrades(), (data.prestige && data.prestige.upgrades) || {}),
     }),
+    // ฟิลด์ Tier 3 (achievements/daily/tutorial) — เติมแบบ additive ไม่ต้อง bump save version
+    achievements: { claimed: Object.assign({}, (data.achievements && data.achievements.claimed) || {}) },
+    daily: Object.assign({ lastClaimDay: null, streak: 0 }, data.daily || {}),
+    tutorialSeen: !!data.tutorialSeen,
     lastSeenAt: data.lastSeenAt || Date.now(),
-    settings: Object.assign({ soundEnabled: true }, data.settings || {}),
+    settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
     stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
   });
   if (needsResave) {

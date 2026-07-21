@@ -1,8 +1,12 @@
 /* =====================================================================
    Settings Modal — เปิด/ปิดเสียง, รีเซ็ตเกม
    ===================================================================== */
-document.getElementById('btnOpenSettings').addEventListener('click', () => {
+function syncSettingsLabels() {
   document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+  document.getElementById('btnToggleMusic').textContent = player.settings.musicEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+}
+document.getElementById('btnOpenSettings').addEventListener('click', () => {
+  syncSettingsLabels();
   document.getElementById('settingsModal').classList.add('show');
 });
 document.getElementById('btnCloseSettings').addEventListener('click', () => {
@@ -10,8 +14,18 @@ document.getElementById('btnCloseSettings').addEventListener('click', () => {
 });
 document.getElementById('btnToggleSound').addEventListener('click', () => {
   player.settings.soundEnabled = !player.settings.soundEnabled;
-  document.getElementById('btnToggleSound').textContent = player.settings.soundEnabled ? 'เปิดอยู่' : 'ปิดอยู่';
+  syncSettingsLabels();
   saveGame();
+});
+document.getElementById('btnToggleMusic').addEventListener('click', () => {
+  player.settings.musicEnabled = !player.settings.musicEnabled;
+  syncSettingsLabels();
+  if (player.settings.musicEnabled) startMusic(); else stopMusic();
+  saveGame();
+});
+document.getElementById('btnReplayTutorial').addEventListener('click', () => {
+  document.getElementById('settingsModal').classList.remove('show');
+  openTutorial();
 });
 document.getElementById('btnResetGame').addEventListener('click', () => {
   if (!confirm('ยืนยันรีเซ็ตเกม? ความคืบหน้าทั้งหมดจะหายไป')) return;

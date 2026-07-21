@@ -87,8 +87,19 @@ ensurePlayerIdentity(); // ให้ผู้เล่นทุกคน (ให
 updateSceneMetrics();
 applyOfflineEarnings();
 renderAll();
+refreshRewardsBadge();
 initWorkers();
 scheduleNextCustomer();
 scheduleGoblin();
 scheduleGiftBox();
 rafId = requestAnimationFrame(gameTick);
+
+// สอนเล่นครั้งแรก (ผู้เล่นใหม่) — โชว์หลังบูตเสร็จ
+maybeShowTutorial();
+
+// เพลงประกอบ + AudioContext ต้องรอ user gesture แรก (นโยบายเบราว์เซอร์) — เริ่มเพลงตอนแตะครั้งแรก
+document.addEventListener('pointerdown', function startAudioOnce() {
+  ensureAudioCtx();
+  startMusic();
+  document.removeEventListener('pointerdown', startAudioOnce);
+}, { once: true });
