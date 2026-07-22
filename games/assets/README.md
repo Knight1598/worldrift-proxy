@@ -12,3 +12,9 @@
 หากต้องการเปลี่ยนรูปใดก็แทนที่ไฟล์เดิมได้เลย โดยชื่อไฟล์ต้องตรงกับที่โค้ดอ้างอิงไว้
 (asset ส่วนที่ไม่ได้ผูกกับ gameplay เช่น axe.png, spear.png, bow.png, wand.png, boots.png,
 gloves.png, helmet.png, potion_*.png ก็ถูกตัดเก็บไว้ในโฟลเดอร์ equipment/ ให้ด้วยเผื่อใช้ภายหลัง)
+
+โฟลเดอร์นี้ใช้ร่วมกันกับหลายเกม ไม่ได้ผูกกับ Treasure Idle RPG เท่านั้น — เกม
+`../born-to-die-ai.html` (BornToDieAI: Multiverse Expanded Edition) ก็ดึงภาพจาก
+`bg/`, `monsters/`, `skills/`, และ `ui/icon_lock.png` ไปใช้เช่นกัน (ดู asset
+manifest เต็มๆ ที่คอมเมนต์บนสุดของไฟล์นั้น) ไม่มีการเพิ่มไฟล์ภาพใหม่สำหรับเกมนี้
+ทุกอย่างใช้ของที่มีอยู่แล้วในโฟลเดอร์นี้

@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>BornToDieAI — Multiverse Expanded Edition</title>
+
+<!--
+=====================================================================
+ ASSET MANIFEST / รายการไฟล์ภาพที่ใช้
+ ---------------------------------------------------------------
+ ไฟล์นี้ใช้ภาพจาก games/assets/ ที่มีอยู่แล้วเท่านั้น (ไม่มีการเพิ่มไฟล์ภาพใหม่)
+ อ้างอิงแบบสัมพัทธ์กับไฟล์นี้ (games/born-to-die-ai.html):
+
+ assets/bg/        desert.png, volcano.png, forest.png, heaven.png, hell.png,
+                    demon_king_throne.png, graveyard.png, cave.png, snow.png,
+                    castle.png
+                    -> ใช้เป็นพื้นหลังของแต่ละโลก (world) และแต่ละจุดเกิด (zone)
+ assets/monsters/   dark_wolf.png, rat.png, spider.png, bat.png, red_demon.png,
+                    orc.png, slime.png, necromancer.png, skeleton.png,
+                    stone_golem.png, armored_golem_warrior.png, demon_king.png,
+                    dark_knight.png, purple_dragon.png
+                    -> ใช้เป็นภาพประกอบเหตุการณ์เผชิญหน้า (ambient encounter) เท่านั้น
+                       ไม่มีระบบต่อสู้จริง (ไม่มีเลือด/เทิร์นของมอนสเตอร์)
+ assets/skills/     nature.png, shield.png, physical.png, fire.png, earth.png,
+                    lightning.png, wind.png, ice.png, holy.png, dark.png,
+                    poison.png, dark_aura.png
+                    -> ใช้เป็นไอคอนประกอบคลาส/ตัวเลือกเท่านั้น ไม่มีระบบสกิลจริง
+ assets/ui/         icon_lock.png
+                    -> ใช้ทับจุดเกิดลับ (???) ตอนที่ยังไม่ปลดล็อก
+
+ สถานะ: ไฟล์ภาพทั้งหมดมีอยู่แล้วในโฟลเดอร์นี้ (ใช้ร่วมกับเกมอื่นในโฟลเดอร์ games/)
+ โค้ดจะยังเล่นได้ปกติแม้ไฟล์ภาพไฟล์ใดไฟล์หนึ่งหายไป (จะเห็นพื้นหลังไล่สีสำรองแทน)
+=====================================================================
+-->
+
+<style>
+  :root {
+    --bg-page: #0b0810;
+    --panel-bg: #1a1420;
+    --panel-border: #4a3a66;
+    --text-main: #f1ecd8;
+    --text-muted: #b8aec6;
+    --accent-gold: #e8c766;
+    --accent-gold-light: #f6dd94;
+    --danger: #d9605a;
+    --ok: #7dbf7a;
+    --divider: #4a3a66;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg-page);
+    color: var(--text-main);
+    font-family: 'Tahoma', 'Leelawadee UI', 'Noto Sans Thai', 'Loma', sans-serif;
+    font-size: 15px;
+    min-height: 100%;
+  }
+
+  img { image-rendering: auto; }
+
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 16px 14px 60px;
+  }
+
+  .app-title {
+    text-align: center;
+    font-size: 1.1rem;
+    letter-spacing: 0.12em;
+    color: var(--accent-gold);
+    text-transform: uppercase;
+    margin: 6px 0 18px;
+    opacity: 0.85;
+  }
+
+  .app-screen { display: none; animation: fadeIn 0.35s ease-out; }
+  .app-screen--active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+  .panel {
+    background: linear-gradient(180deg, var(--panel-bg), #140f1a);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: 18px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+  }
+
+  .scene-bg-panel {
+    position: relative;
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--panel-border);
+    margin-bottom: 14px;
+    min-height: 160px;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: flex-end;
+  }
+  .scene-bg-panel::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(11,8,16,0.15) 0%, rgba(11,8,16,0.92) 92%);
+  }
+  .scene-bg-panel__label {
+    position: relative;
+    z-index: 1;
+    padding: 12px 14px;
+    font-weight: bold;
+    color: var(--accent-gold-light);
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+  }
+
+  h1, h2, h3 { margin: 0 0 8px; }
+  h2 { font-size: 1.15rem; color: var(--accent-gold-light); }
+  h3 { font-size: 1rem; color: var(--accent-gold); }
+  p { line-height: 1.55; margin: 0 0 10px; color: var(--text-main); }
+  .muted { color: var(--text-muted); font-size: 0.9rem; }
+  .quote { font-style: italic; color: var(--text-muted); border-left: 3px solid var(--accent-gold); padding-left: 10px; margin: 10px 0; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+
+  .card-btn {
+    background: #201931;
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 10px;
+    color: var(--text-main);
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    font-size: 0.92rem;
+    transition: border-color 0.15s, transform 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .card-btn:hover:not(:disabled) { border-color: var(--accent-gold); transform: translateY(-1px); }
+  .card-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .card-btn__bg {
+    height: 74px;
+    border-radius: 6px;
+    background-size: cover;
+    background-position: center;
+    margin-bottom: 8px;
+    background-color: #2a2238;
+  }
+  .card-btn__title { font-weight: bold; color: var(--accent-gold-light); margin-bottom: 2px; }
+  .card-btn__desc { font-size: 0.8rem; color: var(--text-muted); }
+  .lock-badge {
+    position: absolute; top: 6px; right: 6px;
+    width: 22px; height: 22px;
+    background: rgba(0,0,0,0.65);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .lock-badge img { width: 13px; height: 13px; opacity: 0.9; }
+
+  .btn {
+    display: inline-block;
+    background: linear-gradient(180deg, var(--accent-gold-light), var(--accent-gold));
+    color: #241a08;
+    border: none;
+    border-radius: 7px;
+    padding: 10px 18px;
+    font-weight: bold;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+  .btn--ghost {
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text-main);
+  }
+  .btn--danger { background: linear-gradient(180deg, #e08b86, var(--danger)); color: #2a0e0c; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+
+  input[type=text], select, textarea {
+    width: 100%;
+    background: #150f1e;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    color: var(--text-main);
+    padding: 9px 10px;
+    font-family: inherit;
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+  }
+  label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px; }
+
+  .choice-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .choice-btn {
+    background: #201931;
+    border: 1px solid var(--panel-border);
+    color: var(--text-main);
+    border-radius: 8px;
+    padding: 11px 12px;
+    text-align: left;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 0.92rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .choice-btn:hover { border-color: var(--accent-gold); }
+  .choice-btn img { width: 20px; height: 20px; flex-shrink: 0; opacity: 0.9; }
+
+  .stat-bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .stat-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+  .stat-row .stat-label { width: 58px; color: var(--text-muted); flex-shrink: 0; }
+  .stat-track { flex: 1; height: 9px; background: #150f1e; border-radius: 5px; overflow: hidden; border: 1px solid var(--panel-border); }
+  .stat-fill { height: 100%; transition: width 0.3s ease; }
+  .stat-fill--hp { background: linear-gradient(90deg,#c9483f,#e8756b); }
+  .stat-fill--hunger { background: linear-gradient(90deg,#c98a2e,#e8b35f); }
+  .stat-fill--stamina { background: linear-gradient(90deg,#3e8fc9,#6fbde8); }
+  .stat-val { width: 34px; text-align: right; color: var(--text-muted); flex-shrink: 0; }
+
+  .ash-pulse {
+    position: fixed; top: 12px; right: 12px;
+    width: 26px; height: 26px;
+    opacity: 0.55;
+    animation: ashPulse 3.2s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 50;
+  }
+  @keyframes ashPulse { 0%,100% { opacity: 0.25; transform: scale(0.9); } 50% { opacity: 0.65; transform: scale(1.1); } }
+
+  .scene-echo .scene-bg-panel { filter: sepia(0.55) saturate(0.7) brightness(0.85); }
+
+  .report-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 14px;
+    font-size: 0.92rem;
+    margin: 10px 0 14px;
+  }
+  .report-grid dt { color: var(--text-muted); }
+  .report-grid dd { margin: 0 0 6px; font-weight: bold; color: var(--text-main); }
+  .rating-badge {
+    display: inline-block;
+    font-size: 1.15rem;
+    font-weight: bold;
+    color: var(--accent-gold-light);
+    border: 1px solid var(--accent-gold);
+    border-radius: 8px;
+    padding: 8px 14px;
+    margin: 6px 0 14px;
+  }
+
+  canvas#cardCanvas {
+    width: 100%;
+    max-width: 420px;
+    height: auto;
+    display: block;
+    margin: 0 auto 14px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+  }
+  .card-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 10px; }
+
+  .toast {
+    position: fixed;
+    bottom: 16px; left: 50%;
+    transform: translateX(-50%);
+    background: #201931;
+    border: 1px solid var(--accent-gold);
+    color: var(--text-main);
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 0.85rem;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    max-width: 90vw;
+    text-align: center;
+  }
+  .toast--show { opacity: 1; }
+
+  .hud-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  @media (max-width: 420px) {
+    .report-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<img class="ash-pulse" src="assets/skills/dark_aura.png" alt="" id="ashPulseIcon">
+
+<div class="wrap">
+  <div class="app-title">BornToDieAI · Multiverse Expanded Edition</div>
+
+  <!-- ============ INTRO ============ -->
+  <div class="app-screen" id="screenIntro">
+    <div class="panel">
+      <p class="quote">"เถ้าถ่านและความเงียบปกคลุมโลกใบนี้<br>แต่นี่ไม่ใช่โลกใบเดียว<br>บางโลกกระซิบ บางโลกกรีดร้อง<br>เลือกที่ที่จิตวิญญาณของเจ้าเริ่มต้น..."</p>
+      <p class="muted">"Ash and silence blanket the world. But this is not the only world. Some worlds whisper. Others scream. Choose where your soul begins."</p>
+      <div id="introContinueWrap" style="display:none;">
+        <p class="muted">พบข้อมูลการเดินทางก่อนหน้า</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btnStartNew">เริ่มเรื่องราวใหม่</button>
+        <button class="btn btn--ghost" id="btnContinue" style="display:none;">เล่นต่อ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ WORLD SELECT ============ -->
+  <div class="app-screen" id="screenWorldSelect">
+    <div class="panel">
+      <h2>"The Ash is not alone. Choose the world you were born in…"</h2>
+      <p class="muted">เลือกโลกที่เจ้าถือกำเนิด</p>
+      <div class="grid" id="worldGrid"></div>
+    </div>
+  </div>
+
+  <!-- ============ ZONE SELECT ============ -->
+  <div class="app-screen" id="screenZoneSelect">
+    <div class="panel">
+      <h2>"Where did you wake up…?"</h2>
+      <p class="muted">เจ้าตื่นขึ้นที่ใด...</p>
+      <div class="grid" id="zoneGrid"></div>
+    </div>
+  </div>
+
+  <!-- ============ CHARACTER CREATE ============ -->
+  <div class="app-screen" id="screenCharCreate">
+    <div class="panel">
+      <h2>"Name. Gender. Personality. Who were you… before the ash?"</h2>
+      <label for="inpName">ชื่อ (Name)</label>
+      <input type="text" id="inpName" maxlength="40" placeholder="เช่น Kael">
+      <label for="inpGender">เพศ (Gender)</label>
+      <input type="text" id="inpGender" maxlength="24" placeholder="เช่น ไม่ระบุ / ชาย / หญิง / อื่นๆ">
+      <label for="inpBackstory">เจ้าเป็นใครก่อนเถ้าถ่านจะมาถึง (Personality / Backstory)</label>
+      <textarea id="inpBackstory" rows="3" maxlength="300" placeholder="บอกเล่าเรื่องราวสั้นๆ ของเจ้า..."></textarea>
+      <div class="btn-row">
+        <button class="btn" id="btnConfirmCharCreate">ยืนยัน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CLASS SELECT ============ -->
+  <div class="app-screen" id="screenClassSelect">
+    <div class="panel">
+      <h2>เจ้าจะเดินทางในฐานะใด?</h2>
+      <p class="muted">พิมพ์ชื่อคลาสที่ต้องการ (Survivor, Fighter, Engineer, Wanderer, Oracle) หรือพิมพ์ "สุ่ม" ให้โชคชะตาเลือกให้ หรือปล่อยให้คำพูดของเจ้าเผยความลับบางอย่าง...</p>
+      <input type="text" id="inpClass" maxlength="60" placeholder="พิมพ์คำตอบของเจ้า...">
+      <div class="btn-row">
+        <button class="btn" id="btnConfirmClass">ยืนยัน</button>
+      </div>
+      <div class="muted" style="margin-top:10px;">ตัวเลือก: Survivor · Fighter · Engineer · Wanderer · Oracle · หรือ "สุ่ม" · หรือคำตอบของเจ้าเอง</div>
+    </div>
+  </div>
+
+  <!-- ============ CLASS REVEAL ============ -->
+  <div class="app-screen" id="screenClassReveal">
+    <div class="panel" id="classRevealPanel"></div>
+    <div class="btn-row">
+      <button class="btn" id="btnEnterScenes">เข้าสู่โลกที่แหลกสลาย</button>
+    </div>
+  </div>
+
+  <!-- ============ SCENE RUNTIME ============ -->
+  <div class="app-screen" id="screenScene">
+    <div class="hud-bar">
+      <span id="sceneHudLeft"></span>
+      <span id="sceneHudRight"></span>
+    </div>
+    <div class="stat-bars" id="statBars"></div>
+    <div class="scene-bg-panel" id="sceneBgPanel">
+      <div class="scene-bg-panel__label" id="sceneLabel"></div>
+    </div>
+    <div class="panel" id="sceneTextPanel">
+      <p id="sceneText"></p>
+      <div class="choice-list" id="sceneChoices"></div>
+    </div>
+  </div>
+
+  <!-- ============ FINAL REPORT ============ -->
+  <div class="app-screen" id="screenFinalReport">
+    <div class="panel">
+      <h2>"Ash settles over your fate…"</h2>
+      <h3>Final Report</h3>
+      <dl class="report-grid" id="reportGrid"></dl>
+      <div class="rating-badge" id="ratingBadge"></div>
+      <p class="quote" id="reportQuote"></p>
+      <p class="muted" id="reportOverseer"></p>
+      <div class="btn-row">
+        <button class="btn" id="btnGoToCard">ดูการ์ดตัวละครสรุปท้ายเกม</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CHARACTER CARD ============ -->
+  <div class="app-screen" id="screenCharacterCard">
+    <div class="panel">
+      <h2 style="text-align:center;">Final Character Card</h2>
+      <canvas id="cardCanvas" width="800" height="1200"></canvas>
+      <div class="card-actions">
+        <button class="btn" id="btnDownloadCard">ดาวน์โหลดรูปภาพ (PNG)</button>
+        <button class="btn btn--ghost" id="btnCopySummary">คัดลอกข้อความสรุป</button>
+      </div>
+      <textarea id="shareTextarea" rows="6" readonly style="display:none;"></textarea>
+      <p class="quote" id="finalClosingLine" style="text-align:center;"></p>
+      <div class="btn-row" style="justify-content:center;">
+        <button class="btn btn--danger" id="btnNewStory">เริ่มเรื่องราวใหม่</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const ASSET_BASE = 'assets/';
+  const SAVE_KEY = 'bornToDieAiSave_v1';
+
+  // ===================================================================
+  // DATA TABLES
+  // ===================================================================
+
+  const WORLD_DEFS = [
+    { key: 'ashlands', name: 'Ashlands', nameTh: 'แอชแลนด์ส', bg: 'desert.png', bg2: 'volcano.png',
+      tint: '#8a5a3a', symbol: 'Ash Crown', quote: 'ในแอชแลนด์ส ไม่มีอะไรเติบโตอีกต่อไป มีแต่เจ้าที่ยังยืนอยู่', emblem: 'crack' },
+    { key: 'elaria', name: 'Elaria', nameTh: 'เอลาเรีย', bg: 'forest.png', bg2: 'heaven.png',
+      tint: '#3a7a4a', symbol: 'Elaria Blossom', quote: 'เอลาเรียเคยเบ่งบาน บัดนี้เหลือเพียงกลิ่นอายของสิ่งที่เคยงดงาม', emblem: 'leaf' },
+    { key: 'kharthal', name: "Khar'Thal", nameTh: 'คาร์-ธัล', bg: 'hell.png', bg2: 'demon_king_throne.png',
+      tint: '#a33a2e', symbol: "Khar'Thal Red Fang", quote: 'คาร์-ธัลไม่ให้อภัยผู้อ่อนแอ เจ้าต้องแข็งแกร่งหรือไม่ก็สลาย', emblem: 'fang' },
+    { key: 'mirevale', name: 'Mirevale', nameTh: 'ไมร์เวล', bg: 'graveyard.png', bg2: 'cave.png',
+      tint: '#4a6a4a', symbol: 'Mirevale Wisp', quote: 'ไมร์เวลกลืนกินเรื่องราวของทุกคนที่เดินผ่านหนองน้ำนี้', emblem: 'ripple' },
+    { key: 'nyxabyss', name: 'Nyx Abyss', nameTh: 'นิกซ์ แอบิส', bg: 'snow.png', bg2: 'cave.png',
+      tint: '#3a3a6a', symbol: 'Nyx Crescent', quote: 'ในนิกซ์ แอบิส แม้แต่ดวงดาวก็ยังหลงทาง', emblem: 'crescent' },
+    { key: 'aethremvale', name: 'Aethrem Vale', nameTh: 'เอเธรม เวล', bg: 'castle.png', bg2: 'heaven.png',
+      tint: '#7a6a3a', symbol: 'Aethrem Spire', quote: 'เอเธรม เวลเคยเป็นอาณาจักรแห่งฟากฟ้า บัดนี้เหลือเพียงเงาของบัลลังก์', emblem: 'spire' },
+  ];
+
+  const ZONE_DEFS = [
+    { key: 'ashruins', name: 'Ash Ruins', nameTh: 'ซากปรักหักพังแห่งเถ้าถ่าน', bg: 'volcano.png', secret: false,
+      desc: 'ซากอาคารที่ถูกเผาไหม้ ยังคุกรุ่นด้วยความร้อนของอดีต' },
+    { key: 'redgarden', name: 'Red Garden', nameTh: 'สวนสีเลือด', bg: 'graveyard.png', secret: false,
+      desc: 'สวนที่ครั้งหนึ่งเคยเขียวขจี บัดนี้กลายเป็นสุสานที่ปกคลุมด้วยหมอกสีแดง' },
+    { key: 'steelwastes', name: 'Steel Wastes', nameTh: 'ทุ่งเศษเหล็ก', bg: 'demon_king_throne.png', secret: false,
+      desc: 'ซากปรักหักพังของโครงสร้างเหล็กขนาดมหึมา บิดเบี้ยวและเป็นสนิม' },
+    { key: 'skyfallridge', name: 'Skyfall Ridge', nameTh: 'สันเขาฟ้าถล่ม', bg: 'heaven.png', secret: false,
+      desc: 'เศษซากของท้องฟ้าที่ร่วงหล่นลงมากองรวมกันเป็นสันเขา' },
+    { key: 'unknown', name: '???', nameTh: '???', bg: 'snow.png', secret: true,
+      desc: 'สถานที่ที่ไม่มีชื่อ ไม่มีใครจดจำได้ว่ามันเคยมีอยู่' },
+  ];
+
+  const CLASS_DEFS = [
+    { key: 'survivor', name: 'Survivor', nameTh: 'ผู้รอดชีวิต', weight: 24, secret: false,
+      quote: '"ข้ายังมีชีวิตอยู่ ไม่ใช่เพราะโชคชะตา แต่เพราะข้าเลือกที่จะยืนหยัด"',
+      passive: 'ทนทานต่อความหิวโหยและความอ่อนล้าได้ดีกว่าผู้อื่น', icon1: 'nature.png', icon2: 'shield.png',
+      keywords: ['survivor', 'ผู้รอดชีวิต', 'รอดชีวิต'] },
+    { key: 'fighter', name: 'Fighter', nameTh: 'นักสู้', weight: 20, secret: false,
+      quote: '"ถ้าโลกใบนี้จะบดขยี้ข้า ข้าจะสู้กลับจนวินาทีสุดท้าย"',
+      passive: 'มีพลังชีวิตเริ่มต้นสูงกว่าคลาสอื่น', icon1: 'physical.png', icon2: 'fire.png',
+      keywords: ['fighter', 'นักสู้', 'ฟันดาบ'] },
+    { key: 'engineer', name: 'Engineer', nameTh: 'วิศวกร', weight: 18, secret: false,
+      quote: '"ทุกสิ่งพังทลายได้ แต่ทุกสิ่งก็ซ่อมได้เช่นกัน หากเจ้ารู้วิธี"',
+      passive: 'สามารถดัดแปลงเศษซากให้กลายเป็นสิ่งที่มีประโยชน์', icon1: 'earth.png', icon2: 'lightning.png',
+      keywords: ['engineer', 'วิศวกร', 'ช่าง'] },
+    { key: 'wanderer', name: 'Wanderer', nameTh: 'ผู้พเนจร', weight: 20, secret: false,
+      quote: '"ไม่มีบ้านให้กลับไป มีเพียงเส้นทางข้างหน้าที่ยังไม่มีใครเดิน"',
+      passive: 'เคลื่อนที่และหลบหลีกอันตรายได้คล่องแคล่วกว่าใคร', icon1: 'wind.png', icon2: 'ice.png',
+      keywords: ['wanderer', 'ผู้พเนจร', 'พเนจร', 'นักเดินทาง'] },
+    { key: 'oracle', name: 'Oracle', nameTh: 'ผู้ทำนาย', weight: 18, secret: false,
+      quote: '"ข้าเห็นสิ่งที่จะเกิดขึ้น แต่การรู้ล่วงหน้าไม่ได้ทำให้มันเจ็บปวดน้อยลง"',
+      passive: 'รับรู้สัญญาณอันตรายก่อนที่มันจะมาถึง', icon1: 'holy.png', icon2: 'dark.png',
+      keywords: ['oracle', 'ผู้ทำนาย', 'หมอดู'] },
+    { key: 'lostone', name: 'Lost One', nameTh: 'ผู้สาบสูญ', weight: 0, secret: true,
+      quote: '"ข้าจำชื่อของตัวเองไม่ได้อีกแล้ว บางทีนั่นอาจเป็นสิ่งเดียวที่ข้าเลือกได้"',
+      passive: 'ไม่หวั่นไหวต่อความเงียบและภาพหลอนของเถ้าถ่าน', icon1: 'dark.png', icon2: 'poison.png' },
+    { key: 'revenant', name: 'Revenant', nameTh: 'ผู้คืนชีพ', weight: 0, secret: true,
+      quote: '"ข้าเคยตายมาแล้วครั้งหนึ่ง โลกใบนี้ไม่มีอะไรที่จะทำให้ข้ากลัวได้อีก"',
+      passive: 'ฟื้นตัวจากบาดแผลร้ายแรงได้เร็วกว่าปกติ', icon1: 'dark_aura.png', icon2: 'holy.png' },
+  ];
+
+  const CLASS_LOOKUP = Object.fromEntries(CLASS_DEFS.map(c => [c.key, c]));
+  const WORLD_LOOKUP = Object.fromEntries(WORLD_DEFS.map(w => [w.key, w]));
+  const ZONE_LOOKUP = Object.fromEntries(ZONE_DEFS.map(z => [z.key, z]));
+
+  const RANDOM_KEYWORDS = ['สุ่ม', 'random', 'อะไรก็ได้', 'แล้วแต่', 'randomize', 'idk', 'สุดแล้วแต่'];
+  const DEATH_KEYWORDS = ['ตาย', 'เกิด', 'เจ็บ', 'die', 'death', 'pain', 'hurt', 'rebirth', 'reborn'];
+  const FORGET_KEYWORDS = ['ลืม', 'ไม่', 'forget', 'forgotten', 'nothing', '?'];
+
+  const MONSTER_POOL = {
+    ashlands: ['dark_wolf.png', 'rat.png'],
+    elaria: ['spider.png', 'bat.png'],
+    kharthal: ['red_demon.png', 'orc.png'],
+    mirevale: ['slime.png', 'rat.png'],
+    nyxabyss: ['necromancer.png', 'skeleton.png'],
+    aethremvale: ['stone_golem.png', 'armored_golem_warrior.png'],
+  };
+
+  // Fixed linear scene sequence. Each scene: {id, kind, bgKind:'zone'|'world'|'world2'|'echo', title, text(vars)=>str, choices:[...]}
+  const SCENE_SEQUENCE = [
+    'wake', 'firstChoice', 'wander1', 'moralChoice1', 'encounter1',
+    'echoMemory', 'wander2', 'silenceBeat', 'moralChoice2', 'encounter2',
+    'crisis', 'closing',
+  ];
+
+  function fmt(str, vars) {
+    return str.replace(/\{(\w+)\}/g, (_, k) => (vars[k] !== undefined && vars[k] !== '' ? vars[k] : ''));
+  }
+
+  const SCENES = {
+    wake: {
+      title: 'ตื่นขึ้นกลางเถ้าถ่าน',
+      bgKind: 'zone',
+      text: v => `${v.name} ลืมตาขึ้นท่ามกลาง ${v.zoneName} เถ้าถ่านลอยฟุ้งในอากาศ ไม่มีเสียงใดนอกจากลมหวีดหวิว ${v.className} อย่างเจ้าจำอะไรได้บ้าง...?`,
+      choices: [
+        { label: 'สำรวจรอบตัวอย่างระมัดระวัง', effects: { stamina: -5 }, tags: [{ tag: 'pragmatism', delta: 1 }] },
+        { label: 'ลุกขึ้นเดินโดยไม่คิดอะไร', effects: { stamina: -10, hp: -3 }, tags: [{ tag: 'cowardice', delta: 1 }] },
+      ],
+    },
+    firstChoice: {
+      title: 'เสบียงชิ้นสุดท้าย',
+      bgKind: 'zone',
+      text: v => `${v.name} พบเสบียงเล็กน้อยตกอยู่ข้างซากศพที่ไม่รู้จัก ไกลออกไปมีคนแปลกหน้ากำลังมองมาด้วยสายตาหิวโหย`,
+      choices: [
+        { label: 'แบ่งเสบียงให้คนแปลกหน้า', effects: { hunger: -15 }, tags: [{ tag: 'mercy', delta: 2 }, { tag: 'sacrifice', delta: 1 }] },
+        { label: 'เก็บเสบียงไว้กับตัวเองแล้วเดินจากไป', effects: { hunger: -5 }, tags: [{ tag: 'pragmatism', delta: 1 }, { tag: 'cruelty', delta: 1 }] },
+      ],
+    },
+    wander1: {
+      title: `เสียงกระซิบในสายลม`,
+      bgKind: 'world',
+      text: v => `${v.name} เดินทางผ่าน${v.worldName} เสียงกระซิบแปลกๆ ลอยมาตามสายลม บางทีมันอาจเป็นแค่จินตนาการ... หรือไม่ก็ไม่ใช่`,
+      choices: [
+        { label: 'หยุดฟังเสียงนั้นให้ชัดเจน', effects: { mind: 5 }, tags: [{ tag: 'curiosity', delta: 2 }] },
+        { label: 'เดินต่อไปโดยไม่สนใจ', effects: { mind: -3 }, tags: [{ tag: 'denial', delta: 1 }] },
+      ],
+    },
+    moralChoice1: {
+      title: 'ผู้บาดเจ็บริมทาง',
+      bgKind: 'world2',
+      text: v => `มีผู้บาดเจ็บสาหัสนอนอยู่ริมทาง เขากระซิบขอความช่วยเหลือ แต่ ${v.name} รู้ว่าเวลาและเสบียงมีจำกัด`,
+      choices: [
+        { label: 'อยู่ช่วยรักษาแผลให้', effects: { stamina: -20, hunger: -10 }, tags: [{ tag: 'mercy', delta: 3 }, { tag: 'sacrifice', delta: 2 }] },
+        { label: 'ปลดปล่อยเขาจากความทรมาน', effects: { mind: -5 }, tags: [{ tag: 'cruelty', delta: 2 }] },
+        { label: 'เดินผ่านไปเงียบๆ', effects: {}, tags: [{ tag: 'cowardice', delta: 2 }, { tag: 'denial', delta: 1 }] },
+      ],
+    },
+    encounter1: {
+      title: 'เผชิญหน้า',
+      bgKind: 'world',
+      encounter: true,
+      text: v => `${v.monsterName} โผล่ออกมาจากเงามืด สายตาจ้องมองมาที่ ${v.name} อย่างไม่ไว้วางใจ`,
+      choices: [
+        { label: 'ยืนหยัดสู้', effects: { stamina: -10 }, tags: [{ tag: 'pragmatism', delta: 1 }], encounterRoll: 'stand' },
+        { label: 'หลบหนีอย่างเงียบเชียบ', effects: { stamina: -15 }, tags: [{ tag: 'cowardice', delta: 1 }], encounterRoll: 'flee' },
+      ],
+    },
+    echoMemory: {
+      title: 'เสียงสะท้อนจากอดีต',
+      bgKind: 'echo',
+      echo: true,
+      text: v => `ภาพความทรงจำผุดขึ้นมาอย่างฉับพลัน... ${v.name} เห็นภาพของ${v.worldName}ก่อนที่เถ้าถ่านจะมาถึง ภาพของ "${v.backstory || 'ชีวิตที่เคยมี'}" ลอยผ่านสายตา ความทรงจำนี้เจ็บปวดเกินกว่าจะมอง แต่ก็งดงามเกินกว่าจะละทิ้ง`,
+      choices: [
+        { label: 'โอบกอดความทรงจำนี้ไว้ (Embrace)', effects: { hp: -5, mind: 10 }, tags: [{ tag: 'acceptance', delta: 15 }], setFlags: { echoChoice: 'embrace' } },
+        { label: 'ปิดกั้นความทรงจำนี้ไป (Suppress)', effects: { stamina: -5, mind: -10 }, tags: [{ tag: 'denial', delta: 15 }], setFlags: { echoChoice: 'suppress' } },
+      ],
+    },
+    wander2: {
+      title: 'ทางแยก',
+      bgKind: 'world2',
+      text: v => `เส้นทางแยกออกเป็นสองสาย ${v.name} ต้องเลือก... สายหนึ่งดูปลอดภัยแต่อ้อมไกล อีกสายหนึ่งเร็วกว่าแต่เต็มไปด้วยเสียงกระซิบที่แผ่วมาจากความมืด`,
+      choices: [
+        { label: 'เลือกเส้นทางที่ปลอดภัยกว่า', effects: { stamina: -8, hunger: -8 }, tags: [{ tag: 'pragmatism', delta: 1 }] },
+        { label: 'เสี่ยงไปตามเส้นทางมืด', effects: { mind: -8, stamina: -4 }, tags: [{ tag: 'curiosity', delta: 1 }, { tag: 'cowardice', delta: -1 }] },
+      ],
+    },
+    silenceBeat: {
+      title: 'ความเงียบที่ไม่มีที่สิ้นสุด',
+      bgKind: 'world',
+      text: v => `จู่ๆ ทุกอย่างก็เงียบลงอย่างสิ้นเชิง ไม่มีแม้แต่เสียงลม ${v.name} รู้สึกได้ถึงสายตาบางอย่างที่จับจ้องมาจากความว่างเปล่า`,
+      choices: [
+        { label: 'ยืนนิ่งจนกว่าเสียงจะกลับมา', effects: { mind: 3 }, tags: [{ tag: 'acceptance', delta: 1 }] },
+        { label: 'วิ่งฝ่าความเงียบนั้นออกไป', effects: { stamina: -10, mind: -3 }, tags: [{ tag: 'cowardice', delta: 1 }] },
+      ],
+    },
+    moralChoice2: {
+      title: 'กลุ่มผู้ลี้ภัย',
+      bgKind: 'world2',
+      text: v => `${v.name} พบกลุ่มผู้ลี้ภัยกำลังหลบซ่อนอยู่ในซากอาคาร พวกเขาขอให้ช่วยนำทางไปยังที่ปลอดภัย แต่เส้นทางนั้นอันตรายและอาจทำให้ ${v.name} ต้องเสี่ยงชีวิต`,
+      choices: [
+        { label: 'อาสานำทางให้พวกเขา', effects: { hp: -8, stamina: -15 }, tags: [{ tag: 'mercy', delta: 2 }, { tag: 'sacrifice', delta: 3 }] },
+        { label: 'บอกเส้นทางแล้วแยกทางกันไป', effects: {}, tags: [{ tag: 'pragmatism', delta: 2 }] },
+        { label: 'ปฏิเสธและเดินจากไปทันที', effects: {}, tags: [{ tag: 'cruelty', delta: 2 }, { tag: 'cowardice', delta: 1 }] },
+      ],
+    },
+    encounter2: {
+      title: 'เผชิญหน้าอีกครั้ง',
+      bgKind: 'world2',
+      encounter: true,
+      text: v => `${v.monsterName} ปรากฏตัวขึ้นอีกครั้ง คราวนี้ดูเหมือนมันจะจดจำ ${v.name} ได้`,
+      choices: [
+        { label: 'ยืนหยัดสู้', effects: { stamina: -12 }, tags: [{ tag: 'pragmatism', delta: 1 }], encounterRoll: 'stand' },
+        { label: 'หลบหนีอย่างเงียบเชียบ', effects: { stamina: -18 }, tags: [{ tag: 'cowardice', delta: 1 }], encounterRoll: 'flee' },
+      ],
+    },
+    crisis: {
+      title: 'วิกฤตครั้งสุดท้าย',
+      bgKind: 'world',
+      text: v => `พายุเถ้าถ่านโหมกระหน่ำเข้ามาอย่างไม่ทันตั้งตัว ${v.name} มีเวลาเพียงน้อยนิดในการตัดสินใจว่าจะใช้แรงที่เหลืออยู่อย่างไร`,
+      choices: [
+        { label: 'ใช้แรงทั้งหมดวิ่งหาที่กำบัง', effects: { stamina: -25, hp: 5 }, tags: [{ tag: 'pragmatism', delta: 2 }] },
+        { label: 'ยืนปกป้องผู้ที่อ่อนแอกว่ารอบตัว', effects: { hp: -15, stamina: -15 }, tags: [{ tag: 'sacrifice', delta: 3 }, { tag: 'mercy', delta: 1 }] },
+      ],
+    },
+    closing: {
+      title: 'เมื่อพายุสงบ',
+      bgKind: 'zone',
+      text: v => `พายุเถ้าถ่านค่อยๆ สงบลง ${v.name} ยืนอยู่ท่ามกลางความเงียบที่เหลืออยู่ เรื่องราวของเจ้ากำลังจะถูกจารึกไว้...`,
+      choices: [
+        { label: 'มองย้อนกลับไปในสิ่งที่ผ่านมา', effects: {}, tags: [{ tag: 'acceptance', delta: 1 }] },
+        { label: 'ก้าวเดินต่อไปโดยไม่หันหลังกลับ', effects: {}, tags: [{ tag: 'denial', delta: 1 }] },
+      ],
+    },
+  };
+
+  // Rating tiers by survivalScore
+  const RATING_TIERS = [
+    { max: 39, key: 'ashes', label: 'Ashes' },
+    { max: 59, key: 'survivor', label: 'Survivor' },
+    { max: 79, key: 'warden', label: 'Warden of the Ruins' },
+    { max: 100, key: 'legend', label: 'Legend of the Wasteland' },
+  ];
+
+  const AXIS_PRIORITY = ['mercy', 'sacrifice', 'acceptance', 'pragmatism', 'curiosity', 'cowardice', 'denial', 'cruelty'];
+
+  const AXIS_FAMILY = {
+    mercy: 'kind', sacrifice: 'kind', acceptance: 'kind',
+    pragmatism: 'pragmatic', curiosity: 'pragmatic',
+    cowardice: 'dark', denial: 'dark', cruelty: 'dark',
+  };
+
+  // 4 tiers x 3 families = 12 quote templates
+  const RATING_QUOTES = {
+    ashes: {
+      kind: '"{name} ล่มสลายไป แต่ในวินาทีสุดท้าย เขายังคงเลือกที่จะอ่อนโยน"',
+      pragmatic: '"{name} ไม่รอด แต่ก็ไม่เคยหลอกตัวเองแม้แต่วินาทีเดียว"',
+      dark: '"{name} จมหายไปในความเงียบ ไม่มีใครจดจำว่าเขาเคยยืนอยู่"',
+    },
+    survivor: {
+      kind: '"{name} รอดชีวิตด้วยหัวใจที่ยังไม่แข็งกระด้าง"',
+      pragmatic: '"{name} เอาชีวิตรอดด้วยการตัดสินใจที่เยือกเย็นและแม่นยำ"',
+      dark: '"{name} รอดชีวิต แต่บางส่วนของเขาตายไปพร้อมกับความเงียบ"',
+    },
+    warden: {
+      kind: '"{name} กลายเป็นผู้พิทักษ์ซากปรักหักพัง ด้วยความเมตตาที่ไม่เคยจางหาย"',
+      pragmatic: '"{name} ยืนหยัดเป็นผู้ดูแลซากปรักหักพัง ด้วยสติปัญญาที่ไม่เคยพลาด"',
+      dark: '"{name} ปกครองซากปรักหักพังด้วยความกลัวที่ผู้อื่นมีต่อเขา"',
+    },
+    legend: {
+      kind: '"ตำนานของ{name}ถูกเล่าขาน ในฐานะแสงสว่างท่ามกลางเถ้าถ่าน"',
+      pragmatic: '"ตำนานของ{name}ถูกเล่าขาน ในฐานะผู้ที่ไม่เคยพ่ายแพ้ต่อสถานการณ์"',
+      dark: '"ตำนานของ{name}ถูกเล่าขาน ในฐานะเงาที่แม้แต่เถ้าถ่านยังหวาดกลัว"',
+    },
+  };
+
+  const OVERSEER_JUDGMENTS = [
+    { mind: 'high', family: 'kind', text: 'The Ash remembers kindness rarely shown.' },
+    { mind: 'high', family: 'pragmatic', text: 'It saw clearly, even when the world did not.' },
+    { mind: 'high', family: 'dark', text: 'It kept its eyes open, and still chose the shadow.' },
+    { mind: 'low', family: 'kind', text: 'It gave without seeing where it stood.' },
+    { mind: 'low', family: 'pragmatic', text: 'It survived on instinct alone, and that was enough.' },
+    { mind: 'low', family: 'dark', text: 'Another wolf wearing the shape of a person.' },
+  ];
+
+  const WORLD_PALETTE = {
+    ashlands: ['#3a2416', '#7a4520', '#c9793a'],
+    elaria: ['#16241a', '#20502e', '#4a9b5e'],
+    kharthal: ['#2a0e0c', '#6a1f14', '#c9432c'],
+    mirevale: ['#0e1f16', '#1f3d2c', '#3f7a56'],
+    nyxabyss: ['#0d0d24', '#1c1c4a', '#3a3a8a'],
+    aethremvale: ['#241c0c', '#5a4a1c', '#c9a33a'],
+  };
+
+  const WORLD_EMBLEM_PATHS = {
+    crack: [[-18, -22], [-4, -4], [-14, 6], [2, 22], [-6, 2], [10, -10], [-2, -20]],
+    leaf: [[0, -22], [16, -6], [10, 14], [0, 22], [-10, 14], [-16, -6]],
+    fang: [[-16, -18], [0, 22], [16, -18], [8, -12], [0, 6], [-8, -12]],
+    ripple: [[-20, 4], [-10, -8], [0, 4], [10, -8], [20, 4], [10, 16], [0, 4], [-10, 16]],
+    crescent: [[14, -18], [2, -18], [-10, -6], [-10, 6], [2, 18], [14, 18], [4, 12], [-2, 0], [4, -12]],
+    spire: [[0, -22], [10, 2], [16, 20], [-16, 20], [-10, 2]],
+  };
+
+  // ===================================================================
+  // STATE
+  // ===================================================================
+
+  let player = createFreshPlayer();
+
+  function createFreshPlayer() {
+    return {
+      meta: { version: 1, createdAt: Date.now() },
+      screen: 'intro',
+      name: '', gender: '', backstory: '',
+      world: '', zone: '', zoneWasOverridden: false,
+      classKey: '', classInputRaw: '',
+      stats: { hp: 100, hunger: 100, stamina: 100 },
+      mind: 50,
+      moralityLog: [],
+      moralityAgg: { mercy: 0, cruelty: 0, pragmatism: 0, cowardice: 0, sacrifice: 0, acceptance: 0, denial: 0, curiosity: 0 },
+      echoChoice: null,
+      sceneIndex: 0,
+      sceneVariant: {},
+      flags: {},
+      ended: false,
+      finalRating: null,
+    };
+  }
+
+  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+  function pickWeighted(list) {
+    const total = list.reduce((sum, item) => sum + item.weight, 0);
+    let roll = Math.random() * total;
+    for (const item of list) {
+      if (roll < item.weight) return item;
+      roll -= item.weight;
+    }
+    return list[list.length - 1];
+  }
+
+  function saveGame() {
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(player));
+    } catch (e) { /* private-mode / storage full: ignore, non-critical */ }
+  }
+
+  function loadGame() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return false;
+      player = Object.assign(createFreshPlayer(), parsed);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function clearSave() {
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+  }
+
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('toast--show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('toast--show'), 2600);
+  }
+
+  function assetUrl(folder, file) { return ASSET_BASE + folder + '/' + file; }
+
+  // ===================================================================
+  // SCREEN MANAGEMENT
+  // ===================================================================
+
+  const SCREEN_IDS = ['screenIntro', 'screenWorldSelect', 'screenZoneSelect', 'screenCharCreate',
+    'screenClassSelect', 'screenClassReveal', 'screenScene', 'screenFinalReport', 'screenCharacterCard'];
+
+  function showScreen(id, skipSave) {
+    SCREEN_IDS.forEach(s => {
+      const el = document.getElementById(s);
+      if (el) el.classList.toggle('app-screen--active', s === id);
+    });
+    player.screen = id;
+    if (!skipSave) saveGame();
+    renderCurrentScreen();
+    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+  }
+
+  function renderCurrentScreen() {
+    switch (player.screen) {
+      case 'screenIntro': renderIntro(); break;
+      case 'screenWorldSelect': renderWorldSelect(); break;
+      case 'screenZoneSelect': renderZoneSelect(); break;
+      case 'screenCharCreate': renderCharCreate(); break;
+      case 'screenClassSelect': renderClassSelect(); break;
+      case 'screenClassReveal': renderClassReveal(); break;
+      case 'screenScene': renderScene(); break;
+      case 'screenFinalReport': renderFinalReport(); break;
+      case 'screenCharacterCard': renderCharacterCard(); break;
+    }
+  }
+
+  // ===================================================================
+  // RENDER: INTRO
+  // ===================================================================
+
+  function renderIntro() {
+    const hasSave = !!localStorage.getItem(SAVE_KEY);
+    document.getElementById('btnContinue').style.display = hasSave ? 'inline-block' : 'none';
+    document.getElementById('introContinueWrap').style.display = hasSave ? 'block' : 'none';
+  }
+
+  // ===================================================================
+  // RENDER: WORLD SELECT
+  // ===================================================================
+
+  function renderWorldSelect() {
+    const grid = document.getElementById('worldGrid');
+    grid.innerHTML = '';
+    WORLD_DEFS.forEach(w => {
+      const btn = document.createElement('button');
+      btn.className = 'card-btn';
+      btn.innerHTML = `
+        <div class="card-btn__bg" style="background-image:url('${assetUrl('bg', w.bg)}')"></div>
+        <div class="card-btn__title">${w.name} <span class="muted">(${w.nameTh})</span></div>
+        <div class="card-btn__desc">${w.symbol}</div>
+      `;
+      btn.addEventListener('click', () => selectWorld(w.key));
+      grid.appendChild(btn);
+    });
+  }
+
+  function selectWorld(key) {
+    player.world = key;
+    showScreen('screenZoneSelect');
+  }
+
+  // ===================================================================
+  // RENDER: ZONE SELECT
+  // ===================================================================
+
+  function renderZoneSelect() {
+    const grid = document.getElementById('zoneGrid');
+    grid.innerHTML = '';
+    ZONE_DEFS.forEach(z => {
+      const btn = document.createElement('button');
+      btn.className = 'card-btn';
+      const locked = z.secret;
+      btn.disabled = locked;
+      btn.innerHTML = `
+        <div class="card-btn__bg" style="background-image:url('${assetUrl('bg', z.bg)}');${locked ? 'filter:grayscale(1) brightness(0.4);' : ''}"></div>
+        ${locked ? `<div class="lock-badge"><img src="${assetUrl('ui', 'icon_lock.png')}" alt="locked"></div>` : ''}
+        <div class="card-btn__title">${z.name}</div>
+        <div class="card-btn__desc">${locked ? 'คุณยังไม่รู้จักที่แห่งนี้...' : z.desc}</div>
+      `;
+      if (!locked) btn.addEventListener('click', () => selectZone(z.key));
+      grid.appendChild(btn);
+    });
+  }
+
+  function selectZone(key) {
+    player.zone = key;
+    showScreen('screenCharCreate');
+  }
+
+  // ===================================================================
+  // RENDER: CHARACTER CREATE
+  // ===================================================================
+
+  function renderCharCreate() {
+    document.getElementById('inpName').value = player.name || '';
+    document.getElementById('inpGender').value = player.gender || '';
+    document.getElementById('inpBackstory').value = player.backstory || '';
+  }
+
+  function confirmCharCreate() {
+    const name = document.getElementById('inpName').value.trim();
+    const gender = document.getElementById('inpGender').value.trim();
+    const backstory = document.getElementById('inpBackstory').value.trim();
+    player.name = name || 'ผู้ไร้นาม';
+    player.gender = gender || 'ไม่ระบุ';
+    player.backstory = backstory;
+    showScreen('screenClassSelect');
+  }
+
+  // ===================================================================
+  // RENDER: CLASS SELECT
+  // ===================================================================
+
+  function renderClassSelect() {
+    document.getElementById('inpClass').value = '';
+  }
+
+  function resolveClassFromInput(rawInput) {
+    const norm = (rawInput || '').trim().toLowerCase();
+
+    for (const c of CLASS_DEFS) {
+      if (c.secret) continue;
+      if (c.keywords.some(k => norm === k.toLowerCase() || norm.includes(k.toLowerCase()))) {
+        return c.key;
+      }
+    }
+
+    if (RANDOM_KEYWORDS.some(k => norm.includes(k.toLowerCase()))) {
+      const rolled = pickWeighted(CLASS_DEFS.filter(c => !c.secret));
+      return rolled.key;
+    }
+
+    const isDeath = DEATH_KEYWORDS.some(k => norm.includes(k.toLowerCase()));
+    const isForget = FORGET_KEYWORDS.some(k => norm.includes(k.toLowerCase()));
+    if (isDeath) return 'revenant';
+    if (isForget) return 'lostone';
+    if (norm === '') return 'lostone';
+
+    return 'lostone';
+  }
+
+  function confirmClassSelect() {
+    const raw = document.getElementById('inpClass').value;
+    player.classInputRaw = raw;
+    const classKey = resolveClassFromInput(raw);
+    player.classKey = classKey;
+
+    const cls = CLASS_LOOKUP[classKey];
+    if (cls.secret) {
+      const originalZoneName = ZONE_LOOKUP[player.zone] ? ZONE_LOOKUP[player.zone].name : '';
+      player.zone = 'unknown';
+      player.zoneWasOverridden = true;
+      player.flags.originalZoneName = originalZoneName;
+    }
+
+    showScreen('screenClassReveal');
+  }
+
+  function renderClassReveal() {
+    const cls = CLASS_LOOKUP[player.classKey];
+    const panel = document.getElementById('classRevealPanel');
+    let overrideNote = '';
+    if (player.zoneWasOverridden) {
+      overrideNote = `<p class="quote">"เถ้าถ่านจดจำสิ่งที่เจ้าปฏิเสธจะเป็น เส้นทางของเจ้าไม่เคยเป็น ${player.flags.originalZoneName || ''} มันคือสถานที่ที่ไม่มีชื่อมาโดยตลอด"</p>`;
+    }
+    panel.innerHTML = `
+      <h2>${cls.name} <span class="muted">(${cls.nameTh})</span></h2>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <img src="${assetUrl('skills', cls.icon1)}" alt="" style="width:32px;height:32px;">
+        <img src="${assetUrl('skills', cls.icon2)}" alt="" style="width:32px;height:32px;">
+      </div>
+      <p class="quote">${cls.quote}</p>
+      <p class="muted">Passive: ${cls.passive}</p>
+      ${overrideNote}
+    `;
+  }
+
+  function enterScenes() {
+    player.sceneIndex = 0;
+    player.trait = CLASS_LOOKUP[player.classKey].nameTh;
+    showScreen('screenScene');
+  }
+
+  // ===================================================================
+  // RENDER: SCENE RUNTIME
+  // ===================================================================
+
+  function sceneVars() {
+    const world = WORLD_LOOKUP[player.world];
+    const zone = ZONE_LOOKUP[player.zone];
+    const cls = CLASS_LOOKUP[player.classKey];
+    const pool = MONSTER_POOL[player.world] || MONSTER_POOL.ashlands;
+    const monsterIdx = SCENE_SEQUENCE.indexOf(SCENE_SEQUENCE[player.sceneIndex]) === SCENE_SEQUENCE.indexOf('encounter2') ? 1 : 0;
+    return {
+      name: player.name,
+      worldName: world.name,
+      zoneName: zone.name,
+      className: cls.name,
+      backstory: player.backstory,
+      monsterName: (pool[monsterIdx] || pool[0]).replace('.png', '').replace(/_/g, ' '),
+    };
+  }
+
+  function currentSceneId() { return SCENE_SEQUENCE[player.sceneIndex]; }
+
+  function bgForScene(scene) {
+    const world = WORLD_LOOKUP[player.world];
+    const zone = ZONE_LOOKUP[player.zone];
+    if (scene.bgKind === 'zone') return zone.bg;
+    if (scene.bgKind === 'world2') return world.bg2;
+    if (scene.bgKind === 'echo') return world.bg;
+    return world.bg;
+  }
+
+  function renderStatBars() {
+    const s = player.stats;
+    const bars = [
+      { key: 'hp', label: 'HP', val: s.hp, cls: 'stat-fill--hp' },
+      { key: 'hunger', label: 'Hunger', val: s.hunger, cls: 'stat-fill--hunger' },
+      { key: 'stamina', label: 'Stamina', val: s.stamina, cls: 'stat-fill--stamina' },
+    ];
+    document.getElementById('statBars').innerHTML = bars.map(b => `
+      <div class="stat-row">
+        <span class="stat-label">${b.label}</span>
+        <span class="stat-track"><span class="stat-fill ${b.cls}" style="width:${clamp(b.val, 0, 100)}%"></span></span>
+        <span class="stat-val">${Math.round(clamp(b.val, 0, 100))}</span>
+      </div>
+    `).join('');
+  }
+
+  function renderScene() {
+    const sceneId = currentSceneId();
+    const scene = SCENES[sceneId];
+    const vars = sceneVars();
+    const world = WORLD_LOOKUP[player.world];
+
+    renderStatBars();
+
+    document.getElementById('sceneHudLeft').textContent = `${world.name} · ${player.name}`;
+    document.getElementById('sceneHudRight').textContent = `ฉาก ${player.sceneIndex + 1}/${SCENE_SEQUENCE.length}`;
+
+    const bgFile = bgForScene(scene);
+    const bgPanel = document.getElementById('sceneBgPanel');
+    bgPanel.style.backgroundImage = `url('${assetUrl('bg', bgFile)}')`;
+    bgPanel.style.filter = scene.bgKind === 'echo' ? 'sepia(0.55) saturate(0.7) brightness(0.85)' : '';
+    document.getElementById('sceneLabel').textContent = scene.title;
+
+    let text = fmt(scene.text(vars), vars);
+    document.getElementById('sceneText').textContent = text;
+
+    const choicesEl = document.getElementById('sceneChoices');
+    choicesEl.innerHTML = '';
+    scene.choices.forEach((choice, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'choice-btn';
+      btn.textContent = choice.label;
+      btn.addEventListener('click', () => applySceneChoice(sceneId, idx));
+      choicesEl.appendChild(btn);
+    });
+  }
+
+  function applySceneChoice(sceneId, choiceIdx) {
+    const scene = SCENES[sceneId];
+    const choice = scene.choices[choiceIdx];
+
+    if (choice.effects) {
+      Object.keys(choice.effects).forEach(k => {
+        if (k === 'mind') {
+          player.mind = clamp(player.mind + choice.effects.mind, 0, 100);
+        } else if (player.stats[k] !== undefined) {
+          player.stats[k] = clamp(player.stats[k] + choice.effects[k], 0, 100);
+        }
+      });
+    }
+
+    if (choice.encounterRoll) {
+      const roll = Math.random();
+      if (choice.encounterRoll === 'stand') {
+        if (roll < 0.6) player.stats.hp = clamp(player.stats.hp - 5, 0, 100);
+        else player.stats.hp = clamp(player.stats.hp + 2, 0, 100);
+      } else {
+        if (roll < 0.3) player.stats.hp = clamp(player.stats.hp - 8, 0, 100);
+      }
+    }
+
+    if (choice.tags) {
+      choice.tags.forEach(t => {
+        player.moralityAgg[t.tag] = (player.moralityAgg[t.tag] || 0) + t.delta;
+      });
+      player.moralityLog.push({ sceneId, choiceId: choiceIdx, tags: choice.tags, mindAt: player.mind });
+    }
+
+    if (choice.setFlags) {
+      Object.assign(player.flags, choice.setFlags);
+      if (choice.setFlags.echoChoice) player.echoChoice = choice.setFlags.echoChoice;
+    }
+
+    // passive per-scene decay
+    player.stats.hunger = clamp(player.stats.hunger - 3, 0, 100);
+    player.stats.stamina = clamp(player.stats.stamina - 2, 0, 100);
+
+    player.sceneIndex += 1;
+    saveGame();
+
+    if (player.sceneIndex >= SCENE_SEQUENCE.length) {
+      player.ended = true;
+      player.finalRating = computeFinalReport();
+      showScreen('screenFinalReport');
+    } else {
+      renderScene();
+      saveGame();
+    }
+  }
+
+  // ===================================================================
+  // FINAL REPORT
+  // ===================================================================
+
+  function dominantAxis() {
+    let best = AXIS_PRIORITY[0];
+    let bestVal = -Infinity;
+    AXIS_PRIORITY.forEach(axis => {
+      const val = player.moralityAgg[axis] || 0;
+      if (val > bestVal) { bestVal = val; best = axis; }
+    });
+    return best;
+  }
+
+  function computeFinalReport() {
+    const s = player.stats;
+    const survivalScore = clamp(Math.round(s.hp * 0.4 + s.hunger * 0.3 + s.stamina * 0.3), 0, 100);
+    const tier = RATING_TIERS.find(t => survivalScore <= t.max) || RATING_TIERS[RATING_TIERS.length - 1];
+    const axis = dominantAxis();
+    const family = AXIS_FAMILY[axis];
+    const quoteTemplate = RATING_QUOTES[tier.key][family];
+    const quote = fmt(quoteTemplate, { name: player.name });
+    const mindLevel = player.mind >= 50 ? 'high' : 'low';
+    const overseerEntry = OVERSEER_JUDGMENTS.find(o => o.mind === mindLevel && o.family === family) || OVERSEER_JUDGMENTS[0];
+    return { survivalScore, tierKey: tier.key, tierLabel: tier.label, axis, family, quote, overseer: overseerEntry.text };
+  }
+
+  function renderFinalReport() {
+    const world = WORLD_LOOKUP[player.world];
+    const zone = ZONE_LOOKUP[player.zone];
+    const cls = CLASS_LOOKUP[player.classKey];
+    const report = player.finalRating || computeFinalReport();
+    player.finalRating = report;
+
+    document.getElementById('reportGrid').innerHTML = `
+      <dt>Name</dt><dd>${player.name}</dd>
+      <dt>World</dt><dd>${world.name}</dd>
+      <dt>Class</dt><dd>${cls.name}</dd>
+      <dt>Trait</dt><dd>${cls.nameTh}</dd>
+      <dt>Zone</dt><dd>${zone.name}</dd>
+      <dt>Final HP</dt><dd>${Math.round(player.stats.hp)}</dd>
+      <dt>Hunger</dt><dd>${Math.round(player.stats.hunger)}%</dd>
+      <dt>Stamina</dt><dd>${Math.round(player.stats.stamina)}%</dd>
+    `;
+    document.getElementById('ratingBadge').textContent = `Survival Rating: ${report.tierLabel} (${report.survivalScore})`;
+    document.getElementById('reportQuote').textContent = report.quote;
+    document.getElementById('reportOverseer').textContent = report.overseer;
+  }
+
+  function goToCard() { showScreen('screenCharacterCard'); }
+
+  // ===================================================================
+  // CHARACTER CARD (CANVAS)
+  // ===================================================================
+
+  function loadImage(src) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    let lines = [];
+    words.forEach(word => {
+      const test = line ? line + ' ' + word : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    });
+    if (line) lines.push(line);
+    lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight));
+    return lines.length * lineHeight;
+  }
+
+  function drawEmblem(ctx, cx, cy, world) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.beginPath();
+    ctx.arc(0, 0, 46, 0, Math.PI * 2);
+    ctx.fillStyle = world.tint;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#e8c766';
+    ctx.stroke();
+
+    const path = WORLD_EMBLEM_PATHS[world.emblem] || WORLD_EMBLEM_PATHS.crack;
+    ctx.beginPath();
+    path.forEach((pt, i) => { i === 0 ? ctx.moveTo(pt[0], pt[1]) : ctx.lineTo(pt[0], pt[1]); });
+    ctx.closePath();
+    ctx.fillStyle = '#f6dd94';
+    ctx.globalAlpha = 0.9;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  async function buildCharacterCard() {
+    const canvas = document.getElementById('cardCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const world = WORLD_LOOKUP[player.world];
+    const zone = ZONE_LOOKUP[player.zone];
+    const cls = CLASS_LOOKUP[player.classKey];
+    const report = player.finalRating || computeFinalReport();
+
+    // 1. gradient base
+    const palette = WORLD_PALETTE[player.world] || WORLD_PALETTE.ashlands;
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, palette[0]);
+    grad.addColorStop(0.55, palette[1]);
+    grad.addColorStop(1, palette[2]);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    // 2. world bg image, cover-fit
+    const img = await loadImage(assetUrl('bg', world.bg));
+    if (img) {
+      const scale = Math.max(W / img.width, H / img.height);
+      const dw = img.width * scale, dh = img.height * scale;
+      ctx.globalAlpha = 0.55;
+      ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      ctx.globalAlpha = 1;
+    }
+
+    // 3. vignette + border
+    const vignette = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.75);
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.65)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = '#e8c766';
+    ctx.lineWidth = 6;
+    ctx.strokeRect(10, 10, W - 20, H - 20);
+
+    // 4. emblem
+    drawEmblem(ctx, W / 2, 110, world);
+
+    // 5. name (auto-shrink)
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f6dd94';
+    let fontSize = 46;
+    ctx.font = `bold ${fontSize}px Tahoma, 'Noto Sans Thai', sans-serif`;
+    while (ctx.measureText(player.name).width > W - 100 && fontSize > 22) {
+      fontSize -= 3;
+      ctx.font = `bold ${fontSize}px Tahoma, 'Noto Sans Thai', sans-serif`;
+    }
+    ctx.fillText(player.name, W / 2, 210);
+
+    ctx.font = "22px Tahoma, 'Noto Sans Thai', sans-serif";
+    ctx.fillStyle = '#d8cfe6';
+    ctx.fillText(world.name + ' · ' + world.symbol, W / 2, 245);
+
+    // 6. divider
+    ctx.strokeStyle = 'rgba(232,199,102,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(80, 280);
+    ctx.lineTo(W - 80, 280);
+    ctx.stroke();
+
+    // stat block, 2 columns
+    ctx.textAlign = 'left';
+    ctx.font = "22px Tahoma, 'Noto Sans Thai', sans-serif";
+    const leftX = 90, rightX = W / 2 + 20;
+    let rowY = 330;
+    const leftRows = [
+      ['World', world.name],
+      ['Class', cls.name],
+      ['Trait', cls.nameTh],
+      ['Zone', zone.name],
+    ];
+    const rightRows = [
+      ['Final HP', Math.round(player.stats.hp)],
+      ['Hunger', Math.round(player.stats.hunger) + '%'],
+      ['Stamina', Math.round(player.stats.stamina) + '%'],
+      ['Rating', report.tierLabel],
+    ];
+    leftRows.forEach((r, i) => {
+      ctx.fillStyle = '#b8aec6';
+      ctx.fillText(r[0], leftX, rowY + i * 42);
+      ctx.fillStyle = '#f1ecd8';
+      ctx.fillText(String(r[1]), leftX, rowY + i * 42 + 24);
+    });
+    rightRows.forEach((r, i) => {
+      ctx.fillStyle = '#b8aec6';
+      ctx.fillText(r[0], rightX, rowY + i * 42);
+      ctx.fillStyle = '#f1ecd8';
+      ctx.fillText(String(r[1]), rightX, rowY + i * 42 + 24);
+    });
+
+    // 7. rating headline
+    ctx.textAlign = 'center';
+    ctx.font = "bold 34px Tahoma, 'Noto Sans Thai', sans-serif";
+    ctx.fillStyle = '#f6dd94';
+    ctx.fillText(report.tierLabel.toUpperCase(), W / 2, 570);
+    ctx.font = "18px Tahoma, 'Noto Sans Thai', sans-serif";
+    ctx.fillStyle = '#d8cfe6';
+    ctx.fillText('Survival Score: ' + report.survivalScore, W / 2, 598);
+
+    // 8. closing quote
+    ctx.font = "italic 22px Tahoma, 'Noto Sans Thai', sans-serif";
+    ctx.fillStyle = '#f1ecd8';
+    ctx.textAlign = 'left';
+    wrapCanvasText(ctx, report.quote, 90, 660, W - 180, 32);
+
+    ctx.font = "16px Tahoma, 'Noto Sans Thai', sans-serif";
+    ctx.fillStyle = '#b8aec6';
+    ctx.textAlign = 'center';
+    ctx.fillText(report.overseer, W / 2, 800);
+
+    // 9. final line
+    ctx.font = "20px Tahoma, 'Noto Sans Thai', sans-serif";
+    ctx.fillStyle = '#e8c766';
+    const finalLine = `Your story is now part of the ruins... of ${world.name}`;
+    ctx.fillText(finalLine, W / 2, H - 60);
+
+    return finalLine;
+  }
+
+  function generateShareText() {
+    const world = WORLD_LOOKUP[player.world];
+    const zone = ZONE_LOOKUP[player.zone];
+    const cls = CLASS_LOOKUP[player.classKey];
+    const report = player.finalRating || computeFinalReport();
+    return [
+      `Name: ${player.name}`,
+      `World: ${world.name}`,
+      `Class: ${cls.name}`,
+      `Trait: ${cls.nameTh}`,
+      `Zone: ${zone.name}`,
+      `Final HP: ${Math.round(player.stats.hp)}`,
+      `Hunger: ${Math.round(player.stats.hunger)}%`,
+      `Stamina: ${Math.round(player.stats.stamina)}%`,
+      `Survival Rating: ${report.tierLabel} (${report.survivalScore})`,
+      report.quote,
+      `Your story is now part of the ruins... of ${world.name}`,
+    ].join('\n');
+  }
+
+  async function renderCharacterCard() {
+    const finalLine = await buildCharacterCard();
+    document.getElementById('finalClosingLine').textContent = finalLine;
+  }
+
+  function downloadCard() {
+    const canvas = document.getElementById('cardCanvas');
+    try {
+      canvas.toBlob(blob => {
+        if (!blob) { fallbackShare(); return; }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `borntodieai-${(player.name || 'character').replace(/\s+/g, '_')}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      }, 'image/png');
+    } catch (e) {
+      fallbackShare();
+    }
+  }
+
+  function fallbackShare() {
+    const ta = document.getElementById('shareTextarea');
+    ta.style.display = 'block';
+    ta.value = generateShareText();
+    showToast('ไม่สามารถดาวน์โหลดรูปภาพได้ในเบราว์เซอร์นี้ — คัดลอกข้อความสรุปแทนได้');
+  }
+
+  function copySummary() {
+    const text = generateShareText();
+    const ta = document.getElementById('shareTextarea');
+    ta.style.display = 'block';
+    ta.value = text;
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('คัดลอกข้อความสรุปแล้ว');
+    } catch (e) {
+      showToast('กรุณาคัดลอกข้อความด้วยตนเอง');
+    }
+  }
+
+  function startNewStory() {
+    clearSave();
+    player = createFreshPlayer();
+    showScreen('screenIntro', true);
+  }
+
+  // ===================================================================
+  // WIRING
+  // ===================================================================
+
+  document.getElementById('btnStartNew').addEventListener('click', () => {
+    clearSave();
+    player = createFreshPlayer();
+    showScreen('screenWorldSelect');
+  });
+  document.getElementById('btnContinue').addEventListener('click', () => {
+    if (loadGame()) {
+      showScreen(player.screen || 'screenIntro', true);
+    }
+  });
+  document.getElementById('btnConfirmCharCreate').addEventListener('click', confirmCharCreate);
+  document.getElementById('btnConfirmClass').addEventListener('click', confirmClassSelect);
+  document.getElementById('btnEnterScenes').addEventListener('click', enterScenes);
+  document.getElementById('btnGoToCard').addEventListener('click', goToCard);
+  document.getElementById('btnDownloadCard').addEventListener('click', downloadCard);
+  document.getElementById('btnCopySummary').addEventListener('click', copySummary);
+  document.getElementById('btnNewStory').addEventListener('click', startNewStory);
+
+  document.getElementById('inpName').addEventListener('keydown', e => { if (e.key === 'Enter') confirmCharCreate(); });
+  document.getElementById('inpClass').addEventListener('keydown', e => { if (e.key === 'Enter') confirmClassSelect(); });
+
+  // initial load
+  if (loadGame()) {
+    showScreen(SCREEN_IDS.includes(player.screen) ? player.screen : 'screenIntro', true);
+  } else {
+    showScreen('screenIntro', true);
+  }
+})();
+</script>
+</body>
+</html>
