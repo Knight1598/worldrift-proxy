@@ -19,7 +19,7 @@ var HEADERS = {
   Branches: ['branchCode', 'branchName', 'zone', 'defaultCarrier', 'defaultDropPoint', 'active'],
   Carriers: ['carrierCode', 'carrierName', 'phone', 'note', 'active'],
   DropPoints: ['dropPointName', 'zone', 'note'],
-  Parts: ['partCode', 'partName', 'unit', 'lastUsedAt'],
+  Parts: ['partCode', 'partName'],
   Shipments: [
     'shipmentId', 'createdAt', 'shipDate', 'prNo', 'destBranch', 'zone', 'dropPoint',
     'isTransfer', 'carrier', 'trackingNo', 'boxCount', 'sender', 'receiverName', 'note',
@@ -108,7 +108,7 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
-/** ข้อมูลตั้งต้นของฟอร์ม: รายชื่อเขต/สาขา/ขนส่ง/จุดฝากลง/อะไหล่ */
+/** ข้อมูลตั้งต้นของฟอร์ม: รายชื่อเขต/สาขา/ขนส่ง/จุดฝากลง */
 function apiBootstrap() {
   var masters = getMasters_();
   return {
@@ -117,8 +117,7 @@ function apiBootstrap() {
     zones: masters.zones,
     branches: masters.branches,
     carriers: masters.carriers,
-    dropPoints: masters.dropPoints,
-    parts: masters.parts
+    dropPoints: masters.dropPoints
   };
 }
 
@@ -135,6 +134,24 @@ function apiSaveShipment(payload) {
 function apiSearch(payload) {
   try {
     return { ok: true, results: searchShipments_(payload || {}) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** ค้นรายการสินค้าจากชีต Parts (พิมพ์รหัสหรือชื่อก็ได้) คืนไม่เกิน 20 รายการ */
+function apiLookupParts(query) {
+  try {
+    return { ok: true, results: lookupParts_(query) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** หาสินค้าจากรหัสแบบตรงตัวเป๊ะ ๆ ใช้ตอนพิมพ์รหัสเต็มแล้วออกจากช่อง */
+function apiLookupPartByCode(code) {
+  try {
+    return { ok: true, part: lookupPartByCode_(code) };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
@@ -191,16 +208,9 @@ function getMasters_() {
       .filter(function (r) { return String(r.dropPointName || '').trim(); })
       .map(function (r) {
         return { name: String(r.dropPointName).trim(), zone: String(r.zone || '').trim() };
-      }),
-    parts: readSheetObjects_(SHEETS.PARTS)
-      .filter(function (r) { return String(r.partCode || r.partName || '').trim(); })
-      .map(function (r) {
-        return {
-          code: String(r.partCode || '').trim(),
-          name: String(r.partName || '').trim(),
-          unit: String(r.unit || '').trim()
-        };
       })
+    // ไม่ส่งรายการสินค้าทั้งหมดมาที่หน้าเว็บ เพราะอาจมีหลักหมื่นรายการ
+    // หน้าเว็บจะค้นผ่าน apiLookupParts() ทีละครั้งแทน
   };
 
   try {
@@ -228,50 +238,56 @@ function findBranch_(name) {
   return null;
 }
 
-/**
- * เก็บอะไหล่ที่เพิ่งคีย์เข้าคลังคำ เพื่อให้ครั้งหน้ามี autocomplete ให้เลือก
- * ยึดรหัสเป็นหลัก ถ้าไม่มีรหัสก็ยึดชื่อ
- */
-function upsertParts_(items) {
-  if (!items || !items.length) return;
+/** อ่านรายการสินค้าทั้งหมดจากชีต Parts */
+function readParts_() {
   var sh = getSheet_(SHEETS.PARTS);
-  var existing = readSheetObjects_(SHEETS.PARTS);
-  var byKey = {};
-  existing.forEach(function (r) {
-    var k = partKey_(r.partCode, r.partName);
-    if (k) byKey[k] = r;
-  });
-
-  var stamp = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm');
-  var toAppend = [];
-  var seen = {};
-
-  items.forEach(function (it) {
-    var key = partKey_(it.partCode, it.partName);
-    if (!key || seen[key]) return;
-    seen[key] = true;
-    var found = byKey[key];
-    if (found) {
-      sh.getRange(found._row, colIndex_('Parts', 'lastUsedAt')).setValue(stamp);
-      if (!String(found.partName || '').trim() && it.partName) {
-        sh.getRange(found._row, colIndex_('Parts', 'partName')).setValue(it.partName);
-      }
-    } else {
-      toAppend.push([it.partCode || '', it.partName || '', it.unit || '', stamp]);
-    }
-  });
-
-  if (toAppend.length) {
-    sh.getRange(sh.getLastRow() + 1, 1, toAppend.length, HEADERS.Parts.length).setValues(toAppend);
-    clearMasterCache_();
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var values = sh.getRange(2, 1, last - 1, 2).getValues();
+  var out = [];
+  for (var i = 0; i < values.length; i++) {
+    var code = String(values[i][0] == null ? '' : values[i][0]).trim();
+    var name = String(values[i][1] == null ? '' : values[i][1]).trim();
+    if (code || name) out.push({ code: code, name: name });
   }
+  return out;
 }
 
-function partKey_(code, name) {
-  var c = String(code || '').trim().toUpperCase();
-  if (c) return 'C:' + c;
-  var n = String(name || '').trim().toUpperCase();
-  return n ? 'N:' + n : '';
+/**
+ * ค้นสินค้าจากรหัสหรือชื่อ
+ * เรียงผลลัพธ์ให้ "รหัสที่ขึ้นต้นด้วยคำค้น" มาก่อน เพราะปกติผู้ใช้พิมพ์รหัสเป็นหลัก
+ */
+function lookupParts_(query) {
+  var q = String(query || '').trim().toLowerCase();
+  if (!q) return [];
+
+  var parts = readParts_();
+  var starts = [];
+  var contains = [];
+
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    var code = p.code.toLowerCase();
+    if (code.indexOf(q) === 0) {
+      starts.push(p);
+      if (starts.length >= 20) break;
+    } else if (contains.length < 20 &&
+               (code.indexOf(q) > 0 || p.name.toLowerCase().indexOf(q) >= 0)) {
+      contains.push(p);
+    }
+  }
+  return starts.concat(contains).slice(0, 20);
+}
+
+/** หาสินค้าจากรหัสแบบตรงตัว (ไม่สนตัวพิมพ์เล็กใหญ่) */
+function lookupPartByCode_(code) {
+  var key = String(code || '').trim().toLowerCase();
+  if (!key) return null;
+  var parts = readParts_();
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].code.toLowerCase() === key) return parts[i];
+  }
+  return null;
 }
 
 /* =======================================================================
@@ -306,13 +322,6 @@ function saveShipment_(payload) {
   if (isDuplicate) {
     // กดซ้ำ/เน็ตหลุดแล้วส่งซ้ำ — คืนผลเดิม ไม่เขียนแถวใหม่
     return { ok: true, shipmentId: shipmentId, duplicate: true };
-  }
-
-  try {
-    upsertParts_(clean.items);
-  } catch (err) {
-    // อัปเดตคลังคำอะไหล่ไม่สำเร็จ ไม่ควรทำให้การบันทึกล้มเหลว
-    console.warn('upsertParts_ ล้มเหลว: ' + err);
   }
 
   return {

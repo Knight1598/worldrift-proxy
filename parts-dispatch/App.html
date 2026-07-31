@@ -163,10 +163,11 @@
   }
 
   .item-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
-  .item-row .code { flex: 3; }
+  .item-row .code { flex: 4; }
   .item-row .name { flex: 5; }
   .item-row .qty  { flex: 2; }
   .item-row input { margin-bottom: 0; }
+  .item-row .combo { margin-bottom: 0; }
   .item-row button {
     flex: none;
     width: 38px;
@@ -329,8 +330,6 @@
         <h2>รายการอะไหล่ *</h2>
         <div id="items"></div>
         <button type="button" class="add-item" id="addItem">+ เพิ่มรายการ</button>
-        <datalist id="partCodes"></datalist>
-        <datalist id="partNames"></datalist>
       </div>
 
       <div class="card">
@@ -398,7 +397,7 @@
 </div>
 
 <script>
-  var MASTERS = { zones: [], branches: [], carriers: [], dropPoints: [], parts: [] };
+  var MASTERS = { zones: [], branches: [], carriers: [], dropPoints: [] };
   var clientToken = newToken();
   var historyLoaded = false;
   var booted = false;
@@ -424,6 +423,8 @@
     var open = false;
     var blurTimer = null;
     var scope = null;   // ฟังก์ชันจำกัดขอบเขตตัวเลือก เช่น เอาเฉพาะสาขาในเขตที่เลือกไว้
+    var remoteTimer = null;
+    var remoteSeq = 0;  // กันผลลัพธ์เก่าที่กลับมาช้ามาทับผลใหม่
 
     var input = document.createElement('input');
     input.type = 'text';
@@ -466,12 +467,20 @@
       if (filtered.length > 50) filtered = filtered.slice(0, 50);
     }
 
+    function renderMessage(text) {
+      list.innerHTML = '';
+      var el = document.createElement('li');
+      el.className = 'combo-empty';
+      el.textContent = text;
+      list.appendChild(el);
+    }
+
     function render() {
       list.innerHTML = '';
       if (!filtered.length) {
         var empty = document.createElement('li');
         empty.className = 'combo-empty';
-        empty.textContent = 'ไม่พบรายการที่ตรง';
+        empty.textContent = config.emptyText || 'ไม่พบรายการที่ตรง';
         list.appendChild(empty);
         return;
       }
@@ -494,12 +503,53 @@
     function openList(query) {
       // ยกเลิกการปิดที่ค้างคิวอยู่จากการ blur ครั้งก่อน ไม่งั้นมันจะมาปิดรายการที่เพิ่งกางทิ้ง
       if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+
+      if (config.remote) return openRemote(query === undefined ? '' : query);
+
       filter(query === undefined ? '' : query);
       activeIndex = filtered.length ? 0 : -1;
       render();
+      show();
+    }
+
+    function show() {
       list.classList.remove('hidden');
       input.setAttribute('aria-expanded', 'true');
       open = true;
+    }
+
+    /** โหมดค้นจากเซิร์ฟเวอร์ — ใช้กับรายการสินค้าที่มีเยอะเกินกว่าจะโหลดมาทั้งหมด */
+    function openRemote(query) {
+      var q = String(query || '').trim();
+      var minChars = config.minChars || 2;
+
+      if (remoteTimer) { clearTimeout(remoteTimer); remoteTimer = null; }
+
+      if (q.length < minChars) {
+        filtered = [];
+        activeIndex = -1;
+        renderMessage('พิมพ์อย่างน้อย ' + minChars + ' ตัวอักษรเพื่อค้นหา');
+        show();
+        return;
+      }
+
+      renderMessage('กำลังค้นหา…');
+      show();
+
+      var seq = ++remoteSeq;
+      remoteTimer = setTimeout(function () {
+        remoteTimer = null;
+        config.remote(q, function (results) {
+          if (seq !== remoteSeq) return;   // มีการพิมพ์ต่อไปแล้ว ทิ้งผลเก่า
+          options = (results || []).map(function (o) {
+            return typeof o === 'string' ? { value: o, label: o } : o;
+          });
+          filtered = options.slice(0, 50);
+          activeIndex = filtered.length ? 0 : -1;
+          render();
+          show();
+        });
+      }, config.debounce || 250);
     }
 
     function closeList() {
@@ -516,8 +566,11 @@
       if (config.onChange) config.onChange(value, option);
     }
 
-    input.addEventListener('input', function () { openList(input.value); });
-    input.addEventListener('focus', function () { openList(''); });
+    input.addEventListener('input', function () {
+      if (config.freeText) value = input.value.trim();
+      openList(input.value);
+    });
+    input.addEventListener('focus', function () { openList(config.remote ? input.value : ''); });
 
     input.addEventListener('keydown', function (e) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -545,6 +598,12 @@
       blurTimer = setTimeout(function () {
         blurTimer = null;
         closeList();
+        if (config.freeText) {
+          // ช่องที่ยอมให้พิมพ์ค่าที่ไม่มีในรายการ (เช่น รหัสสินค้าที่ยังไม่ได้นำเข้า)
+          value = input.value.trim();
+          if (config.onBlur) config.onBlur(value);
+          return;
+        }
         input.value = value ? labelOf(value) : '';
       }, 120);
     });
@@ -557,7 +616,8 @@
           return typeof o === 'string' ? { value: o, label: o } : o;
         });
         // ถ้าค่าที่เลือกไว้เดิมไม่มีในชุดใหม่ ต้องล้างทิ้ง ไม่งั้นจะส่งค่าเก่าไปบันทึกทั้งที่ช่องดูว่าง
-        if (value && !labelOf(value)) { value = ''; input.value = ''; }
+        // (ยกเว้นช่องที่ยอมให้พิมพ์ค่านอกรายการ)
+        if (!config.freeText && value && !labelOf(value)) { value = ''; input.value = ''; }
       },
       getValue: function () { return value; },
       setValue: function (v) {
@@ -658,12 +718,7 @@
     dropOptions.push({ value: '__other__', label: 'อื่น ๆ (พิมพ์เอง)' });
     comboDrop.setOptions(dropOptions);
     comboDrop.setPlaceholder('พิมพ์ชื่อสาขาหรือจุดฝากลง');
-
-    var codes = $('partCodes'), names = $('partNames');
-    res.parts.forEach(function (p) {
-      if (p.code) codes.appendChild(new Option(p.code + (p.name ? ' — ' + p.name : ''), p.code));
-      if (p.name) names.appendChild(new Option(p.name, p.name));
-    });
+    // รายการสินค้าไม่ได้โหลดมาที่นี่ — ช่องรหัสจะค้นจากเซิร์ฟเวอร์ทีละครั้งแทน
   }
 
   function hasOption(select, value) {
@@ -741,50 +796,61 @@
 
   /* ---------- รายการอะไหล่ ---------- */
 
+  var itemSeq = 0;
+
   function addItemRow(focus) {
+    var id = 'itemCode' + (++itemSeq);
     var row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML =
-      '<input class="code" list="partCodes" placeholder="รหัส" autocomplete="off">' +
-      '<input class="name" list="partNames" placeholder="ชื่ออะไหล่" autocomplete="off">' +
+      '<div class="combo code" id="' + id + '"></div>' +
+      '<input class="name" placeholder="ชื่ออะไหล่" autocomplete="off">' +
       '<input class="qty" type="number" min="0" step="1" value="1" inputmode="numeric">' +
       '<button type="button" title="ลบรายการ">×</button>';
+
+    $('items').appendChild(row);
+
+    var name = row.querySelector('.name');
+
+    // ช่องรหัส: พิมพ์รหัส (หรือชื่อ) แล้วค้นจากชีต Parts เลือกแล้วเติมชื่อให้อัตโนมัติ
+    var codeCombo = makeCombo(id, {
+      placeholder: 'รหัสสินค้า',
+      freeText: true,
+      minChars: 2,
+      emptyText: 'ไม่พบรหัสนี้ (พิมพ์ชื่อเองได้)',
+      remote: function (query, done) {
+        call('apiLookupParts', query).then(function (res) {
+          done((res && res.ok ? res.results : []).map(function (p) {
+            return { value: p.code, label: p.code, sub: p.name };
+          }));
+        }).catch(function () { done([]); });
+      },
+      onChange: function (code, option) {
+        if (option && option.sub) name.value = option.sub;
+      },
+      // พิมพ์รหัสเต็มแล้วคลิกออกโดยไม่ได้เลือกจากรายการ ก็ให้ไปหาชื่อมาเติมให้
+      onBlur: function (code) {
+        if (!code || name.value.trim()) return;
+        call('apiLookupPartByCode', code).then(function (res) {
+          if (res && res.ok && res.part && !name.value.trim()) name.value = res.part.name;
+        }).catch(function () { /* หาไม่เจอก็ปล่อยให้พิมพ์ชื่อเอง */ });
+      }
+    });
+
+    row._codeCombo = codeCombo;
 
     row.querySelector('button').addEventListener('click', function () {
       row.remove();
       if (!$('items').children.length) addItemRow();
     });
 
-    var code = row.querySelector('.code');
-    var name = row.querySelector('.name');
-
-    code.addEventListener('change', function () {
-      var p = findPart('code', code.value.trim());
-      if (p && !name.value.trim()) name.value = p.name;
-    });
-    name.addEventListener('change', function () {
-      var p = findPart('name', name.value.trim());
-      if (p && !code.value.trim()) code.value = p.code;
-    });
-
-    $('items').appendChild(row);
-    if (focus) code.focus();
-  }
-
-  function findPart(field, value) {
-    if (!value) return null;
-    var v = value.toUpperCase();
-    for (var i = 0; i < MASTERS.parts.length; i++) {
-      var p = MASTERS.parts[i];
-      if (String(p[field] || '').toUpperCase() === v) return p;
-    }
-    return null;
+    if (focus) codeCombo.input.focus();
   }
 
   function collectItems() {
     return Array.prototype.slice.call($('items').children).map(function (row) {
       return {
-        partCode: row.querySelector('.code').value.trim(),
+        partCode: row._codeCombo ? row._codeCombo.getValue().trim() : '',
         partName: row.querySelector('.name').value.trim(),
         qty: row.querySelector('.qty').value
       };
