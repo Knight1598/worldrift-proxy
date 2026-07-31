@@ -1,5 +1,5 @@
 <!--
-  หน้าเว็บของระบบบันทึกส่งอะไหล่ (ฟอร์ม + ประวัติ อยู่ในไฟล์เดียว)
+  หน้าเว็บของระบบบันทึกส่งอะไหล่ (ฟอร์ม + รายงาน อยู่ในไฟล์เดียว)
   ก็อปไฟล์นี้ทั้งไฟล์ไปวางใน Apps Script เป็นไฟล์ชนิด HTML ชื่อ App
 -->
 <style>
@@ -96,6 +96,8 @@
 
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--primary); outline-offset: -1px; }
 
+  select:disabled { opacity: .55; }
+
   textarea { min-height: 64px; resize: vertical; }
 
   .row { display: flex; gap: 10px; }
@@ -158,16 +160,6 @@
   }
   button.primary:disabled { opacity: .6; cursor: default; }
 
-  button.link {
-    background: none;
-    border: none;
-    color: var(--primary);
-    padding: 0;
-    font-size: 14px;
-    cursor: pointer;
-    text-decoration: underline;
-  }
-
   .add-item {
     background: none;
     border: 1px dashed var(--line);
@@ -216,22 +208,14 @@
   <h1>📦 บันทึกส่งอะไหล่</h1>
   <div class="tabs">
     <button id="tabForm" class="active">บันทึกใหม่</button>
-    <button id="tabHistory">ประวัติ</button>
+    <button id="tabHistory">รายงาน</button>
   </div>
 </header>
 
 <div class="wrap">
 
-  <!-- ด่าน PIN (โผล่เฉพาะเมื่อมีการตั้ง APP_PIN ไว้) -->
-  <div id="pinCard" class="card hidden">
-    <h2>ใส่ PIN เพื่อเข้าใช้งาน</h2>
-    <input id="pinInput" type="tel" inputmode="numeric" placeholder="PIN" autocomplete="off">
-    <div id="pinError" class="banner err hidden"></div>
-    <button class="primary" id="pinBtn">เข้าใช้งาน</button>
-  </div>
-
   <div id="loading" class="card">
-    <div class="muted">กำลังโหลดข้อมูลสาขาและขนส่ง…</div>
+    <div class="muted">กำลังโหลดข้อมูลเขตและสาขา…</div>
   </div>
 
   <div id="fatal" class="card hidden">
@@ -253,17 +237,27 @@
     <form id="form" autocomplete="off">
 
       <div class="card">
-        <h2>ปลายทาง</h2>
+        <h2>เอกสาร</h2>
+
+        <label for="prNo">เลขที่ใบ PR *</label>
+        <input type="text" id="prNo" placeholder="เช่น PR-2026-0731" required>
 
         <label for="shipDate">วันที่ส่ง</label>
         <input type="date" id="shipDate" required>
+      </div>
 
-        <label for="destBranch">สาขาปลายทาง *</label>
-        <select id="destBranch" required>
-          <option value="">— เลือกสาขา —</option>
+      <div class="card">
+        <h2>ปลายทาง</h2>
+
+        <label for="zone">เขต *</label>
+        <select id="zone" required>
+          <option value="">— เลือกเขต —</option>
         </select>
 
-        <div id="zoneChip" class="chip hidden"></div>
+        <label for="destBranch">สาขาปลายทาง *</label>
+        <select id="destBranch" required disabled>
+          <option value="">— เลือกเขตก่อน —</option>
+        </select>
 
         <div class="switch">
           <input type="checkbox" id="isTransfer">
@@ -272,7 +266,7 @@
 
         <div id="dropWrap" class="hidden">
           <div class="warn">
-            ⚠️ รอบนี้ของ<strong id="warnBranch">สาขาปลายทาง</strong> แต่ไปฝากลงที่อื่น — ระบบจะแจ้งเตือนให้เห็นชัดในกลุ่มไลน์
+            ⚠️ รอบนี้ของ<strong id="warnBranch">สาขาปลายทาง</strong> แต่ไปฝากลงที่อื่น — ระบบจะบันทึกจุดฝากลงแยกไว้ในรายงาน
           </div>
           <label for="dropPoint">ฝากลงที่</label>
           <select id="dropPoint">
@@ -315,36 +309,40 @@
 
         <div class="row">
           <div>
-            <label for="docNo">เลขที่บิล/ใบส่งของ</label>
-            <input type="text" id="docNo">
-          </div>
-          <div>
             <label for="receiverName">ผู้รับ</label>
             <input type="text" id="receiverName">
+          </div>
+          <div>
+            <label for="sender">ผู้บันทึก</label>
+            <input type="text" id="sender" placeholder="ชื่อคนคีย์">
           </div>
         </div>
 
         <label for="note">หมายเหตุ</label>
         <textarea id="note" placeholder="เช่น ฝากพี่แดงรับแทน / ให้สาขามารับเอง"></textarea>
-
-        <label for="sender">ผู้บันทึก</label>
-        <input type="text" id="sender" placeholder="ชื่อคนคีย์">
       </div>
 
       <div id="formError" class="banner err hidden"></div>
-      <button type="submit" class="primary" id="saveBtn">บันทึก + แจ้งเข้ากลุ่มไลน์</button>
-      <div class="muted" id="lineWarn" style="text-align:center;margin-top:8px;"></div>
+      <button type="submit" class="primary" id="saveBtn">บันทึก</button>
     </form>
   </div>
 
-  <!-- ================= หน้าประวัติ ================= -->
+  <!-- ================= หน้ารายงาน ================= -->
   <div id="viewHistory" class="hidden">
     <div class="card">
       <label for="q">ค้นหา</label>
-      <input type="search" id="q" placeholder="รหัสอะไหล่ / ชื่ออะไหล่ / เลขพัสดุ / เลขที่บิล / จุดฝากลง">
+      <input type="search" id="q" placeholder="เลขที่ใบ PR / รหัสอะไหล่ / ชื่ออะไหล่ / เลขพัสดุ / จุดฝากลง">
 
-      <label for="branchFilter">สาขาปลายทาง</label>
-      <select id="branchFilter"><option value="">— ทุกสาขา —</option></select>
+      <div class="row">
+        <div>
+          <label for="zoneFilter">เขต</label>
+          <select id="zoneFilter"><option value="">— ทุกเขต —</option></select>
+        </div>
+        <div>
+          <label for="branchFilter">สาขาปลายทาง</label>
+          <select id="branchFilter"><option value="">— ทุกสาขา —</option></select>
+        </div>
+      </div>
 
       <div class="row">
         <div>
@@ -371,8 +369,7 @@
 </div>
 
 <script>
-  var MASTERS = { branches: [], carriers: [], dropPoints: [], parts: [] };
-  var PIN = localStorage.getItem('pd_pin') || '';
+  var MASTERS = { zones: [], branches: [], carriers: [], dropPoints: [], parts: [] };
   var clientToken = newToken();
   var historyLoaded = false;
   var booted = false;
@@ -400,7 +397,7 @@
   $('tabHistory').addEventListener('click', function () { showTab('history'); });
 
   function showTab(name) {
-    if (!booted) return; // ยังโหลดข้อมูลไม่เสร็จ หรือยังไม่ผ่านด่าน PIN
+    if (!booted) return;
     var isForm = name === 'form';
     $('tabForm').classList.toggle('active', isForm);
     $('tabHistory').classList.toggle('active', !isForm);
@@ -416,26 +413,17 @@
   /* ---------- โหลดข้อมูลตั้งต้น ---------- */
 
   function boot() {
-    call('apiBootstrap', { pin: PIN }).then(function (res) {
-      if (res && res.needPin) {
-        $('loading').classList.add('hidden');
-        $('pinCard').classList.remove('hidden');
-        return;
-      }
+    call('apiBootstrap').then(function (res) {
       if (!res || !res.ok) throw new Error((res && res.error) || 'โหลดข้อมูลไม่สำเร็จ');
 
       MASTERS = res;
       booted = true;
-      $('pinCard').classList.add('hidden');
       $('loading').classList.add('hidden');
       $('viewForm').classList.remove('hidden');
       fillMasters(res);
       $('shipDate').value = res.today;
       $('sender').value = localStorage.getItem('pd_sender') || '';
       addItemRow();
-      if (!res.lineReady) {
-        $('lineWarn').textContent = 'ยังไม่ได้ตั้งค่ากลุ่มไลน์ — ระบบจะบันทึกลงชีตอย่างเดียว';
-      }
     }).catch(function (err) {
       $('loading').classList.add('hidden');
       $('fatal').classList.remove('hidden');
@@ -444,11 +432,15 @@
   }
 
   function fillMasters(res) {
-    var dest = $('destBranch');
-    var branchFilter = $('branchFilter');
+    var zoneSel = $('zone');
+    var zoneFilter = $('zoneFilter');
+    res.zones.forEach(function (z) {
+      zoneSel.appendChild(new Option(z, z));
+      zoneFilter.appendChild(new Option(z, z));
+    });
+
     res.branches.forEach(function (b) {
-      dest.appendChild(new Option(b.name, b.name));
-      branchFilter.appendChild(new Option(b.name, b.name));
+      $('branchFilter').appendChild(new Option(b.name, b.name));
     });
 
     var carrier = $('carrier');
@@ -481,21 +473,30 @@
     return Array.prototype.some.call(select.options, function (o) { return o.value === value; });
   }
 
-  /* ---------- สาขา → เขตขนส่ง + ขนส่งประจำ (ไม่ต้องจำเอง) ---------- */
+  /* ---------- เขต → กรองสาขาในเขตนั้น ---------- */
+
+  $('zone').addEventListener('change', function () {
+    var zone = this.value;
+    var branchSel = $('destBranch');
+    var prevValue = branchSel.value;
+    branchSel.innerHTML = '';
+
+    if (!zone) {
+      branchSel.appendChild(new Option('— เลือกเขตก่อน —', ''));
+      branchSel.disabled = true;
+      return;
+    }
+
+    var inZone = MASTERS.branches.filter(function (b) { return b.zone === zone; });
+    branchSel.appendChild(new Option('— เลือกสาขา (' + inZone.length + ' สาขา) —', ''));
+    inZone.forEach(function (b) { branchSel.appendChild(new Option(b.name, b.name)); });
+    branchSel.disabled = false;
+    if (inZone.some(function (b) { return b.name === prevValue; })) branchSel.value = prevValue;
+  });
 
   $('destBranch').addEventListener('change', function () {
     var b = findBranch(this.value);
-    if (b) {
-      $('zoneChip').classList.remove('hidden');
-      $('zoneChip').innerHTML = '';
-      $('zoneChip').appendChild(document.createTextNode('เขตขนส่ง: '));
-      var strong = document.createElement('strong');
-      strong.textContent = b.zone || '-';
-      $('zoneChip').appendChild(strong);
-      if (b.carrier && hasOption($('carrier'), b.carrier)) $('carrier').value = b.carrier;
-    } else {
-      $('zoneChip').classList.add('hidden');
-    }
+    if (b && b.carrier && hasOption($('carrier'), b.carrier)) $('carrier').value = b.carrier;
     $('warnBranch').textContent = this.value ? 'สาขา' + this.value : 'สาขาปลายทาง';
   });
 
@@ -586,8 +587,8 @@
       : $('dropPoint').value;
 
     var payload = {
-      pin: PIN,
       clientToken: clientToken,
+      prNo: $('prNo').value.trim(),
       shipDate: $('shipDate').value,
       destBranch: $('destBranch').value,
       isTransfer: $('isTransfer').checked,
@@ -595,13 +596,14 @@
       carrier: $('carrier').value,
       trackingNo: $('trackingNo').value.trim(),
       boxCount: $('boxCount').value,
-      docNo: $('docNo').value.trim(),
       receiverName: $('receiverName').value.trim(),
       note: $('note').value.trim(),
       sender: $('sender').value.trim(),
       items: collectItems()
     };
 
+    if (!payload.prNo) return showFormError('ยังไม่ได้กรอกเลขที่ใบ PR');
+    if (!payload.destBranch) return showFormError('ยังไม่ได้เลือกสาขาปลายทาง');
     if (!payload.items.length) return showFormError('ยังไม่ได้ใส่รายการอะไหล่');
     if (payload.isTransfer && !payload.dropPoint) return showFormError('เลือกฝากลงที่อื่นแล้ว ต้องระบุจุดฝากลงด้วย');
 
@@ -612,10 +614,7 @@
 
     call('apiSaveShipment', payload).then(function (res) {
       setSaving(false);
-      if (!res || !res.ok) {
-        if (res && res.error === 'PIN_REQUIRED') return requirePinAgain();
-        return showFormError((res && res.error) || 'บันทึกไม่สำเร็จ');
-      }
+      if (!res || !res.ok) return showFormError((res && res.error) || 'บันทึกไม่สำเร็จ');
       showResult(res, payload);
     }).catch(function (err) {
       setSaving(false);
@@ -625,7 +624,7 @@
 
   function setSaving(on) {
     $('saveBtn').disabled = on;
-    $('saveBtn').textContent = on ? 'กำลังบันทึก…' : 'บันทึก + แจ้งเข้ากลุ่มไลน์';
+    $('saveBtn').textContent = on ? 'กำลังบันทึก…' : 'บันทึก';
   }
 
   function showFormError(msg) {
@@ -636,15 +635,13 @@
 
   function showResult(res, payload) {
     clientToken = newToken();
-    historyLoaded = false; // ให้ประวัติโหลดใหม่เมื่อเปิดแท็บ
+    historyLoaded = false; // ให้รายงานโหลดใหม่เมื่อเปิดแท็บ
 
     var banner = $('resultBanner');
-    banner.className = 'banner ' + (res.lineSent === false && !res.duplicate ? 'err' : 'ok');
-    banner.textContent = res.duplicate
-      ? 'รายการนี้บันทึกไปแล้ว (กันบันทึกซ้ำ)'
-      : (res.lineSent ? '✅ บันทึกแล้ว และแจ้งเข้ากลุ่มไลน์เรียบร้อย' : '⚠️ บันทึกลงชีตแล้ว แต่ ' + res.lineStatus);
+    banner.className = 'banner ok';
+    banner.textContent = res.duplicate ? 'รายการนี้บันทึกไปแล้ว (กันบันทึกซ้ำ)' : '✅ บันทึกเรียบร้อย';
 
-    $('resultId').textContent = res.shipmentId;
+    $('resultId').textContent = res.shipmentId + '  (PR ' + payload.prNo + ')';
 
     var detail = payload.destBranch;
     if (res.summary && res.summary.zone) detail += ' (เขต' + res.summary.zone + ')';
@@ -661,8 +658,10 @@
   $('againBtn').addEventListener('click', function () {
     $('resultCard').classList.add('hidden');
     $('form').classList.remove('hidden');
-    $('destBranch').value = '';
-    $('zoneChip').classList.add('hidden');
+    $('prNo').value = '';
+    $('zone').value = '';
+    $('destBranch').innerHTML = '<option value="">— เลือกเขตก่อน —</option>';
+    $('destBranch').disabled = true;
     $('isTransfer').checked = false;
     $('dropWrap').classList.add('hidden');
     $('dropPoint').value = '';
@@ -670,15 +669,15 @@
     $('dropPointOther').classList.add('hidden');
     $('trackingNo').value = '';
     $('boxCount').value = '';
-    $('docNo').value = '';
     $('receiverName').value = '';
     $('note').value = '';
     $('items').innerHTML = '';
     addItemRow();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('prNo').focus();
   });
 
-  /* ---------- ประวัติ ---------- */
+  /* ---------- รายงาน ---------- */
 
   $('searchBtn').addEventListener('click', search);
   $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
@@ -697,18 +696,15 @@
     setSearchStatus('กำลังค้นหา…');
     $('results').innerHTML = '';
     call('apiSearch', {
-      pin: PIN,
       q: $('q').value.trim(),
+      zone: $('zoneFilter').value,
       branch: $('branchFilter').value,
       from: $('from').value,
       to: $('to').value,
       transferOnly: $('transferOnly').checked,
       limit: 50
     }).then(function (res) {
-      if (!res || !res.ok) {
-        if (res && res.error === 'PIN_REQUIRED') return requirePinAgain();
-        return setSearchStatus((res && res.error) || 'ค้นหาไม่สำเร็จ', true);
-      }
+      if (!res || !res.ok) return setSearchStatus((res && res.error) || 'ค้นหาไม่สำเร็จ', true);
       renderResults(res.results);
     }).catch(function (err) {
       setSearchStatus('ค้นหาไม่สำเร็จ: ' + (err.message || err), true);
@@ -727,7 +723,7 @@
       var head = document.createElement('div');
       head.className = 'head';
       var left = document.createElement('span');
-      left.textContent = thaiDate(s.shipDate) + (s.docNo ? ' • บิล ' + s.docNo : '');
+      left.textContent = thaiDate(s.shipDate) + (s.prNo ? ' • PR ' + s.prNo : '');
       var right = document.createElement('span');
       right.textContent = s.shipmentId;
       head.appendChild(left);
@@ -773,25 +769,6 @@
         el.appendChild(note);
       }
 
-      if (s.lineStatus && s.lineStatus.indexOf('SENT') !== 0) {
-        var warn = document.createElement('div');
-        warn.className = 'meta';
-        warn.style.marginTop = '8px';
-        warn.textContent = 'ยังไม่ได้แจ้งไลน์ ';
-        var btn = document.createElement('button');
-        btn.className = 'link';
-        btn.textContent = 'ส่งเข้ากลุ่มไลน์ซ้ำ';
-        btn.addEventListener('click', function () {
-          btn.disabled = true;
-          btn.textContent = 'กำลังส่ง…';
-          call('apiResendLine', { pin: PIN, shipmentId: s.shipmentId }).then(function (r) {
-            warn.textContent = r && r.ok ? '✅ แจ้งเข้ากลุ่มไลน์แล้ว' : 'ส่งไม่สำเร็จ: ' + ((r && r.error) || '');
-          });
-        });
-        warn.appendChild(btn);
-        el.appendChild(warn);
-      }
-
       box.appendChild(el);
     });
   }
@@ -799,38 +776,6 @@
   function thaiDate(iso) {
     var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? m[3] + '/' + m[2] + '/' + m[1] : iso;
-  }
-
-  /* ---------- PIN ---------- */
-
-  $('pinBtn').addEventListener('click', submitPin);
-  $('pinInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') submitPin(); });
-
-  function submitPin() {
-    PIN = $('pinInput').value.trim();
-    localStorage.setItem('pd_pin', PIN);
-    $('pinError').classList.add('hidden');
-    $('pinCard').classList.add('hidden');
-    $('loading').classList.remove('hidden');
-    call('apiBootstrap', { pin: PIN }).then(function (res) {
-      if (res && res.needPin) {
-        $('loading').classList.add('hidden');
-        $('pinCard').classList.remove('hidden');
-        $('pinError').textContent = 'PIN ไม่ถูกต้อง';
-        $('pinError').classList.remove('hidden');
-        return;
-      }
-      location.reload();
-    });
-  }
-
-  function requirePinAgain() {
-    localStorage.removeItem('pd_pin');
-    $('viewForm').classList.add('hidden');
-    $('viewHistory').classList.add('hidden');
-    $('pinCard').classList.remove('hidden');
-    $('pinError').textContent = 'ต้องใส่ PIN ใหม่';
-    $('pinError').classList.remove('hidden');
   }
 
   boot();

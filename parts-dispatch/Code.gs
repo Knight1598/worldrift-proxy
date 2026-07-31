@@ -1,5 +1,5 @@
 /**
- * ระบบบันทึกการส่งอะไหล่ + แจ้งเตือนกลุ่มไลน์
+ * ระบบบันทึกการส่งอะไหล่ (เลขที่ใบ PR / เขต / สาขา / ขนส่ง) + รายงานย้อนหลัง
  * ก็อปไฟล์นี้ทั้งไฟล์ไปวางใน Apps Script (ไฟล์ชนิด Script ชื่อ Code)
  * แล้วก็อป App.html ไปวางอีกไฟล์ (ชนิด HTML ชื่อ App) — มีแค่ 2 ไฟล์เท่านั้น
  *
@@ -21,9 +21,9 @@ var HEADERS = {
   DropPoints: ['dropPointName', 'zone', 'note'],
   Parts: ['partCode', 'partName', 'unit', 'lastUsedAt'],
   Shipments: [
-    'shipmentId', 'createdAt', 'shipDate', 'docNo', 'destBranch', 'zone', 'dropPoint',
+    'shipmentId', 'createdAt', 'shipDate', 'prNo', 'destBranch', 'zone', 'dropPoint',
     'isTransfer', 'carrier', 'trackingNo', 'boxCount', 'sender', 'receiverName', 'note',
-    'itemsSummary', 'lineStatus', 'clientToken'
+    'itemsSummary', 'clientToken'
   ],
   Items: ['shipmentId', 'lineNo', 'partCode', 'partName', 'qty', 'unit', 'note']
 };
@@ -98,12 +98,6 @@ function nowStamp_() {
   return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
 }
 
-function formatThaiDate_(iso) {
-  var s = String(iso || '').trim();
-  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return m ? (m[3] + '/' + m[2] + '/' + m[1]) : s;
-}
-
 /* =======================================================================
  * ส่วนที่ 2 — เราต์ของเว็บแอป และ API ที่หน้าเว็บเรียกใช้
  * ===================================================================== */
@@ -114,40 +108,13 @@ function doGet() {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
-/** รับเฉพาะ webhook ของ LINE (หน้าเว็บคุยกับสคริปต์ผ่าน google.script.run ไม่ผ่านทางนี้) */
-function doPost(e) {
-  var body = {};
-  try {
-    body = JSON.parse(e.postData.contents);
-  } catch (err) {
-    body = {};
-  }
-  if (body && body.events) return handleLineWebhook_(body);
-  return ContentService
-    .createTextOutput(JSON.stringify({ ok: false, error: 'unsupported payload' }))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function requirePin_(pin) {
-  var expected = prop_('APP_PIN');
-  if (!expected) return;
-  if (String(pin || '') !== String(expected)) {
-    throw new Error('PIN_REQUIRED');
-  }
-}
-
-/** ข้อมูลตั้งต้นของฟอร์ม: รายชื่อสาขา/ขนส่ง/จุดฝากลง/อะไหล่ */
-function apiBootstrap(payload) {
-  payload = payload || {};
-  if (prop_('APP_PIN') && String(payload.pin || '') !== prop_('APP_PIN')) {
-    return { ok: false, needPin: true };
-  }
+/** ข้อมูลตั้งต้นของฟอร์ม: รายชื่อเขต/สาขา/ขนส่ง/จุดฝากลง/อะไหล่ */
+function apiBootstrap() {
   var masters = getMasters_();
   return {
     ok: true,
-    needPin: false,
     today: todayIso_(),
-    lineReady: !!(prop_('LINE_CHANNEL_ACCESS_TOKEN') && prop_('LINE_GROUP_ID')),
+    zones: masters.zones,
     branches: masters.branches,
     carriers: masters.carriers,
     dropPoints: masters.dropPoints,
@@ -155,42 +122,27 @@ function apiBootstrap(payload) {
   };
 }
 
-/** บันทึกรอบส่ง 1 รอบ แล้วยิงข้อความเข้ากลุ่มไลน์ */
+/** บันทึกรอบส่ง 1 รอบ */
 function apiSaveShipment(payload) {
-  payload = payload || {};
   try {
-    requirePin_(payload.pin);
-    return saveShipment_(payload);
+    return saveShipment_(payload || {});
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
 }
 
-/** ค้นประวัติการส่ง */
+/** ค้น/กรองรายงานย้อนหลัง */
 function apiSearch(payload) {
-  payload = payload || {};
   try {
-    requirePin_(payload.pin);
-    return { ok: true, results: searchShipments_(payload) };
-  } catch (err) {
-    return { ok: false, error: String(err.message || err) };
-  }
-}
-
-/** ส่งข้อความเข้าไลน์ซ้ำสำหรับรอบส่งที่ยิงไม่สำเร็จ */
-function apiResendLine(payload) {
-  payload = payload || {};
-  try {
-    requirePin_(payload.pin);
-    return resendLine_(payload.shipmentId);
+    return { ok: true, results: searchShipments_(payload || {}) };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
 }
 
 /* =======================================================================
- * ส่วนที่ 3 — ข้อมูลหลัก (สาขา / ขนส่ง / จุดฝากลง / อะไหล่)
- * ตารางสาขาคือหัวใจของการ "ไม่ต้องจำเขตขนส่ง"
+ * ส่วนที่ 3 — ข้อมูลหลัก (เขต / สาขา / ขนส่ง / จุดฝากลง / อะไหล่)
+ * ตารางสาขาผูกกับเขตโดยตรง จึงเลือกเขตก่อนแล้วกรองสาขาในเขตนั้นได้ทันที
  * ===================================================================== */
 
 var MASTER_CACHE_KEY = 'masters_v1';
@@ -207,18 +159,29 @@ function getMasters_() {
     }
   }
 
+  var branches = readSheetObjects_(SHEETS.BRANCHES)
+    .filter(function (r) { return String(r.branchName || '').trim() && isActive_(r.active); })
+    .map(function (r) {
+      return {
+        code: String(r.branchCode || '').trim(),
+        name: String(r.branchName).trim(),
+        zone: String(r.zone || '').trim(),
+        carrier: String(r.defaultCarrier || '').trim(),
+        dropPoint: String(r.defaultDropPoint || '').trim()
+      };
+    });
+
+  var zoneSet = {};
+  branches.forEach(function (b) { if (b.zone) zoneSet[b.zone] = true; });
+  var zones = Object.keys(zoneSet).sort(function (a, b) {
+    var na = parseInt(a, 10), nb = parseInt(b, 10);
+    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+    return a < b ? -1 : (a > b ? 1 : 0);
+  });
+
   var data = {
-    branches: readSheetObjects_(SHEETS.BRANCHES)
-      .filter(function (r) { return String(r.branchName || '').trim() && isActive_(r.active); })
-      .map(function (r) {
-        return {
-          code: String(r.branchCode || '').trim(),
-          name: String(r.branchName).trim(),
-          zone: String(r.zone || '').trim(),
-          carrier: String(r.defaultCarrier || '').trim(),
-          dropPoint: String(r.defaultDropPoint || '').trim()
-        };
-      }),
+    zones: zones,
+    branches: branches,
     carriers: readSheetObjects_(SHEETS.CARRIERS)
       .filter(function (r) { return String(r.carrierName || '').trim() && isActive_(r.active); })
       .map(function (r) {
@@ -312,13 +275,10 @@ function partKey_(code, name) {
 }
 
 /* =======================================================================
- * ส่วนที่ 4 — บันทึกรอบส่งและค้นประวัติ
+ * ส่วนที่ 4 — บันทึกรอบส่งและค้นรายงานย้อนหลัง
  * ===================================================================== */
 
-/**
- * บันทึก 1 รอบส่ง: เขียนชีตให้เสร็จก่อน แล้วค่อยยิงไลน์
- * ถ้าไลน์ล้ม ข้อมูลยังอยู่ครบ และกดส่งซ้ำจากหน้าประวัติได้
- */
+/** บันทึก 1 รอบส่ง */
 function saveShipment_(payload) {
   var clean = validateShipment_(payload);
   var lock = LockService.getScriptLock();
@@ -344,8 +304,8 @@ function saveShipment_(payload) {
   }
 
   if (isDuplicate) {
-    // กดซ้ำ/เน็ตหลุดแล้วส่งซ้ำ — คืนผลเดิม ไม่เขียนใหม่และไม่ยิงไลน์ซ้ำ
-    return { ok: true, shipmentId: shipmentId, duplicate: true, lineStatus: 'ส่งไปแล้วก่อนหน้านี้' };
+    // กดซ้ำ/เน็ตหลุดแล้วส่งซ้ำ — คืนผลเดิม ไม่เขียนแถวใหม่
+    return { ok: true, shipmentId: shipmentId, duplicate: true };
   }
 
   try {
@@ -355,16 +315,12 @@ function saveShipment_(payload) {
     console.warn('upsertParts_ ล้มเหลว: ' + err);
   }
 
-  var line = pushLineText_(buildShipmentMessage_(shipmentId, clean));
-  setLineStatus_(shipmentId, line.ok ? 'SENT ' + nowStamp_() : 'FAILED: ' + line.error);
-
   return {
     ok: true,
     shipmentId: shipmentId,
     duplicate: false,
-    lineSent: line.ok,
-    lineStatus: line.ok ? 'แจ้งเข้ากลุ่มไลน์แล้ว' : ('ยังไม่ได้แจ้งไลน์: ' + line.error),
     summary: {
+      prNo: clean.prNo,
       destBranch: clean.destBranch,
       zone: clean.zone,
       dropPoint: clean.dropPoint,
@@ -378,6 +334,9 @@ function saveShipment_(payload) {
 /** ตรวจและปรับข้อมูลจากฟอร์มให้อยู่ในรูปที่พร้อมเขียนลงชีต */
 function validateShipment_(payload) {
   var p = payload || {};
+  var prNo = String(p.prNo || '').trim();
+  if (!prNo) throw new Error('ยังไม่ได้กรอกเลขที่ใบ PR');
+
   var destBranch = String(p.destBranch || '').trim();
   if (!destBranch) throw new Error('ยังไม่ได้เลือกสาขาปลายทาง');
 
@@ -414,7 +373,7 @@ function validateShipment_(payload) {
 
   return {
     shipDate: shipDate,
-    docNo: String(p.docNo || '').trim(),
+    prNo: prNo,
     destBranch: destBranch,
     zone: branch ? branch.zone : String(p.zone || '').trim(),
     dropPoint: dropPoint,
@@ -435,7 +394,7 @@ function buildShipmentRow_(shipmentId, c) {
     shipmentId: shipmentId,
     createdAt: nowStamp_(),
     shipDate: c.shipDate,
-    docNo: c.docNo,
+    prNo: c.prNo,
     destBranch: c.destBranch,
     zone: c.zone,
     dropPoint: c.dropPoint,
@@ -447,7 +406,6 @@ function buildShipmentRow_(shipmentId, c) {
     receiverName: c.receiverName,
     note: c.note,
     itemsSummary: itemsSummary_(c.items),
-    lineStatus: 'PENDING',
     clientToken: c.clientToken
   };
   return HEADERS.Shipments.map(function (h) { return map[h]; });
@@ -501,22 +459,10 @@ function findByClientToken_(sh, token) {
   return null;
 }
 
-function setLineStatus_(shipmentId, status) {
-  var sh = getSheet_(SHEETS.SHIPMENTS);
-  var last = sh.getLastRow();
-  if (last < 2) return;
-  var ids = sh.getRange(2, colIndex_('Shipments', 'shipmentId'), last - 1, 1).getValues();
-  for (var i = ids.length - 1; i >= 0; i--) {
-    if (String(ids[i][0]) === shipmentId) {
-      sh.getRange(i + 2, colIndex_('Shipments', 'lineStatus')).setValue(status);
-      return;
-    }
-  }
-}
-
-/** ค้นได้ด้วย รหัส/ชื่ออะไหล่, เลขพัสดุ, เลขที่บิล, ชื่อสาขา, จุดฝากลง, เลขที่รอบส่ง */
+/** ค้นได้ด้วย เลขที่ใบ PR, รหัส/ชื่ออะไหล่, เลขพัสดุ, ชื่อสาขา, จุดฝากลง, เลขที่รอบส่ง */
 function searchShipments_(opts) {
   var q = String(opts.q || '').trim().toLowerCase();
+  var zone = String(opts.zone || '').trim();
   var branch = String(opts.branch || '').trim();
   var from = String(opts.from || '').trim();
   var to = String(opts.to || '').trim();
@@ -535,6 +481,7 @@ function searchShipments_(opts) {
     var shipDate = String(s.shipDate || '');
     if (from && shipDate < from) continue;
     if (to && shipDate > to) continue;
+    if (zone && String(s.zone || '') !== zone) continue;
     if (branch && String(s.destBranch || '') !== branch) continue;
 
     var isTransfer = String(s.isTransfer).toUpperCase() === 'TRUE';
@@ -543,7 +490,7 @@ function searchShipments_(opts) {
     var items = itemsById[id] || [];
     if (q) {
       var haystack = [
-        id, s.docNo, s.destBranch, s.zone, s.dropPoint, s.carrier,
+        id, s.prNo, s.destBranch, s.zone, s.dropPoint, s.carrier,
         s.trackingNo, s.sender, s.receiverName, s.note, s.itemsSummary
       ].join(' ').toLowerCase();
       var itemText = items.map(function (it) {
@@ -555,7 +502,7 @@ function searchShipments_(opts) {
     results.push({
       shipmentId: id,
       shipDate: shipDate,
-      docNo: String(s.docNo || ''),
+      prNo: String(s.prNo || ''),
       destBranch: String(s.destBranch || ''),
       zone: String(s.zone || ''),
       dropPoint: String(s.dropPoint || ''),
@@ -566,7 +513,6 @@ function searchShipments_(opts) {
       sender: String(s.sender || ''),
       receiverName: String(s.receiverName || ''),
       note: String(s.note || ''),
-      lineStatus: String(s.lineStatus || ''),
       items: items
     });
   }
@@ -591,203 +537,198 @@ function groupItems_() {
   return map;
 }
 
-/** ส่งข้อความเข้าไลน์ซ้ำสำหรับรอบส่งเดิม */
-function resendLine_(shipmentId) {
-  var id = String(shipmentId || '').trim();
-  if (!id) throw new Error('ไม่ได้ระบุเลขที่รอบส่ง');
-
-  var found = null;
-  var shipments = readSheetObjects_(SHEETS.SHIPMENTS);
-  for (var i = shipments.length - 1; i >= 0; i--) {
-    if (String(shipments[i].shipmentId) === id) { found = shipments[i]; break; }
-  }
-  if (!found) throw new Error('ไม่พบรอบส่ง ' + id);
-
-  var items = (groupItems_()[id] || []);
-  var payload = {
-    shipDate: String(found.shipDate || ''),
-    docNo: String(found.docNo || ''),
-    destBranch: String(found.destBranch || ''),
-    zone: String(found.zone || ''),
-    dropPoint: String(found.dropPoint || ''),
-    isTransfer: String(found.isTransfer).toUpperCase() === 'TRUE',
-    carrier: String(found.carrier || ''),
-    trackingNo: String(found.trackingNo || ''),
-    boxCount: found.boxCount,
-    sender: String(found.sender || ''),
-    receiverName: String(found.receiverName || ''),
-    note: String(found.note || ''),
-    items: items
-  };
-
-  var line = pushLineText_(buildShipmentMessage_(id, payload));
-  setLineStatus_(id, line.ok ? 'SENT ' + nowStamp_() : 'FAILED: ' + line.error);
-  return { ok: line.ok, shipmentId: id, error: line.error || '' };
-}
-
 /* =======================================================================
- * ส่วนที่ 5 — LINE Messaging API
- *
- * หมายเหตุ: LINE Notify ปิดบริการไปแล้ว (31 มี.ค. 2568) จึงต้องใช้ LINE Official Account
- * เชิญบอทเข้ากลุ่ม แล้ว push ข้อความไปที่ groupId ของกลุ่มนั้น
+ * ส่วนที่ 5 — ติดตั้งและตรวจสอบระบบ (รันเองจากเมนู Apps Script)
  * ===================================================================== */
 
-var LINE_PUSH_URL = 'https://api.line.me/v2/bot/message/push';
-var LINE_REPLY_URL = 'https://api.line.me/v2/bot/message/reply';
-
-/** ส่งข้อความ text เข้ากลุ่มที่ตั้งค่าไว้ — ไม่ throw แต่คืน {ok, error} ให้ผู้เรียกตัดสินใจ */
-function pushLineText_(text) {
-  var token = prop_('LINE_CHANNEL_ACCESS_TOKEN');
-  var groupId = prop_('LINE_GROUP_ID');
-  if (!token) return { ok: false, error: 'ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN' };
-  if (!groupId) return { ok: false, error: 'ยังไม่ได้ตั้งค่า LINE_GROUP_ID (ยังไม่ได้จับคู่กลุ่ม)' };
-
-  try {
-    var res = UrlFetchApp.fetch(LINE_PUSH_URL, {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + token },
-      payload: JSON.stringify({
-        to: groupId,
-        messages: [{ type: 'text', text: truncateForLine_(text) }]
-      }),
-      muteHttpExceptions: true
-    });
-    var code = res.getResponseCode();
-    if (code === 200) return { ok: true, error: '' };
-    return { ok: false, error: 'LINE ตอบกลับ HTTP ' + code + ' ' + res.getContentText().substring(0, 300) };
-  } catch (err) {
-    return { ok: false, error: String(err.message || err) };
-  }
-}
-
-/** ข้อความ LINE ยาวได้ไม่เกิน 5,000 ตัวอักษร */
-function truncateForLine_(text) {
-  var s = String(text || '');
-  return s.length > 4900 ? s.substring(0, 4890) + '\n… (ตัดข้อความ)' : s;
-}
-
 /**
- * ข้อความสรุปที่ยิงเข้ากลุ่ม
- * บรรทัด ⚠️ จะขึ้นเฉพาะรอบที่ฝากลงคนละที่กับสาขาปลายทาง เพื่อให้สะดุดตา
+ * ข้อมูลตั้งต้น
+ * Branches คือรายชื่อเขต/สาขาจริงทั้งหมด (53 เขต 166 สาขา) ดึงมาจากตารางจัดเขตขายที่ให้มา
+ * แก้ไข/เพิ่ม/ลบทีหลังได้ตามจริง — ค่า defaultCarrier/defaultDropPoint เว้นว่างไว้ให้กรอกเอง
  */
-function buildShipmentMessage_(shipmentId, c) {
-  var lines = [];
-  lines.push('📦 ส่งอะไหล่ ' + shipmentId);
-
-  var head = '📅 ' + formatThaiDate_(c.shipDate);
-  if (c.docNo) head += '  |  บิล ' + c.docNo;
-  lines.push(head);
-
-  lines.push('🏢 ปลายทาง: ' + c.destBranch + (c.zone ? ' (เขต' + c.zone + ')' : ''));
-  if (c.isTransfer) lines.push('⚠️ ฝากลงที่: ' + c.dropPoint);
-
-  var ship = '🚚 ขนส่ง: ' + c.carrier;
-  if (c.trackingNo) ship += ' | เลขพัสดุ: ' + c.trackingNo;
-  if (c.boxCount !== '' && c.boxCount !== null && c.boxCount !== undefined) ship += ' | ' + c.boxCount + ' กล่อง';
-  lines.push(ship);
-
-  if (c.receiverName) lines.push('👤 ผู้รับ: ' + c.receiverName);
-
-  lines.push('📋 รายการ');
-  (c.items || []).forEach(function (it) {
-    var row = ' • ' + (it.partCode ? it.partCode + ' ' : '') + it.partName + ' x' + it.qty;
-    if (it.unit) row += ' ' + it.unit;
-    if (it.note) row += ' (' + it.note + ')';
-    lines.push(row);
-  });
-
-  if (c.note) lines.push('📝 ' + c.note);
-  if (c.sender) lines.push('— บันทึกโดย: ' + c.sender);
-
-  return lines.join('\n');
-}
-
-/**
- * รับ webhook จาก LINE เพื่อจับ groupId ตอนตั้งค่า
- *
- * ข้อจำกัด: Apps Script อ่าน HTTP header ไม่ได้ จึงตรวจลายเซ็น X-Line-Signature ไม่ได้
- * เพราะฉะนั้นจะรับ event เฉพาะตอนเปิด PAIRING_MODE เท่านั้น และปิดโหมดทันทีที่จับคู่สำเร็จ
- */
-function handleLineWebhook_(body) {
-  var ok = { ok: true };
-  if (prop_('PAIRING_MODE') !== 'true') return jsonOut_(ok);
-
-  var events = body.events || [];
-  for (var i = 0; i < events.length; i++) {
-    var src = events[i].source || {};
-    var id = src.groupId || src.roomId;
-    if (!id) continue;
-
-    props_().setProperty('LINE_GROUP_ID', id);
-    props_().setProperty('PAIRING_MODE', 'false');
-
-    if (events[i].replyToken) {
-      replyLineText_(events[i].replyToken,
-        '✅ จับคู่กลุ่มสำเร็จ\nต่อจากนี้ทุกครั้งที่มีการบันทึกส่งอะไหล่ ระบบจะแจ้งเข้ากลุ่มนี้อัตโนมัติ');
-    }
-    break;
-  }
-  return jsonOut_(ok);
-}
-
-function replyLineText_(replyToken, text) {
-  var token = prop_('LINE_CHANNEL_ACCESS_TOKEN');
-  if (!token) return;
-  try {
-    UrlFetchApp.fetch(LINE_REPLY_URL, {
-      method: 'post',
-      contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + token },
-      payload: JSON.stringify({
-        replyToken: replyToken,
-        messages: [{ type: 'text', text: truncateForLine_(text) }]
-      }),
-      muteHttpExceptions: true
-    });
-  } catch (err) {
-    console.warn('ตอบกลับ LINE ไม่สำเร็จ: ' + err);
-  }
-}
-
-function jsonOut_(obj) {
-  return ContentService
-    .createTextOutput(JSON.stringify(obj))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-/* =======================================================================
- * ส่วนที่ 6 — ติดตั้งและตรวจสอบระบบ (รันเองจากเมนู Apps Script)
- * ===================================================================== */
-
-/** ตัวอย่างข้อมูลตั้งต้น ให้ลบทิ้งแล้วใส่ของจริงทับได้เลย */
 var SAMPLE_DATA = {
   Branches: [
-    ['KKN', 'ขอนแก่น', 'อีสานเหนือ', 'นิ่มซี่เส็ง', 'ขอนแก่น', 'TRUE'],
-    ['KTW', 'กันทรวิชัย', 'อีสานเหนือ', 'นิ่มซี่เส็ง', 'กันทรวิชัย', 'TRUE'],
-    ['MKM', 'มหาสารคาม', 'อีสานเหนือ', 'นิ่มซี่เส็ง', 'มหาสารคาม', 'TRUE'],
-    ['UDN', 'อุดรธานี', 'อีสานเหนือ', 'ขนส่งชัยพัฒนา', 'อุดรธานี', 'TRUE'],
-    ['UBN', 'อุบลราชธานี', 'อีสานใต้', 'ขนส่งชัยพัฒนา', 'อุบลราชธานี', 'TRUE']
+    ['0001', 'สนญ.-ยามาฮ่า', '01:เยาว์', '', '', 'TRUE'],
+    ['0043', 'บ้านนางใย', '01:เยาว์', '', '', 'TRUE'],
+    ['0108', 'สนญ.-ฮอนด้า', '01:เยาว์', '', '', 'TRUE'],
+    ['0144', 'สนญ.ซูซูกิ', '01:เยาว์', '', '', 'TRUE'],
+    ['0048', 'หนองแปน', '02:ป๋อง', '', '', 'TRUE'],
+    ['0049', 'ร่องคำ', '02:ป๋อง', '', '', 'TRUE'],
+    ['0109', 'สนญ.-มดแดง', '02:ป๋อง', '', '', 'TRUE'],
+    ['0009', 'วาปี-ฮอนด้า', '03:แต๋ว', '', '', 'TRUE'],
+    ['0046', 'วาปี-ยามาฮ่า', '03:แต๋ว', '', '', 'TRUE'],
+    ['0802', 'อีฮงน้อยวาปีปทุม', '03:แต๋ว', '', '', 'TRUE'],
+    ['0011', 'บรบือ', '04:เปา', '', '', 'TRUE'],
+    ['0013', 'นาดูน', '04:เปา', '', '', 'TRUE'],
+    ['0005', 'โกสุมฯ-ฮอนด้า', '05:เก่ง', '', '', 'TRUE'],
+    ['0096', 'โกสุมฯ-มดแดง', '05:เก่ง', '', '', 'TRUE'],
+    ['0097', 'บ้านแพง', '05:เก่ง', '', '', 'TRUE'],
+    ['0083', 'กุดรัง', '06:เมธี', '', '', 'TRUE'],
+    ['0146', 'บ้านไผ่', '06:เมธี', '', '', 'TRUE'],
+    ['0152', 'โนนศิลา', '06:เมธี', '', '', 'TRUE'],
+    ['0029', 'ซับใหญ่', '07:แกะ', '', '', 'TRUE'],
+    ['0125', 'ภักดีชุมพล', '07:แกะ', '', '', 'TRUE'],
+    ['0133', 'เทพสถิตย์', '07:แกะ', '', '', 'TRUE'],
+    ['0016', 'แกดำ', '08:เจี๊ยบ', '', '', 'TRUE'],
+    ['0505', 'ย่อยแวงน่าง', '08:เจี๊ยบ', '', '', 'TRUE'],
+    ['0801', 'อีฮงน้อยมหาสารคาม', '08:เจี๊ยบ', '', '', 'TRUE'],
+    ['0006', 'เชียงยืน-มดแดง', '09:ถิน', '', '', 'TRUE'],
+    ['0070', 'เชียงยืน-ยามาฮ่า', '09:ถิน', '', '', 'TRUE'],
+    ['0094', 'ชื่นชม', '09:ถิน', '', '', 'TRUE'],
+    ['0031', 'ท่าคันโท', '10:บ๋อม', '', '', 'TRUE'],
+    ['0033', 'หนองกุงศรี', '10:บ๋อม', '', '', 'TRUE'],
+    ['0039', 'ห้วยเม็ก', '10:บ๋อม', '', '', 'TRUE'],
+    ['0045', 'นามน', '11:เปียว', '', '', 'TRUE'],
+    ['0047', 'ดอนจาน', '11:เปียว', '', '', 'TRUE'],
+    ['0067', 'สมเด็จ', '11:เปียว', '', '', 'TRUE'],
+    ['0136', 'กาฬสินธุ์-เวสป้า', '11:เปียว', '', '', 'TRUE'],
+    ['0032', 'สหัสขันธ์', '12:นิก', '', '', 'TRUE'],
+    ['0036', 'คำม่วง', '12:นิก', '', '', 'TRUE'],
+    ['0514', 'บ้านโพน', '12:นิก', '', '', 'TRUE'],
+    ['0024', 'โนนหัน', '13:พงษ์', '', '', 'TRUE'],
+    ['0071', 'ภูเขียว', '13:พงษ์', '', '', 'TRUE'],
+    ['0072', 'เกษตรสมบูรณ์', '13:พงษ์', '', '', 'TRUE'],
+    ['0077', 'ชุมแพ', '13:พงษ์', '', '', 'TRUE'],
+    ['0124', 'คอนสาร', '13:พงษ์', '', '', 'TRUE'],
+    ['0037', 'ภูกระดึง', '14:Kเอี้ยง', '', '', 'TRUE'],
+    ['0145', 'ภูผาม่าน', '14:Kเอี้ยง', '', '', 'TRUE'],
+    ['0149', 'น้ำหนาว', '14:Kเอี้ยง', '', '', 'TRUE'],
+    ['0088', 'โคกโพธิ์ชัย', '15:ดี', '', '', 'TRUE'],
+    ['0131', 'มัญจาคีรี', '15:ดี', '', '', 'TRUE'],
+    ['0135', 'แก้งคร้อ', '15:ดี', '', '', 'TRUE'],
+    ['0100', 'วังสะพุง', '16:สมรักษ์', '', '', 'TRUE'],
+    ['0101', 'เมืองเลย', '16:สมรักษ์', '', '', 'TRUE'],
+    ['0103', 'เอราวัณ', '16:สมรักษ์', '', '', 'TRUE'],
+    ['0054', 'บุรีรัมย์', '17:หนึ่ง', '', '', 'TRUE'],
+    ['0066', 'ลำปลายมาศ', '17:หนึ่ง', '', '', 'TRUE'],
+    ['0092', 'ชำนิ', '17:หนึ่ง', '', '', 'TRUE'],
+    ['0025', 'โนนแดง', '18:แก้ว', '', '', 'TRUE'],
+    ['0074', 'ชุมพวง', '18:แก้ว', '', '', 'TRUE'],
+    ['0085', 'ลำทะเมนชัย', '18:แก้ว', '', '', 'TRUE'],
+    ['0020', 'สตึก', '19:เปิ้ล', '', '', 'TRUE'],
+    ['0080', 'แคนดง', '19:เปิ้ล', '', '', 'TRUE'],
+    ['0148', 'คูเมือง', '19:เปิ้ล', '', '', 'TRUE'],
+    ['0075', 'นางรอง', '20:ธนิต', '', '', 'TRUE'],
+    ['0153', 'ละหานทราย', '20:ธนิต', '', '', 'TRUE'],
+    ['0164', 'โนนสุวรรณ', '20:ธนิต', '', '', 'TRUE'],
+    ['0053', 'ท่าตูม', '21:เอก', '', '', 'TRUE'],
+    ['0114', 'รัตนบุรี', '21:เอก', '', '', 'TRUE'],
+    ['0150', 'ชุมพลบุรี', '21:เอก', '', '', 'TRUE'],
+    ['0050', 'เฉลิมพระเกียรติ(ท่าช้าง)', '22:โทนี่', '', '', 'TRUE'],
+    ['0065', 'จักราช', '22:โทนี่', '', '', 'TRUE'],
+    ['0126', 'โนนสูง', '22:โทนี่', '', '', 'TRUE'],
+    ['0017', 'เมืองเก่าขอนแก่น', '23:วุฒิ(M)', '', '', 'TRUE'],
+    ['0058', 'ท่าพระ', '23:วุฒิ(M)', '', '', 'TRUE'],
+    ['0064', 'พระยืน', '23:วุฒิ(M)', '', '', 'TRUE'],
+    ['0041', 'ขามสะแกแสง', '24:หน่อย', '', '', 'TRUE'],
+    ['0090', 'พิมาย', '24:หน่อย', '', '', 'TRUE'],
+    ['0139', 'พระทองคำ', '24:หน่อย', '', '', 'TRUE'],
+    ['0044', 'เนินสง่า', '25:แต้ว', '', '', 'TRUE'],
+    ['0117', 'จัตุรัส', '25:แต้ว', '', '', 'TRUE'],
+    ['0162', 'บำเหน็จณรงค์', '25:แต้ว', '', '', 'TRUE'],
+    ['0111', 'ภูเรือ', '26:บุ๋มบิ๋ม', '', '', 'TRUE'],
+    ['0127', 'ด่านซ้าย', '26:บุ๋มบิ๋ม', '', '', 'TRUE'],
+    ['0128', 'ท่าลี่', '26:บุ๋มบิ๋ม', '', '', 'TRUE'],
+    ['0115', 'สำโรงทาบ', '27:ดรีม', '', '', 'TRUE'],
+    ['0118', 'สนม', '27:ดรีม', '', '', 'TRUE'],
+    ['0167', 'ศีขรภูมิ', '27:ดรีม', '', '', 'TRUE'],
+    ['0112', 'ปากชม', '28:เบิร์ด', '', '', 'TRUE'],
+    ['0119', 'บ้านธาตุ', '28:เบิร์ด', '', '', 'TRUE'],
+    ['0122', 'เชียงคาน', '28:เบิร์ด', '', '', 'TRUE'],
+    ['0068', 'สามเหลี่ยมขอนแก่น', '29:พวง', '', '', 'TRUE'],
+    ['0155', 'ดอนโมง', '29:พวง', '', '', 'TRUE'],
+    ['0165', 'พระธาตุขามแก่น', '29:พวง', '', '', 'TRUE'],
+    ['0504', 'สาขาหน้าร.8', '29:พวง', '', '', 'TRUE'],
+    ['0076', 'สีคิ้ว', '30:ป้อ', '', '', 'TRUE'],
+    ['0142', 'สูงเนิน', '30:ป้อ', '', '', 'TRUE'],
+    ['0163', 'ปักธงชัย', '30:ป้อ', '', '', 'TRUE'],
+    ['0026', 'จอมพระ', '31:เท่ห์', '', '', 'TRUE'],
+    ['0079', 'กระสัง', '31:เท่ห์', '', '', 'TRUE'],
+    ['0089', 'ปราสาท', '31:เท่ห์', '', '', 'TRUE'],
+    ['0154', 'ลำดวน', '31:เท่ห์', '', '', 'TRUE'],
+    ['0014', 'นาเชือก', '32:วุฒิ', '', '', 'TRUE'],
+    ['0015', 'ยางสีสุราช', '32:วุฒิ', '', '', 'TRUE'],
+    ['0056', 'หนองสองห้อง', '32:วุฒิ', '', '', 'TRUE'],
+    ['0055', 'ชัยภูมิ', '33:น้อย', '', '', 'TRUE'],
+    ['0073', 'หนองบัวแดง', '33:น้อย', '', '', 'TRUE'],
+    ['0120', 'ประโคนชัย', '34:ต๋อง', '', '', 'TRUE'],
+    ['0158', 'บ้านกรวด', '34:ต๋อง', '', '', 'TRUE'],
+    ['0171', 'พลับพลาชัย', '34:ต๋อง', '', '', 'TRUE'],
+    ['0051', 'หนองบัวระเหว', '35:ฝน', '', '', 'TRUE'],
+    ['0099', 'บ้านค่าย', '35:ฝน', '', '', 'TRUE'],
+    ['0513', 'บ้านเขว้า', '35:ฝน', '', '', 'TRUE'],
+    ['0062', 'แก้งสนามนาง', '36:ณัฐ', '', '', 'TRUE'],
+    ['0063', 'ชนบท', '36:ณัฐ', '', '', 'TRUE'],
+    ['0138', 'แวงน้อย', '36:ณัฐ', '', '', 'TRUE'],
+    ['0141', 'คอนสวรรค์', '36:ณัฐ', '', '', 'TRUE'],
+    ['0091', 'ผาขาว', '37:แป้ง', '', '', 'TRUE'],
+    ['0140', 'หนองหิน', '37:แป้ง', '', '', 'TRUE'],
+    ['0151', 'ภูหลวง', '37:แป้ง', '', '', 'TRUE'],
+    ['0038', 'คำใหญ่', '38:บ๋อม(ญ)', '', '', 'TRUE'],
+    ['0061', 'น้ำพอง', '38:บ๋อม(ญ)', '', '', 'TRUE'],
+    ['0084', 'กระนวน', '38:บ๋อม(ญ)', '', '', 'TRUE'],
+    ['0102', 'ซำสูง-มดแดง', '38:บ๋อม(ญ)', '', '', 'TRUE'],
+    ['0022', 'ครบุรี', '39:ปุ้ย', '', '', 'TRUE'],
+    ['0052', 'เสิงสาง', '39:ปุ้ย', '', '', 'TRUE'],
+    ['0121', 'ปะคำ', '39:ปุ้ย', '', '', 'TRUE'],
+    ['0007', 'ยางตลาด', '40:โฟร์', '', '', 'TRUE'],
+    ['0008', 'กาฬสินธุ์1', '40:โฟร์', '', '', 'TRUE'],
+    ['0035', 'กันทรวิชัย', '40:โฟร์', '', '', 'TRUE'],
+    ['0086', 'สีชมพู', '41:เบิร์ด', '', '', 'TRUE'],
+    ['0087', 'ศรีบุญเรือง', '41:เบิร์ด', '', '', 'TRUE'],
+    ['0095', 'ภูเวียง', '41:เบิร์ด', '', '', 'TRUE'],
+    ['0168', 'กุดดินจี่', '41:เบิร์ด', '', '', 'TRUE'],
+    ['0027', 'สีดา', '42:วิญญู', '', '', 'TRUE'],
+    ['0093', 'นาโพธิ์', '42:วิญญู', '', '', 'TRUE'],
+    ['0098', 'ประทาย', '42:วิญญู', '', '', 'TRUE'],
+    ['0137', 'พุทไธสง', '42:วิญญู', '', '', 'TRUE'],
+    ['0040', 'วังสามหมอ', '43:ต้อ', '', '', 'TRUE'],
+    ['0143', 'กุมภวาปี', '43:ต้อ', '', '', 'TRUE'],
+    ['0160', 'เขาสวนกวาง', '43:ต้อ', '', '', 'TRUE'],
+    ['0509', 'ศรีธาตุ', '43:ต้อ', '', '', 'TRUE'],
+    ['0159', 'บัวเชด', '44:ยุทธ', '', '', 'TRUE'],
+    ['0161', 'สังขะ', '44:ยุทธ', '', '', 'TRUE'],
+    ['0170', 'ศรีณรงค์', '44:ยุทธ', '', '', 'TRUE'],
+    ['0012', 'พยัคฆภูมิพิสัย', '45:บี', '', '', 'TRUE'],
+    ['0042', 'ปทุมรัตต์', '45:บี', '', '', 'TRUE'],
+    ['0803', 'อีฮงน้อยพยัคฆภูมิพิสัย', '45:บี', '', '', 'TRUE'],
+    ['0110', 'นากลาง', '46:บอย', '', '', 'TRUE'],
+    ['0129', 'นาด้วง', '46:บอย', '', '', 'TRUE'],
+    ['0157', 'นาวัง', '46:บอย', '', '', 'TRUE'],
+    ['0107', 'หนองบัวลำภู', '47:เอ๋', '', '', 'TRUE'],
+    ['0156', 'อุบลรัตน์', '47:เอ๋', '', '', 'TRUE'],
+    ['0169', 'โนนสัง', '47:เอ๋', '', '', 'TRUE'],
+    ['0123', 'หนองเรือ', '48:บ๊อบบี้', '', '', 'TRUE'],
+    ['0147', 'หนองแก', '48:บ๊อบบี้', '', '', 'TRUE'],
+    ['0166', 'บ้านแท่น', '48:บ๊อบบี้', '', '', 'TRUE'],
+    ['0057', 'หัวทะเล', '49:ป้อ', '', '', 'TRUE'],
+    ['0511', 'นิคมสุรนารี', '49:ป้อ', '', '', 'TRUE'],
+    ['0010', 'ร้อยเอ็ด1', '50:อั๋น', '', '', 'TRUE'],
+    ['0023', 'ร้อยเอ็ด2', '50:อั๋น', '', '', 'TRUE'],
+    ['0028', 'บ้านเหลื่อม', '51:ก้อย', '', '', 'TRUE'],
+    ['0130', 'บัวใหญ่', '51:ก้อย', '', '', 'TRUE'],
+    ['0132', 'คง', '51:ก้อย', '', '', 'TRUE'],
+    ['0060', 'ห้วยแถลง', '52:อาย', '', '', 'TRUE'],
+    ['0078', 'หนองหงส์', '52:อาย', '', '', 'TRUE'],
+    ['0081', 'หนองกี่', '52:อาย', '', '', 'TRUE'],
+    ['0106', 'สนญ.-เวสป้า', '55:คิงส์', '', '', 'TRUE'],
+    ['0113', 'สนญ.-คาวาซากิ', '55:คิงส์', '', '', 'TRUE'],
+    ['0134', 'ร้อยเอ็ด-เวสป้า', '55:คิงส์', '', '', 'TRUE']
   ],
   Carriers: [
-    ['NIM', 'นิ่มซี่เส็ง', '', 'ส่งจันทร์/พุธ/ศุกร์', 'TRUE'],
+    ['NIM', 'นิ่มซี่เส็ง', '', '', 'TRUE'],
     ['CHP', 'ขนส่งชัยพัฒนา', '', '', 'TRUE'],
     ['KRY', 'Kerry', '', '', 'TRUE'],
     ['FLE', 'Flash Express', '', '', 'TRUE'],
-    ['CAR', 'รถบริษัท', '', 'รอบวันศุกร์', 'TRUE']
+    ['CAR', 'รถบริษัท', '', '', 'TRUE']
   ],
-  DropPoints: [
-    ['ท่ารถขอนแก่น', 'อีสานเหนือ', 'ฝากท่ารถให้สาขามารับเอง'],
-    ['ปั๊มน้ำมันหน้าอำเภอ', 'อีสานเหนือ', '']
-  ],
-  Parts: [
-    ['M-001', 'มอเตอร์ล้อหลัง', 'ตัว', ''],
-    ['B-014', 'สายเบรกหน้า', 'เส้น', ''],
-    ['C-220', 'คอนโทรลเลอร์', 'ตัว', '']
-  ]
+  DropPoints: [],
+  Parts: []
 };
 
-/** สร้างชีตทั้งหมดพร้อมหัวตาราง เรียกซ้ำได้ปลอดภัย (ไม่ลบข้อมูลเดิม) */
+/**
+ * สร้างชีตทั้งหมดพร้อมหัวตาราง เรียกซ้ำได้ปลอดภัย (ไม่ลบข้อมูลเดิม)
+ */
 function setupSheets() {
   var ss = getSpreadsheet_();
   var created = [];
@@ -804,7 +745,7 @@ function setupSheets() {
       .setBackground('#eef2ff');
     sh.setFrozenRows(1);
 
-    if (sh.getLastRow() < 2 && SAMPLE_DATA[name]) {
+    if (sh.getLastRow() < 2 && SAMPLE_DATA[name] && SAMPLE_DATA[name].length) {
       sh.getRange(2, 1, SAMPLE_DATA[name].length, headers.length)
         .setValues(SAMPLE_DATA[name]);
     }
@@ -819,25 +760,7 @@ function setupSheets() {
   return msg;
 }
 
-/** ทดสอบว่าส่งข้อความเข้ากลุ่มไลน์ได้จริง — รันหลังใส่ token และ groupId แล้ว */
-function testLineMessage() {
-  var res = pushLineText_('✅ ทดสอบระบบบันทึกส่งอะไหล่ — ถ้าเห็นข้อความนี้แปลว่าเชื่อมต่อสำเร็จแล้ว');
-  Logger.log(res.ok ? 'ส่งสำเร็จ' : 'ส่งไม่สำเร็จ: ' + res.error);
-  return res;
-}
-
-/** เปิดโหมดจับคู่กลุ่ม แล้วไปพิมพ์อะไรก็ได้ในกลุ่มไลน์ เพื่อให้ระบบเก็บ groupId ให้เอง */
-function pairingModeOn() {
-  props_().setProperty('PAIRING_MODE', 'true');
-  return 'เปิดโหมดจับคู่แล้ว — เชิญบอทเข้ากลุ่ม แล้วพิมพ์ข้อความอะไรก็ได้ในกลุ่ม';
-}
-
-function pairingModeOff() {
-  props_().setProperty('PAIRING_MODE', 'false');
-  return 'ปิดโหมดจับคู่แล้ว groupId ปัจจุบัน: ' + (prop_('LINE_GROUP_ID') || '(ยังไม่มี)');
-}
-
-/** ดู URL ของเว็บแอปที่ deploy ไว้ (เอาไปใส่เป็น Webhook URL และเปิดบนมือถือ) */
+/** ดู URL ของเว็บแอปที่ deploy ไว้ (เอาไปเปิดบนมือถือ) */
 function showWebAppUrl() {
   var url = ScriptApp.getService().getUrl();
   Logger.log(url);
@@ -851,10 +774,6 @@ function checkSetup() {
     var sh = getSpreadsheet_().getSheetByName(name);
     lines.push((sh ? '✅' : '❌') + ' ชีต ' + name + (sh ? ' (' + Math.max(0, sh.getLastRow() - 1) + ' แถว)' : ''));
   });
-  lines.push((prop_('LINE_CHANNEL_ACCESS_TOKEN') ? '✅' : '❌') + ' LINE_CHANNEL_ACCESS_TOKEN');
-  lines.push((prop_('LINE_GROUP_ID') ? '✅' : '❌') + ' LINE_GROUP_ID ' + (prop_('LINE_GROUP_ID') ? '(' + prop_('LINE_GROUP_ID') + ')' : ''));
-  lines.push((prop_('APP_PIN') ? '🔒 ตั้ง PIN ไว้' : '🔓 ไม่ได้ตั้ง PIN (ใครมีลิงก์ก็คีย์ได้)'));
-  lines.push('PAIRING_MODE = ' + (prop_('PAIRING_MODE') || 'false'));
   var out = lines.join('\n');
   Logger.log(out);
   return out;
@@ -866,17 +785,7 @@ function onOpen() {
     .createMenu('ระบบส่งอะไหล่')
     .addItem('ติดตั้ง/ซ่อมโครงสร้างชีต', 'setupSheets')
     .addItem('ตรวจการตั้งค่า', 'checkSetupDialog')
-    .addSeparator()
-    .addItem('ทดสอบส่งไลน์', 'testLineMessageDialog')
-    .addItem('เปิดโหมดจับคู่กลุ่มไลน์', 'pairingModeOnDialog')
-    .addItem('ปิดโหมดจับคู่กลุ่มไลน์', 'pairingModeOffDialog')
     .addToUi();
 }
 
 function checkSetupDialog() { SpreadsheetApp.getUi().alert(checkSetup()); }
-function pairingModeOnDialog() { SpreadsheetApp.getUi().alert(pairingModeOn()); }
-function pairingModeOffDialog() { SpreadsheetApp.getUi().alert(pairingModeOff()); }
-function testLineMessageDialog() {
-  var res = testLineMessage();
-  SpreadsheetApp.getUi().alert(res.ok ? 'ส่งเข้ากลุ่มไลน์สำเร็จ' : 'ส่งไม่สำเร็จ:\n' + res.error);
-}
