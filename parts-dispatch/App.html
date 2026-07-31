@@ -115,6 +115,39 @@
   }
   .chip strong { color: var(--text); }
 
+  /* ช่องเลือกแบบพิมพ์ค้นหาได้ */
+  .combo { position: relative; margin-bottom: 12px; }
+  .combo input { margin-bottom: 0; }
+  .combo.disabled input { opacity: .55; }
+
+  .combo-list {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 4px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    max-height: 270px;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .combo-item {
+    padding: 11px 12px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .combo-item.active { background: var(--primary); color: #fff; }
+  .combo-item .sub { font-size: 13px; color: var(--muted); margin-left: 6px; }
+  .combo-item.active .sub { color: rgba(255,255,255,.8); }
+  .combo-empty { padding: 11px 12px; font-size: 14px; color: var(--muted); }
+
   .switch { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-size: 15px; }
   .switch input { width: 22px; height: 22px; margin: 0; flex: none; }
   .switch label { margin: 0; color: var(--text); }
@@ -249,15 +282,11 @@
       <div class="card">
         <h2>ปลายทาง</h2>
 
-        <label for="zone">เขต *</label>
-        <select id="zone" required>
-          <option value="">— เลือกเขต —</option>
-        </select>
+        <label for="zone-input">เขต *</label>
+        <div class="combo" id="zone"></div>
 
-        <label for="destBranch">สาขาปลายทาง *</label>
-        <select id="destBranch" required disabled>
-          <option value="">— เลือกเขตก่อน —</option>
-        </select>
+        <label for="destBranch-input">สาขาปลายทาง *</label>
+        <div class="combo" id="destBranch"></div>
 
         <div class="switch">
           <input type="checkbox" id="isTransfer">
@@ -268,10 +297,8 @@
           <div class="warn">
             ⚠️ รอบนี้ของ<strong id="warnBranch">สาขาปลายทาง</strong> แต่ไปฝากลงที่อื่น — ระบบจะบันทึกจุดฝากลงแยกไว้ในรายงาน
           </div>
-          <label for="dropPoint">ฝากลงที่</label>
-          <select id="dropPoint">
-            <option value="">— เลือกจุดฝากลง —</option>
-          </select>
+          <label for="dropPoint-input">ฝากลงที่</label>
+          <div class="combo" id="dropPoint"></div>
           <input type="text" id="dropPointOther" class="hidden" placeholder="พิมพ์ชื่อจุดฝากลง">
         </div>
       </div>
@@ -335,12 +362,12 @@
 
       <div class="row">
         <div>
-          <label for="zoneFilter">เขต</label>
-          <select id="zoneFilter"><option value="">— ทุกเขต —</option></select>
+          <label for="zoneFilter-input">เขต</label>
+          <div class="combo" id="zoneFilter"></div>
         </div>
         <div>
-          <label for="branchFilter">สาขาปลายทาง</label>
-          <select id="branchFilter"><option value="">— ทุกสาขา —</option></select>
+          <label for="branchFilter-input">สาขาปลายทาง</label>
+          <div class="combo" id="branchFilter"></div>
         </div>
       </div>
 
@@ -381,6 +408,163 @@
     return 'tk-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
   }
 
+  /* ---------- ช่องเลือกแบบพิมพ์ค้นหาได้ ----------
+   * ใช้แทน <select> ที่มีตัวเลือกเยอะ (เขต 53 / สาขา 166)
+   * พิมพ์เลขหรือชื่อก็ได้ เพราะจับคู่แบบ substring บนข้อความเต็มของตัวเลือก
+   */
+  function makeCombo(hostId, config) {
+    config = config || {};
+    var host = $(hostId);
+    var options = [];
+    var filtered = [];
+    var value = '';
+    var activeIndex = -1;
+    var open = false;
+    var blurTimer = null;
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = hostId + '-input';
+    input.autocomplete = 'off';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-expanded', 'false');
+    input.placeholder = config.placeholder || '';
+
+    var list = document.createElement('ul');
+    list.className = 'combo-list hidden';
+
+    host.appendChild(input);
+    host.appendChild(list);
+
+    function norm(s) { return String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ''); }
+
+    function labelOf(v) {
+      for (var i = 0; i < options.length; i++) {
+        if (options[i].value === v) return options[i].label;
+      }
+      return '';
+    }
+
+    function filter(query) {
+      var q = norm(query);
+      filtered = q
+        ? options.filter(function (o) { return norm(o.label + ' ' + (o.sub || '')).indexOf(q) >= 0; })
+        : options.slice();
+      if (filtered.length > 50) filtered = filtered.slice(0, 50);
+    }
+
+    function render() {
+      list.innerHTML = '';
+      if (!filtered.length) {
+        var empty = document.createElement('li');
+        empty.className = 'combo-empty';
+        empty.textContent = 'ไม่พบรายการที่ตรง';
+        list.appendChild(empty);
+        return;
+      }
+      filtered.forEach(function (o, i) {
+        var li = document.createElement('li');
+        li.className = 'combo-item' + (i === activeIndex ? ' active' : '');
+        li.textContent = o.label;
+        if (o.sub) {
+          var sub = document.createElement('span');
+          sub.className = 'sub';
+          sub.textContent = o.sub;
+          li.appendChild(sub);
+        }
+        // ใช้ mousedown/touchstart เพราะ blur ของ input จะยิงก่อน click
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(o); });
+        list.appendChild(li);
+      });
+    }
+
+    function openList(query) {
+      // ยกเลิกการปิดที่ค้างคิวอยู่จากการ blur ครั้งก่อน ไม่งั้นมันจะมาปิดรายการที่เพิ่งกางทิ้ง
+      if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+      filter(query === undefined ? '' : query);
+      activeIndex = filtered.length ? 0 : -1;
+      render();
+      list.classList.remove('hidden');
+      input.setAttribute('aria-expanded', 'true');
+      open = true;
+    }
+
+    function closeList() {
+      list.classList.add('hidden');
+      input.setAttribute('aria-expanded', 'false');
+      open = false;
+      activeIndex = -1;
+    }
+
+    function choose(option) {
+      value = option.value;
+      input.value = option.label;
+      closeList();
+      if (config.onChange) config.onChange(value, option);
+    }
+
+    input.addEventListener('input', function () { openList(input.value); });
+    input.addEventListener('focus', function () { openList(''); });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!open) return openList(input.value);
+        if (!filtered.length) return;
+        activeIndex = e.key === 'ArrowDown'
+          ? (activeIndex + 1) % filtered.length
+          : (activeIndex - 1 + filtered.length) % filtered.length;
+        render();
+        var el = list.children[activeIndex];
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        if (open && activeIndex >= 0 && filtered[activeIndex]) {
+          e.preventDefault();
+          choose(filtered[activeIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        closeList();
+      }
+    });
+
+    // พิมพ์ค้างไว้แล้วคลิกออกโดยไม่ได้เลือก → คืนข้อความเป็นค่าที่เลือกไว้ล่าสุด
+    input.addEventListener('blur', function () {
+      blurTimer = setTimeout(function () {
+        blurTimer = null;
+        closeList();
+        input.value = value ? labelOf(value) : '';
+      }, 120);
+    });
+
+    return {
+      el: host,
+      input: input,
+      setOptions: function (list_) {
+        options = (list_ || []).map(function (o) {
+          return typeof o === 'string' ? { value: o, label: o } : o;
+        });
+        // ถ้าค่าที่เลือกไว้เดิมไม่มีในชุดใหม่ ต้องล้างทิ้ง ไม่งั้นจะส่งค่าเก่าไปบันทึกทั้งที่ช่องดูว่าง
+        if (value && !labelOf(value)) { value = ''; input.value = ''; }
+      },
+      getValue: function () { return value; },
+      setValue: function (v) {
+        value = v || '';
+        input.value = value ? labelOf(value) : '';
+      },
+      clear: function () { value = ''; input.value = ''; closeList(); },
+      setEnabled: function (on) {
+        input.disabled = !on;
+        host.classList.toggle('disabled', !on);
+        if (!on) { value = ''; input.value = ''; closeList(); }
+      },
+      setPlaceholder: function (t) { input.placeholder = t; },
+      focusOpen: function () { input.focus(); openList(''); },
+      count: function () { return options.length; }
+    };
+  }
+
+  var comboZone, comboBranch, comboDrop, comboZoneFilter, comboBranchFilter;
+
   /** ห่อ google.script.run ให้ใช้แบบ promise */
   function call(fnName, arg) {
     return new Promise(function (resolve, reject) {
@@ -413,6 +597,7 @@
   /* ---------- โหลดข้อมูลตั้งต้น ---------- */
 
   function boot() {
+    initCombos();
     call('apiBootstrap').then(function (res) {
       if (!res || !res.ok) throw new Error((res && res.error) || 'โหลดข้อมูลไม่สำเร็จ');
 
@@ -432,35 +617,32 @@
   }
 
   function fillMasters(res) {
-    var zoneSel = $('zone');
-    var zoneFilter = $('zoneFilter');
-    res.zones.forEach(function (z) {
-      zoneSel.appendChild(new Option(z, z));
-      zoneFilter.appendChild(new Option(z, z));
-    });
+    var zoneOptions = res.zones.map(function (z) { return { value: z, label: z }; });
+    comboZone.setOptions(zoneOptions);
+    comboZone.setPlaceholder('พิมพ์เลขเขตหรือชื่อเขต เช่น 40 หรือ โฟร์');
 
-    res.branches.forEach(function (b) {
-      $('branchFilter').appendChild(new Option(b.name, b.name));
+    comboZoneFilter.setOptions(zoneOptions);
+    comboZoneFilter.setPlaceholder('ทุกเขต');
+
+    var branchOptions = res.branches.map(function (b) {
+      return { value: b.name, label: b.name, sub: b.code };
     });
+    comboBranchFilter.setOptions(branchOptions);
+    comboBranchFilter.setPlaceholder('ทุกสาขา');
+
+    comboBranch.setEnabled(false);
+    comboBranch.setPlaceholder('เลือกเขตก่อน');
 
     var carrier = $('carrier');
     res.carriers.forEach(function (c) { carrier.appendChild(new Option(c.name, c.name)); });
     var lastCarrier = localStorage.getItem('pd_carrier');
     if (lastCarrier && hasOption(carrier, lastCarrier)) carrier.value = lastCarrier;
 
-    var drop = $('dropPoint');
-    var gBranch = document.createElement('optgroup');
-    gBranch.label = 'สาขา';
-    res.branches.forEach(function (b) { gBranch.appendChild(new Option(b.name, b.name)); });
-    drop.appendChild(gBranch);
-
-    if (res.dropPoints.length) {
-      var gOther = document.createElement('optgroup');
-      gOther.label = 'จุดฝากลงอื่น';
-      res.dropPoints.forEach(function (d) { gOther.appendChild(new Option(d.name, d.name)); });
-      drop.appendChild(gOther);
-    }
-    drop.appendChild(new Option('อื่น ๆ (พิมพ์เอง)', '__other__'));
+    var dropOptions = branchOptions.slice();
+    res.dropPoints.forEach(function (d) { dropOptions.push({ value: d.name, label: d.name }); });
+    dropOptions.push({ value: '__other__', label: 'อื่น ๆ (พิมพ์เอง)' });
+    comboDrop.setOptions(dropOptions);
+    comboDrop.setPlaceholder('พิมพ์ชื่อสาขาหรือจุดฝากลง');
 
     var codes = $('partCodes'), names = $('partNames');
     res.parts.forEach(function (p) {
@@ -473,32 +655,41 @@
     return Array.prototype.some.call(select.options, function (o) { return o.value === value; });
   }
 
-  /* ---------- เขต → กรองสาขาในเขตนั้น ---------- */
+  /* ---------- สร้าง combobox + เชื่อม เขต → สาขา ---------- */
 
-  $('zone').addEventListener('change', function () {
-    var zone = this.value;
-    var branchSel = $('destBranch');
-    var prevValue = branchSel.value;
-    branchSel.innerHTML = '';
+  function initCombos() {
+    comboZone = makeCombo('zone', {
+      onChange: function (zone) {
+        // เลือกเขตแล้วโหลดสาขาในเขตนั้น แล้วเด้งให้เลือกสาขาต่อทันที
+        var inZone = MASTERS.branches.filter(function (b) { return b.zone === zone; });
+        comboBranch.setEnabled(true);
+        comboBranch.setOptions(inZone.map(function (b) {
+          return { value: b.name, label: b.name, sub: b.code };
+        }));
+        comboBranch.setPlaceholder('เลือกสาขา (' + inZone.length + ' สาขาในเขตนี้)');
+        comboBranch.focusOpen();
+      }
+    });
 
-    if (!zone) {
-      branchSel.appendChild(new Option('— เลือกเขตก่อน —', ''));
-      branchSel.disabled = true;
-      return;
-    }
+    comboBranch = makeCombo('destBranch', {
+      onChange: function (name) {
+        var b = findBranch(name);
+        if (b && b.carrier && hasOption($('carrier'), b.carrier)) $('carrier').value = b.carrier;
+        $('warnBranch').textContent = name ? 'สาขา' + name : 'สาขาปลายทาง';
+      }
+    });
 
-    var inZone = MASTERS.branches.filter(function (b) { return b.zone === zone; });
-    branchSel.appendChild(new Option('— เลือกสาขา (' + inZone.length + ' สาขา) —', ''));
-    inZone.forEach(function (b) { branchSel.appendChild(new Option(b.name, b.name)); });
-    branchSel.disabled = false;
-    if (inZone.some(function (b) { return b.name === prevValue; })) branchSel.value = prevValue;
-  });
+    comboDrop = makeCombo('dropPoint', {
+      onChange: function (v) {
+        var other = v === '__other__';
+        $('dropPointOther').classList.toggle('hidden', !other);
+        if (other) $('dropPointOther').focus();
+      }
+    });
 
-  $('destBranch').addEventListener('change', function () {
-    var b = findBranch(this.value);
-    if (b && b.carrier && hasOption($('carrier'), b.carrier)) $('carrier').value = b.carrier;
-    $('warnBranch').textContent = this.value ? 'สาขา' + this.value : 'สาขาปลายทาง';
-  });
+    comboZoneFilter = makeCombo('zoneFilter');
+    comboBranchFilter = makeCombo('branchFilter');
+  }
 
   function findBranch(name) {
     for (var i = 0; i < MASTERS.branches.length; i++) {
@@ -510,16 +701,10 @@
   $('isTransfer').addEventListener('change', function () {
     $('dropWrap').classList.toggle('hidden', !this.checked);
     if (!this.checked) {
-      $('dropPoint').value = '';
+      comboDrop.clear();
       $('dropPointOther').value = '';
       $('dropPointOther').classList.add('hidden');
     }
-  });
-
-  $('dropPoint').addEventListener('change', function () {
-    var other = this.value === '__other__';
-    $('dropPointOther').classList.toggle('hidden', !other);
-    if (other) $('dropPointOther').focus();
   });
 
   /* ---------- รายการอะไหล่ ---------- */
@@ -582,15 +767,15 @@
     e.preventDefault();
     $('formError').classList.add('hidden');
 
-    var dropPoint = $('dropPoint').value === '__other__'
+    var dropPoint = comboDrop.getValue() === '__other__'
       ? $('dropPointOther').value.trim()
-      : $('dropPoint').value;
+      : comboDrop.getValue();
 
     var payload = {
       clientToken: clientToken,
       prNo: $('prNo').value.trim(),
       shipDate: $('shipDate').value,
-      destBranch: $('destBranch').value,
+      destBranch: comboBranch.getValue(),
       isTransfer: $('isTransfer').checked,
       dropPoint: dropPoint,
       carrier: $('carrier').value,
@@ -659,12 +844,12 @@
     $('resultCard').classList.add('hidden');
     $('form').classList.remove('hidden');
     $('prNo').value = '';
-    $('zone').value = '';
-    $('destBranch').innerHTML = '<option value="">— เลือกเขตก่อน —</option>';
-    $('destBranch').disabled = true;
+    comboZone.clear();
+    comboBranch.setEnabled(false);
+    comboBranch.setPlaceholder('เลือกเขตก่อน');
     $('isTransfer').checked = false;
     $('dropWrap').classList.add('hidden');
-    $('dropPoint').value = '';
+    comboDrop.clear();
     $('dropPointOther').value = '';
     $('dropPointOther').classList.add('hidden');
     $('trackingNo').value = '';
@@ -697,8 +882,8 @@
     $('results').innerHTML = '';
     call('apiSearch', {
       q: $('q').value.trim(),
-      zone: $('zoneFilter').value,
-      branch: $('branchFilter').value,
+      zone: comboZoneFilter.getValue(),
+      branch: comboBranchFilter.getValue(),
       from: $('from').value,
       to: $('to').value,
       transferOnly: $('transferOnly').checked,
