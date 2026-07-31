@@ -282,6 +282,8 @@
       <div class="card">
         <h2>ปลายทาง</h2>
 
+        <div class="muted" style="margin-bottom:10px;">เริ่มจากช่องไหนก่อนก็ได้ — เลือกเขตแล้วสาขาจะถูกกรองให้ หรือพิมพ์ชื่อสาขาแล้วเขตจะเติมให้เอง</div>
+
         <label for="zone-input">เขต *</label>
         <div class="combo" id="zone"></div>
 
@@ -421,6 +423,7 @@
     var activeIndex = -1;
     var open = false;
     var blurTimer = null;
+    var scope = null;   // ฟังก์ชันจำกัดขอบเขตตัวเลือก เช่น เอาเฉพาะสาขาในเขตที่เลือกไว้
 
     var input = document.createElement('input');
     input.type = 'text';
@@ -445,11 +448,21 @@
       return '';
     }
 
+    function matches(pool, q) {
+      return q
+        ? pool.filter(function (o) { return norm(o.label + ' ' + (o.sub || '')).indexOf(q) >= 0; })
+        : pool.slice();
+    }
+
     function filter(query) {
       var q = norm(query);
-      filtered = q
-        ? options.filter(function (o) { return norm(o.label + ' ' + (o.sub || '')).indexOf(q) >= 0; })
-        : options.slice();
+      if (scope) {
+        filtered = matches(options.filter(scope), q);
+        // ถ้าในขอบเขตไม่เจอ ให้ค้นจากทั้งหมดแทน (เช่น พิมพ์สาขาที่อยู่คนละเขตกับที่เลือกไว้)
+        if (!filtered.length && q) filtered = matches(options, q);
+      } else {
+        filtered = matches(options, q);
+      }
       if (filtered.length > 50) filtered = filtered.slice(0, 50);
     }
 
@@ -558,6 +571,7 @@
         if (!on) { value = ''; input.value = ''; closeList(); }
       },
       setPlaceholder: function (t) { input.placeholder = t; },
+      setScope: function (fn) { scope = fn || null; },
       focusOpen: function () { input.focus(); openList(''); },
       count: function () { return options.length; }
     };
@@ -625,13 +639,14 @@
     comboZoneFilter.setPlaceholder('ทุกเขต');
 
     var branchOptions = res.branches.map(function (b) {
-      return { value: b.name, label: b.name, sub: b.code };
+      return { value: b.name, label: b.name, sub: b.code + ' • ' + b.zone, zone: b.zone };
     });
     comboBranchFilter.setOptions(branchOptions);
     comboBranchFilter.setPlaceholder('ทุกสาขา');
 
-    comboBranch.setEnabled(false);
-    comboBranch.setPlaceholder('เลือกเขตก่อน');
+    // ช่องสาขาใช้ได้ตั้งแต่แรก จะเริ่มจากเลือกเขตหรือพิมพ์ชื่อสาขาก่อนก็ได้
+    comboBranch.setOptions(branchOptions);
+    applyZoneScope('');
 
     var carrier = $('carrier');
     res.carriers.forEach(function (c) { carrier.appendChild(new Option(c.name, c.name)); });
@@ -660,13 +675,13 @@
   function initCombos() {
     comboZone = makeCombo('zone', {
       onChange: function (zone) {
-        // เลือกเขตแล้วโหลดสาขาในเขตนั้น แล้วเด้งให้เลือกสาขาต่อทันที
-        var inZone = MASTERS.branches.filter(function (b) { return b.zone === zone; });
-        comboBranch.setEnabled(true);
-        comboBranch.setOptions(inZone.map(function (b) {
-          return { value: b.name, label: b.name, sub: b.code };
-        }));
-        comboBranch.setPlaceholder('เลือกสาขา (' + inZone.length + ' สาขาในเขตนี้)');
+        // เลือกเขตแล้วจำกัดรายการสาขาเหลือเฉพาะเขตนั้น แล้วเด้งให้เลือกสาขาต่อทันที
+        applyZoneScope(zone);
+
+        // ถ้าสาขาที่เลือกไว้เดิมไม่ได้อยู่ในเขตใหม่ ต้องล้างทิ้ง
+        var current = findBranch(comboBranch.getValue());
+        if (current && current.zone !== zone) comboBranch.clear();
+
         comboBranch.focusOpen();
       }
     });
@@ -674,6 +689,11 @@
     comboBranch = makeCombo('destBranch', {
       onChange: function (name) {
         var b = findBranch(name);
+        // เลือกสาขาก่อนก็ได้ — ระบบเติมเขตให้เองจากตารางสาขา
+        if (b && b.zone && b.zone !== comboZone.getValue()) {
+          comboZone.setValue(b.zone);
+          applyZoneScope(b.zone);
+        }
         if (b && b.carrier && hasOption($('carrier'), b.carrier)) $('carrier').value = b.carrier;
         $('warnBranch').textContent = name ? 'สาขา' + name : 'สาขาปลายทาง';
       }
@@ -689,6 +709,18 @@
 
     comboZoneFilter = makeCombo('zoneFilter');
     comboBranchFilter = makeCombo('branchFilter');
+  }
+
+  /** จำกัดรายการสาขาให้เหลือเฉพาะเขตที่เลือก (ยังพิมพ์หาสาขาข้ามเขตได้ ระบบจะสลับเขตให้เอง) */
+  function applyZoneScope(zone) {
+    if (!zone) {
+      comboBranch.setScope(null);
+      comboBranch.setPlaceholder('พิมพ์ชื่อสาขาหรือรหัสสาขา');
+      return;
+    }
+    var count = MASTERS.branches.filter(function (b) { return b.zone === zone; }).length;
+    comboBranch.setScope(function (o) { return o.zone === zone; });
+    comboBranch.setPlaceholder('เลือกสาขา (' + count + ' สาขาในเขตนี้)');
   }
 
   function findBranch(name) {
@@ -845,8 +877,8 @@
     $('form').classList.remove('hidden');
     $('prNo').value = '';
     comboZone.clear();
-    comboBranch.setEnabled(false);
-    comboBranch.setPlaceholder('เลือกเขตก่อน');
+    comboBranch.clear();
+    applyZoneScope('');
     $('isTransfer').checked = false;
     $('dropWrap').classList.add('hidden');
     comboDrop.clear();
