@@ -84,6 +84,19 @@ function isActive_(v) {
   return s !== 'FALSE' && s !== 'NO' && s !== '0' && s !== 'ไม่' && s !== 'ปิด';
 }
 
+/**
+ * ทำรหัสสาขาให้เป็นเลข 4 หลักเสมอ (1 → 0001, 12 → 0012)
+ * จำเป็นเพราะ Google Sheets มองค่าอย่าง "0132" เป็นตัวเลขแล้วตัด 0 นำหน้าทิ้งเหลือ 132
+ * ทำให้เทียบกับรหัสที่อ่านได้จากใบโอนย้ายไม่ตรง
+ */
+function padBranchCode_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  if (!/^\d+$/.test(s)) return s;          // รหัสที่มีตัวอักษรปนอยู่ ปล่อยตามเดิม
+  while (s.length < 4) s = '0' + s;
+  return s;
+}
+
 function colIndex_(sheetName, field) {
   var idx = HEADERS[sheetName].indexOf(field);
   if (idx < 0) throw new Error('ไม่รู้จักคอลัมน์ ' + field + ' ในชีต ' + sheetName);
@@ -229,7 +242,7 @@ function getMasters_() {
     .filter(function (r) { return String(r.branchName || '').trim() && isActive_(r.active); })
     .map(function (r) {
       return {
-        code: String(r.branchCode || '').trim(),
+        code: padBranchCode_(r.branchCode),
         name: String(r.branchName).trim(),
         zone: String(r.zone || '').trim(),
         carrier: String(r.defaultCarrier || '').trim(),
@@ -489,6 +502,20 @@ function saveShipment_(payload) {
     return { ok: true, shipmentId: shipmentId, duplicate: true };
   }
 
+  // เก็บรูปหลักฐานหลังยืนยันการขนส่งแล้วเท่านั้น (ทำนอก lock เพราะอัปโหลดใช้เวลา)
+  var slipFileId = clean.slipFileId;
+  if (!slipFileId && clean.slipBase64) {
+    try {
+      slipFileId = saveSlipImage_(clean.slipBase64, clean.slipMimeType, clean.shipDate,
+        branchCodeByName_(clean.destBranch), clean.prNo);
+      setShipmentField_(shipmentId, 'slipFileId', slipFileId);
+    } catch (err) {
+      // เก็บรูปไม่สำเร็จ ไม่ควรทำให้ข้อมูลการส่งที่บันทึกไปแล้วหาย
+      console.warn('saveSlipImage_ ล้มเหลว: ' + err);
+      slipFileId = '';
+    }
+  }
+
   // อะไหล่ที่ยังไม่มีในตารางแม่ ให้เก็บเข้าชีต Parts ไปเลย
   var addedParts = [];
   try {
@@ -503,6 +530,7 @@ function saveShipment_(payload) {
     shipmentId: shipmentId,
     duplicate: false,
     addedParts: addedParts,
+    slipFileId: slipFileId,
     summary: {
       prNo: clean.prNo,
       destBranch: clean.destBranch,
@@ -570,6 +598,8 @@ function validateShipment_(payload) {
     note: String(p.note || '').trim(),
     items: items,
     slipFileId: String(p.slipFileId || '').trim(),
+    slipBase64: String(p.slipBase64 || ''),
+    slipMimeType: String(p.slipMimeType || 'image/jpeg'),
     clientToken: String(p.clientToken || '').trim()
   };
 }
@@ -643,6 +673,20 @@ function findByClientToken_(sh, token) {
     if (String(tokens[i][0]) === token) return { shipmentId: String(ids[i][0]), row: start + i };
   }
   return null;
+}
+
+/** อัปเดตช่องใดช่องหนึ่งของรอบส่งที่บันทึกไปแล้ว (ใช้เก็บ id รูปหลังอัปโหลดเสร็จ) */
+function setShipmentField_(shipmentId, field, value) {
+  var sh = getSheet_(SHEETS.SHIPMENTS);
+  var last = sh.getLastRow();
+  if (last < 2) return;
+  var ids = sh.getRange(2, colIndex_('Shipments', 'shipmentId'), last - 1, 1).getValues();
+  for (var i = ids.length - 1; i >= 0; i--) {
+    if (String(ids[i][0]) === shipmentId) {
+      sh.getRange(i + 2, colIndex_('Shipments', field)).setValue(value);
+      return;
+    }
+  }
 }
 
 /** ค้นได้ด้วย เลขที่ใบ PR, รหัส/ชื่ออะไหล่, เลขพัสดุ, ชื่อสาขา, จุดฝากลง, เลขที่รอบส่ง */
@@ -802,15 +846,21 @@ function pad2_(v) {
   return s.length < 2 ? '0' + s : s;
 }
 
-/** หาสาขาจากรหัสสาขา (คอลัมน์ branchCode ในชีต Branches) */
+/** หาสาขาจากรหัสสาขา (เทียบแบบเติม 0 ให้ครบ 4 หลักทั้งสองฝั่ง) */
 function findBranchByCode_(code) {
-  var key = String(code || '').trim();
+  var key = padBranchCode_(code);
   if (!key) return null;
   var list = getMasters_().branches;
   for (var i = 0; i < list.length; i++) {
-    if (String(list[i].code).trim() === key) return list[i];
+    if (padBranchCode_(list[i].code) === key) return list[i];
   }
   return null;
+}
+
+/** หารหัสสาขาจากชื่อสาขา ใช้ตอนตั้งชื่อไฟล์รูปหลักฐาน */
+function branchCodeByName_(name) {
+  var b = findBranch_(name);
+  return b ? padBranchCode_(b.code) : '';
 }
 
 /**
@@ -920,8 +970,8 @@ function ocrImage_(blob) {
 }
 
 /**
- * รับรูปจากหน้าเว็บ → เก็บรูปไว้เป็นหลักฐาน → OCR → แยกข้อมูล → เทียบกับตารางแม่
- * คืนข้อมูลให้หน้าเว็บเอาไปเติมในฟอร์มให้ผู้ใช้ตรวจก่อนบันทึก
+ * รับรูปจากหน้าเว็บ → OCR → แยกข้อมูล → เทียบกับตารางแม่
+ * ยังไม่เก็บรูปลง Drive ตอนนี้ — จะเก็บตอนผู้ใช้กดบันทึกการขนส่งแล้วเท่านั้น
  */
 function apiReadSlip(payload) {
   try {
@@ -930,19 +980,39 @@ function apiReadSlip(payload) {
     if (!base64) throw new Error('ไม่พบข้อมูลรูป');
 
     var mimeType = String(payload.mimeType || 'image/jpeg');
-    var name = 'slip-' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd-HHmmss') +
-      (mimeType.indexOf('png') >= 0 ? '.png' : '.jpg');
-    var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, name);
+    var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, 'slip-temp');
 
-    var file = getSlipFolder_().createFile(blob);
     var text = ocrImage_(blob);
     var resolved = resolveSlip_(parseSlipText_(text));
-    resolved.slipFileId = file.getId();
     resolved.ok = true;
+    // ส่งข้อความที่อ่านได้กลับไปด้วย เผื่อบางใบอ่านรายการไม่ออกจะได้ดูว่า OCR เห็นอะไร
+    resolved.rawText = String(text || '').substring(0, 4000);
     return resolved;
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
+}
+
+/**
+ * เก็บรูปหลักฐานลง Drive ตอนบันทึกการขนส่ง
+ * ตั้งชื่อเป็น วันที่_รหัสสาขา_เลขที่ใบPR เพื่อให้ค้นในไดรฟ์ได้ง่าย
+ * เช่น 2026-08-01_0132_0907TR690004839.jpg
+ */
+function saveSlipImage_(base64, mimeType, shipDate, branchCode, prNo) {
+  var type = String(mimeType || 'image/jpeg');
+  var ext = type.indexOf('png') >= 0 ? '.png' : '.jpg';
+  var name = [
+    shipDate || todayIso_(),
+    branchCode || 'ไม่ระบุสาขา',
+    safeFileNamePart_(prNo) || 'ไม่ระบุเลขที่ใบ'
+  ].join('_') + ext;
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64), type, name);
+  return getSlipFolder_().createFile(blob).getId();
+}
+
+/** ตัดอักขระที่ใช้ในชื่อไฟล์ไม่ได้ออก */
+function safeFileNamePart_(v) {
+  return String(v == null ? '' : v).trim().replace(/[\\\/:*?"<>|]+/g, '-');
 }
 
 /* =======================================================================
@@ -1161,12 +1231,41 @@ function setupSheets() {
     sh.autoResizeColumns(1, headers.length);
   });
 
+  var fixed = normalizeBranchCodes_();
+
   clearMasterCache_();
   var msg = created.length
     ? 'สร้างชีตใหม่: ' + created.join(', ')
     : 'ชีตครบอยู่แล้ว — อัปเดตหัวตารางให้เรียบร้อย';
+  if (fixed) msg += ' | แก้รหัสสาขาให้เป็น 4 หลัก ' + fixed + ' แถว';
   Logger.log(msg);
   return msg;
+}
+
+/**
+ * ซ่อมคอลัมน์รหัสสาขาให้เป็นข้อความ 4 หลักเสมอ
+ * Google Sheets จะแปลง "0132" เป็นตัวเลข 132 เองถ้าไม่ตั้งรูปแบบเป็นข้อความไว้
+ */
+function normalizeBranchCodes_() {
+  var sh = getSpreadsheet_().getSheetByName(SHEETS.BRANCHES);
+  if (!sh) return 0;
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+
+  var range = sh.getRange(2, colIndex_('Branches', 'branchCode'), last - 1, 1);
+  range.setNumberFormat('@');            // ล็อกเป็นข้อความ กัน 0 นำหน้าหายอีก
+
+  var values = range.getValues();
+  var out = [];
+  var changed = 0;
+  for (var i = 0; i < values.length; i++) {
+    var before = String(values[i][0] == null ? '' : values[i][0]).trim();
+    var after = padBranchCode_(before);
+    if (after !== before) changed++;
+    out.push([after]);
+  }
+  if (changed) range.setValues(out);
+  return changed;
 }
 
 /** ดู URL ของเว็บแอปที่ deploy ไว้ (เอาไปเปิดบนมือถือ) */

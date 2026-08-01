@@ -279,9 +279,25 @@
           ถ่ายรูปหรือแนบภาพใบโอนย้าย ระบบจะอ่านเลขที่ใบ สาขาปลายทาง และรายการอะไหล่มาเติมให้
           แล้วเก็บรูปไว้เป็นหลักฐานดูย้อนหลังได้
         </div>
-        <input type="file" id="slipFile" accept="image/*" capture="environment">
-        <button type="button" class="primary" id="slipReadBtn">อ่านข้อมูลจากรูป</button>
+        <!-- แยกสองปุ่ม: ถ่ายรูปสดจากกล้อง กับเลือกไฟล์ที่มีอยู่แล้ว -->
+        <input type="file" id="slipCamera" accept="image/*" capture="environment" class="hidden">
+        <input type="file" id="slipFile" accept="image/*" class="hidden">
+        <div class="row">
+          <button type="button" class="primary" id="slipCameraBtn">📷 ถ่ายรูป</button>
+          <button type="button" class="primary" id="slipPickBtn"
+                  style="background:var(--card);color:var(--primary);border:1px solid var(--primary);">
+            🖼️ เลือกรูป
+          </button>
+        </div>
+        <button type="button" class="primary" id="slipReadBtn" style="margin-top:10px;" disabled>
+          อ่านข้อมูลจากรูป
+        </button>
         <div id="slipMsg" class="banner ok hidden" style="margin-top:12px;"></div>
+        <button type="button" class="link hidden" id="slipRawBtn" style="margin-top:8px;">
+          ดูข้อความที่ระบบอ่านได้จากรูป
+        </button>
+        <pre id="slipRaw" class="hidden" style="white-space:pre-wrap;font-size:12px;max-height:220px;
+             overflow:auto;background:var(--bg);padding:10px;border-radius:8px;margin-top:8px;"></pre>
         <img id="slipPreview" class="hidden"
              style="max-width:100%;border-radius:10px;margin-top:12px;border:1px solid var(--line);">
       </div>
@@ -1012,7 +1028,8 @@
       receiverName: $('receiverName').value.trim(),
       note: $('note').value.trim(),
       sender: $('sender').value.trim(),
-      slipFileId: slipFileId,
+      slipBase64: slipImage ? slipImage.base64 : '',
+      slipMimeType: slipImage ? slipImage.mimeType : '',
       items: collectItems()
     };
 
@@ -1065,6 +1082,8 @@
       detail += '\n➕ เก็บอะไหล่ใหม่เข้าตารางให้แล้ว: ' + res.addedParts.join(', ');
       partsLoaded = false; // ให้หน้าอะไหล่โหลดใหม่เมื่อเปิด
     }
+    if (res.slipFileId) detail += '\n📎 เก็บรูปหลักฐานลงไดรฟ์แล้ว';
+    else if (payload.slipBase64) detail += '\n⚠️ บันทึกข้อมูลแล้ว แต่เก็บรูปลงไดรฟ์ไม่สำเร็จ';
     $('resultDetail').style.whiteSpace = 'pre-line';
     $('resultDetail').textContent = detail;
 
@@ -1092,10 +1111,14 @@
     $('note').value = '';
     $('items').innerHTML = '';
     addItemRow();
-    slipFileId = '';
+    slipImage = null;
     $('slipFile').value = '';
+    $('slipCamera').value = '';
+    $('slipReadBtn').disabled = true;
     $('slipMsg').classList.add('hidden');
     $('slipPreview').classList.add('hidden');
+    $('slipRawBtn').classList.add('hidden');
+    $('slipRaw').classList.add('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     $('prNo').focus();
   });
@@ -1217,15 +1240,37 @@
 
   /* ---------- แนบรูปใบโอนย้าย แล้วอ่านข้อมูลมาเติมให้ ---------- */
 
-  var slipFileId = '';
+  // เก็บรูปไว้ในหน่วยความจำก่อน แล้วค่อยอัปโหลดขึ้น Drive ตอนกดบันทึกการขนส่ง
+  var slipImage = null;   // { base64, mimeType, dataUrl }
 
   $('slipReadBtn').addEventListener('click', readSlip);
+  $('slipCameraBtn').addEventListener('click', function () { $('slipCamera').click(); });
+  $('slipPickBtn').addEventListener('click', function () { $('slipFile').click(); });
+  $('slipCamera').addEventListener('change', function () { pickSlip(this.files[0]); });
+  $('slipFile').addEventListener('change', function () { pickSlip(this.files[0]); });
 
-  $('slipFile').addEventListener('change', function () {
-    slipFileId = '';
-    $('slipMsg').classList.add('hidden');
-    $('slipPreview').classList.add('hidden');
+  $('slipRawBtn').addEventListener('click', function () {
+    $('slipRaw').classList.toggle('hidden');
   });
+
+  /** เลือก/ถ่ายรูปเสร็จ → ย่อรูป เก็บไว้ในหน่วยความจำ แล้วโชว์ตัวอย่าง */
+  function pickSlip(file) {
+    if (!file) return;
+    slipImage = null;
+    $('slipRawBtn').classList.add('hidden');
+    $('slipRaw').classList.add('hidden');
+    setSlipMsg('กำลังเตรียมรูป…');
+
+    shrinkImage(file, function (img) {
+      if (!img) return setSlipMsg('เปิดไฟล์รูปไม่ได้ ลองเลือกรูปใหม่', true);
+      slipImage = img;
+      $('slipPreview').src = img.dataUrl;
+      $('slipPreview').classList.remove('hidden');
+      $('slipReadBtn').disabled = false;
+      setSlipMsg('แนบรูปแล้ว — กด "อ่านข้อมูลจากรูป" เพื่อให้ระบบเติมข้อมูลให้ ' +
+        'หรือกรอกเองแล้วกดบันทึกเลยก็ได้\nรูปจะถูกเก็บลงไดรฟ์ตอนกดบันทึกการขนส่ง');
+    });
+  }
 
   /**
    * ย่อรูปก่อนส่ง เพื่อให้อัปโหลดเร็วและ OCR ไม่ต้องรับไฟล์ใหญ่เกินจำเป็น
@@ -1262,24 +1307,14 @@
   }
 
   function readSlip() {
-    var file = $('slipFile').files[0];
-    if (!file) return setSlipMsg('ยังไม่ได้เลือกรูป', true);
+    if (!slipImage) return setSlipMsg('ยังไม่ได้แนบรูป', true);
 
     $('slipReadBtn').disabled = true;
     $('slipReadBtn').textContent = 'กำลังอ่านรูป…';
-    setSlipMsg('กำลังย่อรูปและส่งไปอ่าน อาจใช้เวลาสัก 10-30 วินาที');
+    setSlipMsg('กำลังส่งรูปไปอ่าน อาจใช้เวลาสัก 10-30 วินาที');
 
-    shrinkImage(file, function (img) {
-      if (!img) {
-        $('slipReadBtn').disabled = false;
-        $('slipReadBtn').textContent = 'อ่านข้อมูลจากรูป';
-        return setSlipMsg('เปิดไฟล์รูปไม่ได้ ลองเลือกรูปใหม่', true);
-      }
-
-      $('slipPreview').src = img.dataUrl;
-      $('slipPreview').classList.remove('hidden');
-
-      call('apiReadSlip', { base64: img.base64, mimeType: img.mimeType }).then(function (res) {
+    call('apiReadSlip', { base64: slipImage.base64, mimeType: slipImage.mimeType })
+      .then(function (res) {
         $('slipReadBtn').disabled = false;
         $('slipReadBtn').textContent = 'อ่านข้อมูลจากรูป';
         if (!res || !res.ok) return setSlipMsg('อ่านรูปไม่สำเร็จ: ' + ((res && res.error) || ''), true);
@@ -1289,13 +1324,16 @@
         $('slipReadBtn').textContent = 'อ่านข้อมูลจากรูป';
         setSlipMsg('อ่านรูปไม่สำเร็จ: ' + (err.message || err), true);
       });
-    });
   }
 
   /** เอาข้อมูลที่อ่านได้มาเติมในฟอร์ม แล้วสรุปให้ผู้ใช้ตรวจ */
   function applySlip(res) {
-    slipFileId = res.slipFileId || '';
     var notes = [];
+
+    if (res.rawText) {
+      $('slipRaw').textContent = res.rawText;
+      $('slipRawBtn').classList.remove('hidden');
+    }
 
     if (res.prNo) { $('prNo').value = res.prNo; notes.push('เลขที่ใบ: ' + res.prNo); }
     else notes.push('⚠️ อ่านเลขที่ใบไม่ออก กรอกเอง');
@@ -1331,7 +1369,7 @@
       notes.push('⚠️ อ่านรายการอะไหล่ไม่ออก ใส่เอง');
     }
 
-    notes.push('📎 เก็บรูปเป็นหลักฐานแล้ว');
+    notes.push('📎 รูปจะถูกเก็บลงไดรฟ์ตอนกดบันทึกการขนส่ง');
     setSlipMsg('อ่านข้อมูลมาเติมให้แล้ว — กรุณาตรวจก่อนกดบันทึก\n' + notes.join('\n'),
       notes.some(function (n) { return n.indexOf('⚠️') === 0; }));
     $('prNo').scrollIntoView({ behavior: 'smooth', block: 'center' });
