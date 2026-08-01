@@ -1,0 +1,675 @@
+/**
+ * ระบบติดตามสถานะการกระตุ้นแบตเตอรี่ (ฉบับแยกโปรเจกต์)
+ *
+ * ใช้คู่กับไฟล์ Battery.html — มีแค่ 2 ไฟล์เท่านั้น
+ * ระบบนี้แยกขาดจากระบบบันทึกส่งอะไหล่ ใช้ไฟล์ชีตของตัวเอง
+ * ลิงก์ที่ส่งให้สาขาจึงแตะข้อมูลการส่งของไม่ได้เลย
+ *
+ * ดูขั้นตอนติดตั้งใน README.md
+ */
+
+var SHEETS = {
+  BRANCHES: 'Branches',
+  BATTERIES: 'Batteries'
+};
+
+var HEADERS = {
+  Branches: ['branchCode', 'branchName', 'zone', 'active'],
+  Batteries: [
+    'batteryId', 'receivedDate', 'branch', 'zone', 'serial', 'model', 'qty',
+    'status', 'note', 'updatedAt', 'updatedBy'
+  ]
+};
+
+/** ขั้นตอนการกระตุ้นแบตเตอรี่ เรียงตามลำดับงานจริง */
+var BATTERY_STATUSES = [
+  'รอต่อคิวกระตุ้น',
+  'กำลังกระตุ้น',
+  'กระตุ้นเสร็จแล้ว',
+  'รอจัดส่ง',
+  'กำลังจัดส่ง'
+];
+
+var TZ = 'Asia/Bangkok';
+
+/* =======================================================================
+ * ส่วนที่ 1 — ตัวช่วยพื้นฐาน
+ * ===================================================================== */
+
+function props_() {
+  return PropertiesService.getScriptProperties();
+}
+
+function prop_(key) {
+  var v = props_().getProperty(key);
+  return (v === null) ? '' : v;
+}
+
+function getSpreadsheet_() {
+  var id = prop_('SPREADSHEET_ID');
+  if (id) return SpreadsheetApp.openById(id);
+  var ss = SpreadsheetApp.getActive();
+  if (!ss) {
+    throw new Error('หาไฟล์ชีตไม่เจอ — ถ้าสคริปต์ไม่ได้ผูกกับชีต ให้ตั้งค่า SPREADSHEET_ID ใน Script Properties');
+  }
+  return ss;
+}
+
+function getSheet_(name) {
+  var sh = getSpreadsheet_().getSheetByName(name);
+  if (!sh) throw new Error('ไม่พบชีต "' + name + '" — ให้รันฟังก์ชัน setupSheets() ก่อน');
+  return sh;
+}
+
+function todayIso_() {
+  return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+}
+
+function nowStamp_() {
+  return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
+}
+
+function colIndex_(sheetName, field) {
+  var idx = HEADERS[sheetName].indexOf(field);
+  if (idx < 0) throw new Error('ไม่รู้จักคอลัมน์ ' + field + ' ในชีต ' + sheetName);
+  return idx + 1;
+}
+
+/** ถือว่า active เว้นแต่จะระบุชัดว่าไม่ใช้ */
+function isActive_(v) {
+  if (v === '' || v === null || v === undefined) return true;
+  var s = String(v).trim().toUpperCase();
+  return s !== 'FALSE' && s !== 'NO' && s !== '0' && s !== 'ไม่' && s !== 'ปิด';
+}
+
+/**
+ * ทำรหัสสาขาให้เป็นเลข 4 หลักเสมอ (1 -> 0001, 12 -> 0012)
+ * Google Sheets มองค่าอย่าง "0132" เป็นตัวเลขแล้วตัด 0 นำหน้าทิ้ง
+ */
+function padBranchCode_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return '';
+  if (!/^\d+$/.test(s)) return s;
+  while (s.length < 4) s = '0' + s;
+  return s;
+}
+
+/* =======================================================================
+ * ส่วนที่ 2 — รายชื่อสาขา
+ * ===================================================================== */
+
+var BRANCH_CACHE_KEY = 'branches_v1';
+
+function getBranches_() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get(BRANCH_CACHE_KEY);
+  if (hit) {
+    try {
+      return JSON.parse(hit);
+    } catch (err) {
+      // แคชเสีย อ่านใหม่จากชีต
+    }
+  }
+
+  var sh = getSheet_(SHEETS.BRANCHES);
+  var last = sh.getLastRow();
+  var out = [];
+  if (last > 1) {
+    var values = sh.getRange(2, 1, last - 1, HEADERS.Branches.length).getValues();
+    for (var i = 0; i < values.length; i++) {
+      var name = String(values[i][1] == null ? '' : values[i][1]).trim();
+      if (!name || !isActive_(values[i][3])) continue;
+      out.push({
+        code: padBranchCode_(values[i][0]),
+        name: name,
+        zone: String(values[i][2] == null ? '' : values[i][2]).trim()
+      });
+    }
+  }
+
+  try {
+    cache.put(BRANCH_CACHE_KEY, JSON.stringify(out), 300);
+  } catch (err) {
+    // ข้อมูลใหญ่เกินโควตาแคช ก็อ่านจากชีตทุกครั้งแทน
+  }
+  return out;
+}
+
+function clearBranchCache_() {
+  try {
+    CacheService.getScriptCache().remove(BRANCH_CACHE_KEY);
+  } catch (err) {
+    // ไม่เป็นไร
+  }
+}
+
+function findBranch_(name) {
+  var key = String(name || '').trim();
+  var list = getBranches_();
+  for (var i = 0; i < list.length; i++) {
+    if (list[i].name === key) return list[i];
+  }
+  return null;
+}
+
+/* =======================================================================
+ * ส่วนที่ 3 — สิทธิ์แอดมิน
+ *
+ * ลิงก์ที่ส่งให้สาขาไม่มี key จึงแก้ข้อมูลไม่ได้
+ * การตรวจทำที่ฝั่งเซิร์ฟเวอร์ เพราะการซ่อนปุ่มบนหน้าเว็บอย่างเดียวกันไม่ได้ —
+ * ใครก็เรียกฟังก์ชันจากคอนโซลเบราว์เซอร์ได้
+ * ===================================================================== */
+
+function getBatteryAdminKey_() {
+  var key = prop_('BATTERY_ADMIN_KEY');
+  if (!key) {
+    key = Utilities.getUuid().replace(/-/g, '').substring(0, 16);
+    props_().setProperty('BATTERY_ADMIN_KEY', key);
+  }
+  return key;
+}
+
+function requireBatteryAdmin_(key) {
+  if (String(key || '') !== getBatteryAdminKey_()) {
+    throw new Error('ลิงก์นี้ดูได้อย่างเดียว ไม่มีสิทธิ์แก้ข้อมูล');
+  }
+}
+
+/* =======================================================================
+ * ส่วนที่ 4 — เว็บแอป
+ * ===================================================================== */
+
+function doGet(e) {
+  var tpl = HtmlService.createTemplateFromFile('Battery');
+  var key = e && e.parameter ? String(e.parameter.key || '') : '';
+  tpl.isAdmin = (key === getBatteryAdminKey_());
+  tpl.adminKey = tpl.isAdmin ? key : '';
+  tpl.lockBranch = e && e.parameter ? String(e.parameter.branch || '') : '';
+  return tpl.evaluate()
+    .setTitle('สถานะการกระตุ้นแบตเตอรี่')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
+}
+
+/* =======================================================================
+ * ส่วนที่ 5 — ข้อมูลแบตเตอรี่
+ * ===================================================================== */
+
+function readBatteries_() {
+  var sh = getSheet_(SHEETS.BATTERIES);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var values = sh.getRange(2, 1, last - 1, HEADERS.Batteries.length).getValues();
+  var out = [];
+  for (var i = 0; i < values.length; i++) {
+    var r = values[i];
+    var id = String(r[0] == null ? '' : r[0]).trim();
+    if (!id) continue;
+    out.push({
+      batteryId: id,
+      receivedDate: String(r[1] == null ? '' : r[1]).trim(),
+      branch: String(r[2] == null ? '' : r[2]).trim(),
+      zone: String(r[3] == null ? '' : r[3]).trim(),
+      serial: String(r[4] == null ? '' : r[4]).trim(),
+      model: String(r[5] == null ? '' : r[5]).trim(),
+      qty: r[6] === '' || r[6] == null ? '' : String(r[6]),
+      status: String(r[7] == null ? '' : r[7]).trim(),
+      note: String(r[8] == null ? '' : r[8]).trim(),
+      updatedAt: String(r[9] == null ? '' : r[9]).trim(),
+      updatedBy: String(r[10] == null ? '' : r[10]).trim(),
+      _row: i + 2
+    });
+  }
+  return out;
+}
+
+function toBatteryDto_(b) {
+  if (!b) return null;
+  return {
+    batteryId: b.batteryId, receivedDate: b.receivedDate, branch: b.branch, zone: b.zone,
+    serial: b.serial, model: b.model, qty: b.qty, status: b.status, note: b.note,
+    updatedAt: b.updatedAt, updatedBy: b.updatedBy
+  };
+}
+
+/** ค้นรายการแบต — เปิดให้ทุกคนเรียกได้ เพราะเป็นข้อมูลที่ให้สาขาติดตาม */
+function apiListBatteries(payload) {
+  try {
+    payload = payload || {};
+    var q = String(payload.q || '').trim().toLowerCase();
+    var branch = String(payload.branch || '').trim();
+    var status = String(payload.status || '').trim();
+
+    var rows = readBatteries_();
+    var results = [];
+    for (var i = rows.length - 1; i >= 0 && results.length < 200; i--) {
+      var b = rows[i];
+      if (branch && b.branch !== branch) continue;
+      if (status && b.status !== status) continue;
+      if (q) {
+        var hay = [b.batteryId, b.branch, b.zone, b.serial, b.model, b.status, b.note]
+          .join(' ').toLowerCase();
+        if (hay.indexOf(q) < 0) continue;
+      }
+      results.push(toBatteryDto_(b));
+    }
+
+    var counts = {};
+    BATTERY_STATUSES.forEach(function (s) { counts[s] = 0; });
+    rows.forEach(function (b) {
+      if (branch && b.branch !== branch) return;
+      if (counts[b.status] !== undefined) counts[b.status]++;
+    });
+
+    return { ok: true, results: results, counts: counts, statuses: BATTERY_STATUSES };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+function apiBatteryBootstrap() {
+  try {
+    var branches = getBranches_().map(function (b) { return b.name; });
+    return { ok: true, branches: branches, statuses: BATTERY_STATUSES, today: todayIso_() };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** เพิ่ม/แก้ไขรายการแบต — ต้องมี key ของแอดมิน */
+function apiSaveBattery(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+    return { ok: true, battery: saveBattery_(payload) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** เปลี่ยนสถานะรายการเดียว — ต้องมี key ของแอดมิน */
+function apiUpdateBatteryStatus(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+
+    var id = String(payload.batteryId || '').trim();
+    var status = String(payload.status || '').trim();
+    if (!id) throw new Error('ไม่ได้ระบุรายการ');
+    if (BATTERY_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
+
+    var sh = getSheet_(SHEETS.BATTERIES);
+    var rows = readBatteries_();
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].batteryId === id) {
+        sh.getRange(rows[i]._row, colIndex_('Batteries', 'status')).setValue(status);
+        sh.getRange(rows[i]._row, colIndex_('Batteries', 'updatedAt')).setValue(nowStamp_());
+        sh.getRange(rows[i]._row, colIndex_('Batteries', 'updatedBy'))
+          .setValue(String(payload.updatedBy || '').trim());
+        return { ok: true, batteryId: id, status: status };
+      }
+    }
+    throw new Error('ไม่พบรายการ ' + id);
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+function saveBattery_(p) {
+  var branch = String(p.branch || '').trim();
+  if (!branch) throw new Error('ยังไม่ได้เลือกสาขา');
+
+  var status = String(p.status || '').trim() || BATTERY_STATUSES[0];
+  if (BATTERY_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
+
+  var receivedDate = String(p.receivedDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) receivedDate = todayIso_();
+
+  var branchInfo = findBranch_(branch);
+  var row = {
+    receivedDate: receivedDate,
+    branch: branch,
+    zone: branchInfo ? branchInfo.zone : '',
+    serial: String(p.serial || '').trim(),
+    model: String(p.model || '').trim(),
+    qty: p.qty === '' || p.qty == null ? 1 : Number(p.qty),
+    status: status,
+    note: String(p.note || '').trim(),
+    updatedAt: nowStamp_(),
+    updatedBy: String(p.updatedBy || '').trim()
+  };
+
+  var originalId = String(p.batteryId || '').trim();
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่');
+
+  var id;
+  try {
+    var sh = getSheet_(SHEETS.BATTERIES);
+    var target = null;
+    if (originalId) {
+      var rows = readBatteries_();
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].batteryId === originalId) { target = rows[i]; break; }
+      }
+      if (!target) throw new Error('ไม่พบรายการ ' + originalId);
+    }
+
+    id = target ? target.batteryId : nextBatteryId_(sh);
+    var values = HEADERS.Batteries.map(function (h) {
+      return h === 'batteryId' ? id : row[h];
+    });
+
+    if (target) sh.getRange(target._row, 1, 1, HEADERS.Batteries.length).setValues([values]);
+    else sh.getRange(sh.getLastRow() + 1, 1, 1, HEADERS.Batteries.length).setValues([values]);
+  } finally {
+    lock.releaseLock();
+  }
+
+  row.batteryId = id;
+  return row;
+}
+
+/** เลขที่รายการแบต รูปแบบ BT-YYYYMMDD-NNN (เรียกใต้ lock เท่านั้น) */
+function nextBatteryId_(sh) {
+  var prefix = 'BT-' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd') + '-';
+  var last = sh.getLastRow();
+  var max = 0;
+  if (last > 1) {
+    var ids = sh.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      var v = String(ids[i][0]);
+      if (v.indexOf(prefix) === 0) {
+        var n = parseInt(v.substring(prefix.length), 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+    }
+  }
+  return prefix + ('00' + (max + 1)).slice(-3);
+}
+
+/* =======================================================================
+ * ส่วนที่ 6 — ติดตั้งและดูลิงก์
+ * ===================================================================== */
+
+/** รายชื่อสาขาจริง 166 สาขา ใส่ให้ตอนสร้างชีตครั้งแรก แก้ทีหลังได้ในชีต */
+var SAMPLE_BRANCHES = [
+    ['0001', 'สนญ.-ยามาฮ่า', '01:เยาว์'],
+    ['0043', 'บ้านนางใย', '01:เยาว์'],
+    ['0108', 'สนญ.-ฮอนด้า', '01:เยาว์'],
+    ['0144', 'สนญ.ซูซูกิ', '01:เยาว์'],
+    ['0048', 'หนองแปน', '02:ป๋อง'],
+    ['0049', 'ร่องคำ', '02:ป๋อง'],
+    ['0109', 'สนญ.-มดแดง', '02:ป๋อง'],
+    ['0009', 'วาปี-ฮอนด้า', '03:แต๋ว'],
+    ['0046', 'วาปี-ยามาฮ่า', '03:แต๋ว'],
+    ['0802', 'อีฮงน้อยวาปีปทุม', '03:แต๋ว'],
+    ['0011', 'บรบือ', '04:เปา'],
+    ['0013', 'นาดูน', '04:เปา'],
+    ['0005', 'โกสุมฯ-ฮอนด้า', '05:เก่ง'],
+    ['0096', 'โกสุมฯ-มดแดง', '05:เก่ง'],
+    ['0097', 'บ้านแพง', '05:เก่ง'],
+    ['0083', 'กุดรัง', '06:เมธี'],
+    ['0146', 'บ้านไผ่', '06:เมธี'],
+    ['0152', 'โนนศิลา', '06:เมธี'],
+    ['0029', 'ซับใหญ่', '07:แกะ'],
+    ['0125', 'ภักดีชุมพล', '07:แกะ'],
+    ['0133', 'เทพสถิตย์', '07:แกะ'],
+    ['0016', 'แกดำ', '08:เจี๊ยบ'],
+    ['0505', 'ย่อยแวงน่าง', '08:เจี๊ยบ'],
+    ['0801', 'อีฮงน้อยมหาสารคาม', '08:เจี๊ยบ'],
+    ['0006', 'เชียงยืน-มดแดง', '09:ถิน'],
+    ['0070', 'เชียงยืน-ยามาฮ่า', '09:ถิน'],
+    ['0094', 'ชื่นชม', '09:ถิน'],
+    ['0031', 'ท่าคันโท', '10:บ๋อม'],
+    ['0033', 'หนองกุงศรี', '10:บ๋อม'],
+    ['0039', 'ห้วยเม็ก', '10:บ๋อม'],
+    ['0045', 'นามน', '11:เปียว'],
+    ['0047', 'ดอนจาน', '11:เปียว'],
+    ['0067', 'สมเด็จ', '11:เปียว'],
+    ['0136', 'กาฬสินธุ์-เวสป้า', '11:เปียว'],
+    ['0032', 'สหัสขันธ์', '12:นิก'],
+    ['0036', 'คำม่วง', '12:นิก'],
+    ['0514', 'บ้านโพน', '12:นิก'],
+    ['0024', 'โนนหัน', '13:พงษ์'],
+    ['0071', 'ภูเขียว', '13:พงษ์'],
+    ['0072', 'เกษตรสมบูรณ์', '13:พงษ์'],
+    ['0077', 'ชุมแพ', '13:พงษ์'],
+    ['0124', 'คอนสาร', '13:พงษ์'],
+    ['0037', 'ภูกระดึง', '14:Kเอี้ยง'],
+    ['0145', 'ภูผาม่าน', '14:Kเอี้ยง'],
+    ['0149', 'น้ำหนาว', '14:Kเอี้ยง'],
+    ['0088', 'โคกโพธิ์ชัย', '15:ดี'],
+    ['0131', 'มัญจาคีรี', '15:ดี'],
+    ['0135', 'แก้งคร้อ', '15:ดี'],
+    ['0100', 'วังสะพุง', '16:สมรักษ์'],
+    ['0101', 'เมืองเลย', '16:สมรักษ์'],
+    ['0103', 'เอราวัณ', '16:สมรักษ์'],
+    ['0054', 'บุรีรัมย์', '17:หนึ่ง'],
+    ['0066', 'ลำปลายมาศ', '17:หนึ่ง'],
+    ['0092', 'ชำนิ', '17:หนึ่ง'],
+    ['0025', 'โนนแดง', '18:แก้ว'],
+    ['0074', 'ชุมพวง', '18:แก้ว'],
+    ['0085', 'ลำทะเมนชัย', '18:แก้ว'],
+    ['0020', 'สตึก', '19:เปิ้ล'],
+    ['0080', 'แคนดง', '19:เปิ้ล'],
+    ['0148', 'คูเมือง', '19:เปิ้ล'],
+    ['0075', 'นางรอง', '20:ธนิต'],
+    ['0153', 'ละหานทราย', '20:ธนิต'],
+    ['0164', 'โนนสุวรรณ', '20:ธนิต'],
+    ['0053', 'ท่าตูม', '21:เอก'],
+    ['0114', 'รัตนบุรี', '21:เอก'],
+    ['0150', 'ชุมพลบุรี', '21:เอก'],
+    ['0050', 'เฉลิมพระเกียรติ(ท่าช้าง)', '22:โทนี่'],
+    ['0065', 'จักราช', '22:โทนี่'],
+    ['0126', 'โนนสูง', '22:โทนี่'],
+    ['0017', 'เมืองเก่าขอนแก่น', '23:วุฒิ(M)'],
+    ['0058', 'ท่าพระ', '23:วุฒิ(M)'],
+    ['0064', 'พระยืน', '23:วุฒิ(M)'],
+    ['0041', 'ขามสะแกแสง', '24:หน่อย'],
+    ['0090', 'พิมาย', '24:หน่อย'],
+    ['0139', 'พระทองคำ', '24:หน่อย'],
+    ['0044', 'เนินสง่า', '25:แต้ว'],
+    ['0117', 'จัตุรัส', '25:แต้ว'],
+    ['0162', 'บำเหน็จณรงค์', '25:แต้ว'],
+    ['0111', 'ภูเรือ', '26:บุ๋มบิ๋ม'],
+    ['0127', 'ด่านซ้าย', '26:บุ๋มบิ๋ม'],
+    ['0128', 'ท่าลี่', '26:บุ๋มบิ๋ม'],
+    ['0115', 'สำโรงทาบ', '27:ดรีม'],
+    ['0118', 'สนม', '27:ดรีม'],
+    ['0167', 'ศีขรภูมิ', '27:ดรีม'],
+    ['0112', 'ปากชม', '28:เบิร์ด'],
+    ['0119', 'บ้านธาตุ', '28:เบิร์ด'],
+    ['0122', 'เชียงคาน', '28:เบิร์ด'],
+    ['0068', 'สามเหลี่ยมขอนแก่น', '29:พวง'],
+    ['0155', 'ดอนโมง', '29:พวง'],
+    ['0165', 'พระธาตุขามแก่น', '29:พวง'],
+    ['0504', 'สาขาหน้าร.8', '29:พวง'],
+    ['0076', 'สีคิ้ว', '30:ป้อ'],
+    ['0142', 'สูงเนิน', '30:ป้อ'],
+    ['0163', 'ปักธงชัย', '30:ป้อ'],
+    ['0026', 'จอมพระ', '31:เท่ห์'],
+    ['0079', 'กระสัง', '31:เท่ห์'],
+    ['0089', 'ปราสาท', '31:เท่ห์'],
+    ['0154', 'ลำดวน', '31:เท่ห์'],
+    ['0014', 'นาเชือก', '32:วุฒิ'],
+    ['0015', 'ยางสีสุราช', '32:วุฒิ'],
+    ['0056', 'หนองสองห้อง', '32:วุฒิ'],
+    ['0055', 'ชัยภูมิ', '33:น้อย'],
+    ['0073', 'หนองบัวแดง', '33:น้อย'],
+    ['0120', 'ประโคนชัย', '34:ต๋อง'],
+    ['0158', 'บ้านกรวด', '34:ต๋อง'],
+    ['0171', 'พลับพลาชัย', '34:ต๋อง'],
+    ['0051', 'หนองบัวระเหว', '35:ฝน'],
+    ['0099', 'บ้านค่าย', '35:ฝน'],
+    ['0513', 'บ้านเขว้า', '35:ฝน'],
+    ['0062', 'แก้งสนามนาง', '36:ณัฐ'],
+    ['0063', 'ชนบท', '36:ณัฐ'],
+    ['0138', 'แวงน้อย', '36:ณัฐ'],
+    ['0141', 'คอนสวรรค์', '36:ณัฐ'],
+    ['0091', 'ผาขาว', '37:แป้ง'],
+    ['0140', 'หนองหิน', '37:แป้ง'],
+    ['0151', 'ภูหลวง', '37:แป้ง'],
+    ['0038', 'คำใหญ่', '38:บ๋อม(ญ)'],
+    ['0061', 'น้ำพอง', '38:บ๋อม(ญ)'],
+    ['0084', 'กระนวน', '38:บ๋อม(ญ)'],
+    ['0102', 'ซำสูง-มดแดง', '38:บ๋อม(ญ)'],
+    ['0022', 'ครบุรี', '39:ปุ้ย'],
+    ['0052', 'เสิงสาง', '39:ปุ้ย'],
+    ['0121', 'ปะคำ', '39:ปุ้ย'],
+    ['0007', 'ยางตลาด', '40:โฟร์'],
+    ['0008', 'กาฬสินธุ์1', '40:โฟร์'],
+    ['0035', 'กันทรวิชัย', '40:โฟร์'],
+    ['0086', 'สีชมพู', '41:เบิร์ด'],
+    ['0087', 'ศรีบุญเรือง', '41:เบิร์ด'],
+    ['0095', 'ภูเวียง', '41:เบิร์ด'],
+    ['0168', 'กุดดินจี่', '41:เบิร์ด'],
+    ['0027', 'สีดา', '42:วิญญู'],
+    ['0093', 'นาโพธิ์', '42:วิญญู'],
+    ['0098', 'ประทาย', '42:วิญญู'],
+    ['0137', 'พุทไธสง', '42:วิญญู'],
+    ['0040', 'วังสามหมอ', '43:ต้อ'],
+    ['0143', 'กุมภวาปี', '43:ต้อ'],
+    ['0160', 'เขาสวนกวาง', '43:ต้อ'],
+    ['0509', 'ศรีธาตุ', '43:ต้อ'],
+    ['0159', 'บัวเชด', '44:ยุทธ'],
+    ['0161', 'สังขะ', '44:ยุทธ'],
+    ['0170', 'ศรีณรงค์', '44:ยุทธ'],
+    ['0012', 'พยัคฆภูมิพิสัย', '45:บี'],
+    ['0042', 'ปทุมรัตต์', '45:บี'],
+    ['0803', 'อีฮงน้อยพยัคฆภูมิพิสัย', '45:บี'],
+    ['0110', 'นากลาง', '46:บอย'],
+    ['0129', 'นาด้วง', '46:บอย'],
+    ['0157', 'นาวัง', '46:บอย'],
+    ['0107', 'หนองบัวลำภู', '47:เอ๋'],
+    ['0156', 'อุบลรัตน์', '47:เอ๋'],
+    ['0169', 'โนนสัง', '47:เอ๋'],
+    ['0123', 'หนองเรือ', '48:บ๊อบบี้'],
+    ['0147', 'หนองแก', '48:บ๊อบบี้'],
+    ['0166', 'บ้านแท่น', '48:บ๊อบบี้'],
+    ['0057', 'หัวทะเล', '49:ป้อ'],
+    ['0511', 'นิคมสุรนารี', '49:ป้อ'],
+    ['0010', 'ร้อยเอ็ด1', '50:อั๋น'],
+    ['0023', 'ร้อยเอ็ด2', '50:อั๋น'],
+    ['0028', 'บ้านเหลื่อม', '51:ก้อย'],
+    ['0130', 'บัวใหญ่', '51:ก้อย'],
+    ['0132', 'คง', '51:ก้อย'],
+    ['0060', 'ห้วยแถลง', '52:อาย'],
+    ['0078', 'หนองหงส์', '52:อาย'],
+    ['0081', 'หนองกี่', '52:อาย'],
+    ['0106', 'สนญ.-เวสป้า', '55:คิงส์'],
+    ['0113', 'สนญ.-คาวาซากิ', '55:คิงส์'],
+    ['0134', 'ร้อยเอ็ด-เวสป้า', '55:คิงส์']
+];
+
+/** สร้างชีตทั้งหมดพร้อมหัวตาราง เรียกซ้ำได้ปลอดภัย (ไม่ลบข้อมูลเดิม) */
+function setupSheets() {
+  var ss = getSpreadsheet_();
+  var created = [];
+
+  Object.keys(HEADERS).forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh) {
+      sh = ss.insertSheet(name);
+      created.push(name);
+    }
+    var headers = HEADERS[name];
+    sh.getRange(1, 1, 1, headers.length).setValues([headers])
+      .setFontWeight('bold')
+      .setBackground('#eef2ff');
+    sh.setFrozenRows(1);
+    sh.autoResizeColumns(1, headers.length);
+  });
+
+  // ใส่รายชื่อสาขาให้ตอนที่ชีตยังว่าง
+  var br = ss.getSheetByName(SHEETS.BRANCHES);
+  if (br.getLastRow() < 2) {
+    var rows = SAMPLE_BRANCHES.map(function (b) { return [b[0], b[1], b[2], 'TRUE']; });
+    br.getRange(2, 1, rows.length, HEADERS.Branches.length).setValues(rows);
+  }
+  normalizeBranchCodes_();
+
+  clearBranchCache_();
+  var msg = created.length
+    ? 'สร้างชีตใหม่: ' + created.join(', ')
+    : 'ชีตครบอยู่แล้ว — อัปเดตหัวตารางให้เรียบร้อย';
+  msg += ' | สาขาในระบบ ' + Math.max(0, br.getLastRow() - 1) + ' สาขา';
+  Logger.log(msg);
+  return msg;
+}
+
+/** ล็อกคอลัมน์รหัสสาขาเป็นข้อความ 4 หลัก กัน 0 นำหน้าหาย */
+function normalizeBranchCodes_() {
+  var sh = getSpreadsheet_().getSheetByName(SHEETS.BRANCHES);
+  if (!sh) return 0;
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+
+  var range = sh.getRange(2, 1, last - 1, 1);
+  range.setNumberFormat('@');
+
+  var values = range.getValues();
+  var out = [];
+  var changed = 0;
+  for (var i = 0; i < values.length; i++) {
+    var before = String(values[i][0] == null ? '' : values[i][0]).trim();
+    var after = padBranchCode_(before);
+    if (after !== before) changed++;
+    out.push([after]);
+  }
+  if (changed) range.setValues(out);
+  return changed;
+}
+
+/**
+ * ดูลิงก์ของระบบ — รันฟังก์ชันนี้แล้วดูใน "บันทึกการดำเนินการ"
+ */
+function showBatteryLinks() {
+  var url = '';
+  try {
+    url = ScriptApp.getService().getUrl() || '';
+  } catch (err) {
+    url = '';
+  }
+  if (!url) return 'ยังไม่ได้ Deploy เว็บแอป — Deploy ก่อนแล้วรันฟังก์ชันนี้อีกครั้ง';
+
+  var key = getBatteryAdminKey_();
+  var out = [
+    'ลิงก์สำหรับสาขา (ดูอย่างเดียว แก้ไขอะไรไม่ได้):',
+    url,
+    '',
+    'ลิงก์สำหรับแอดมิน (อัปเดตสถานะได้ — อย่าส่งให้สาขา):',
+    url + '?key=' + key,
+    '',
+    'ลิงก์เจาะจงสาขาเดียว เช่นสาขาคง (ส่งให้สาขานั้นดูเฉพาะของตัวเอง):',
+    url + '?branch=' + encodeURIComponent('คง')
+  ].join('\n');
+  Logger.log(out);
+  return out;
+}
+
+/** ตรวจว่าตั้งค่าครบหรือยัง */
+function checkSetup() {
+  var lines = [];
+  Object.keys(HEADERS).forEach(function (name) {
+    var sh = getSpreadsheet_().getSheetByName(name);
+    lines.push((sh ? '✅' : '❌') + ' ชีต ' + name +
+      (sh ? ' (' + Math.max(0, sh.getLastRow() - 1) + ' แถว)' : ''));
+  });
+  lines.push('🔑 กุญแจแอดมิน: ' + getBatteryAdminKey_());
+  var out = lines.join('\n');
+  Logger.log(out);
+  return out;
+}
+
+/** เมนูลัดบนชีต */
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('ระบบแบตเตอรี่')
+    .addItem('ติดตั้ง/ซ่อมโครงสร้างชีต', 'setupSheets')
+    .addItem('ดูลิงก์สำหรับแจก', 'showBatteryLinksDialog')
+    .addItem('ตรวจการตั้งค่า', 'checkSetupDialog')
+    .addToUi();
+}
+
+function checkSetupDialog() { SpreadsheetApp.getUi().alert(checkSetup()); }
+function showBatteryLinksDialog() { SpreadsheetApp.getUi().alert(showBatteryLinks()); }

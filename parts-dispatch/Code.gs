@@ -12,18 +12,8 @@ var SHEETS = {
   DROP_POINTS: 'DropPoints',
   PARTS: 'Parts',
   SHIPMENTS: 'Shipments',
-  ITEMS: 'Items',
-  BATTERIES: 'Batteries'
+  ITEMS: 'Items'
 };
-
-/** ขั้นตอนการกระตุ้นแบตเตอรี่ เรียงตามลำดับงานจริง */
-var BATTERY_STATUSES = [
-  'รอต่อคิวกระตุ้น',
-  'กำลังกระตุ้น',
-  'กระตุ้นเสร็จแล้ว',
-  'รอจัดส่ง',
-  'กำลังจัดส่ง'
-];
 
 var HEADERS = {
   Branches: ['branchCode', 'branchName', 'zone', 'defaultCarrier', 'defaultDropPoint', 'active'],
@@ -35,11 +25,7 @@ var HEADERS = {
     'isTransfer', 'carrier', 'trackingNo', 'boxCount', 'sender', 'receiverName', 'note',
     'itemsSummary', 'slipFileId', 'clientToken'
   ],
-  Items: ['shipmentId', 'lineNo', 'partCode', 'partName', 'qty', 'unit', 'note'],
-  Batteries: [
-    'batteryId', 'receivedDate', 'branch', 'zone', 'serial', 'model', 'qty',
-    'status', 'note', 'updatedAt', 'updatedBy'
-  ]
+  Items: ['shipmentId', 'lineNo', 'partCode', 'partName', 'qty', 'unit', 'note']
 };
 
 var TZ = 'Asia/Bangkok';
@@ -134,18 +120,6 @@ function doGet(e) {
   // เสิร์ฟผ่านเว็บแอปแทนการเปิดลิงก์ Drive ตรง ๆ จะได้ไม่ต้องแชร์ไฟล์ให้เป็นสาธารณะ
   var imgId = e && e.parameter ? String(e.parameter.img || '').trim() : '';
   if (imgId) return serveSlipImage_(imgId);
-
-  // หน้าติดตามสถานะการกระตุ้นแบตเตอรี่
-  if (e && e.parameter && e.parameter.page === 'battery') {
-    var tpl = HtmlService.createTemplateFromFile('Battery');
-    var key = String(e.parameter.key || '');
-    tpl.isAdmin = (key === getBatteryAdminKey_());
-    tpl.adminKey = tpl.isAdmin ? key : '';
-    tpl.lockBranch = String(e.parameter.branch || '');
-    return tpl.evaluate()
-      .setTitle('สถานะการกระตุ้นแบตเตอรี่')
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
-  }
 
   return HtmlService.createHtmlOutputFromFile('App')
     .setTitle('บันทึกส่งอะไหล่')
@@ -907,228 +881,6 @@ function groupItems_() {
 }
 
 /* =======================================================================
- * ส่วนที่ 4.5 — ระบบติดตามสถานะการกระตุ้นแบตเตอรี่
- *
- * มี 2 โหมดในหน้าเดียว:
- *   - สาขา/ลูกค้า: เปิดลิงก์ธรรมดา ดูสถานะได้อย่างเดียว
- *   - แอดมิน: ลิงก์ที่มี key ต่อท้าย ถึงจะแก้ข้อมูลได้
- * การตรวจ key ทำที่ฝั่งเซิร์ฟเวอร์ทุกครั้งที่เขียนข้อมูล เพราะการซ่อนปุ่มบนหน้าเว็บ
- * อย่างเดียวกันไม่ได้ — ใครก็เรียกฟังก์ชันจากคอนโซลเบราว์เซอร์ได้
- * ===================================================================== */
-
-/** กุญแจแอดมิน สร้างครั้งแรกอัตโนมัติแล้วเก็บไว้ใน Script Properties */
-function getBatteryAdminKey_() {
-  var key = prop_('BATTERY_ADMIN_KEY');
-  if (!key) {
-    key = Utilities.getUuid().replace(/-/g, '').substring(0, 16);
-    props_().setProperty('BATTERY_ADMIN_KEY', key);
-  }
-  return key;
-}
-
-function requireBatteryAdmin_(key) {
-  if (String(key || '') !== getBatteryAdminKey_()) {
-    throw new Error('ลิงก์นี้ดูได้อย่างเดียว ไม่มีสิทธิ์แก้ข้อมูล');
-  }
-}
-
-/** อ่านรายการแบตทั้งหมด (แนบเลขแถวไว้ใช้ตอนแก้ไข) */
-function readBatteries_() {
-  var sh = getSheet_(SHEETS.BATTERIES);
-  var last = sh.getLastRow();
-  if (last < 2) return [];
-  var values = sh.getRange(2, 1, last - 1, HEADERS.Batteries.length).getValues();
-  var out = [];
-  for (var i = 0; i < values.length; i++) {
-    var r = values[i];
-    var id = String(r[0] == null ? '' : r[0]).trim();
-    if (!id) continue;
-    out.push({
-      batteryId: id,
-      receivedDate: String(r[1] == null ? '' : r[1]).trim(),
-      branch: String(r[2] == null ? '' : r[2]).trim(),
-      zone: String(r[3] == null ? '' : r[3]).trim(),
-      serial: String(r[4] == null ? '' : r[4]).trim(),
-      model: String(r[5] == null ? '' : r[5]).trim(),
-      qty: r[6] === '' || r[6] == null ? '' : String(r[6]),
-      status: String(r[7] == null ? '' : r[7]).trim(),
-      note: String(r[8] == null ? '' : r[8]).trim(),
-      updatedAt: String(r[9] == null ? '' : r[9]).trim(),
-      updatedBy: String(r[10] == null ? '' : r[10]).trim(),
-      _row: i + 2
-    });
-  }
-  return out;
-}
-
-function toBatteryDto_(b) {
-  if (!b) return null;
-  return {
-    batteryId: b.batteryId, receivedDate: b.receivedDate, branch: b.branch, zone: b.zone,
-    serial: b.serial, model: b.model, qty: b.qty, status: b.status, note: b.note,
-    updatedAt: b.updatedAt, updatedBy: b.updatedBy
-  };
-}
-
-/** ค้นรายการแบต — เปิดให้ทุกคนเรียกได้ เพราะเป็นข้อมูลที่ให้สาขาติดตาม */
-function apiListBatteries(payload) {
-  try {
-    payload = payload || {};
-    var q = String(payload.q || '').trim().toLowerCase();
-    var branch = String(payload.branch || '').trim();
-    var status = String(payload.status || '').trim();
-
-    var rows = readBatteries_();
-    var results = [];
-    for (var i = rows.length - 1; i >= 0 && results.length < 200; i--) {
-      var b = rows[i];
-      if (branch && b.branch !== branch) continue;
-      if (status && b.status !== status) continue;
-      if (q) {
-        var hay = [b.batteryId, b.branch, b.zone, b.serial, b.model, b.status, b.note]
-          .join(' ').toLowerCase();
-        if (hay.indexOf(q) < 0) continue;
-      }
-      results.push(toBatteryDto_(b));
-    }
-
-    // สรุปจำนวนตามสถานะ ไว้โชว์เป็นภาพรวมด้านบน
-    var counts = {};
-    BATTERY_STATUSES.forEach(function (s) { counts[s] = 0; });
-    rows.forEach(function (b) {
-      if (branch && b.branch !== branch) return;
-      if (counts[b.status] !== undefined) counts[b.status]++;
-    });
-
-    return { ok: true, results: results, counts: counts, statuses: BATTERY_STATUSES };
-  } catch (err) {
-    return { ok: false, error: String(err.message || err) };
-  }
-}
-
-/** ข้อมูลตั้งต้นของหน้าติดตามแบต (รายชื่อสาขาไว้ทำตัวกรอง) */
-function apiBatteryBootstrap() {
-  try {
-    var branches = getMasters_().branches.map(function (b) { return b.name; });
-    return { ok: true, branches: branches, statuses: BATTERY_STATUSES, today: todayIso_() };
-  } catch (err) {
-    return { ok: false, error: String(err.message || err) };
-  }
-}
-
-/** เพิ่ม/แก้ไขรายการแบต — ต้องมี key ของแอดมิน */
-function apiSaveBattery(payload) {
-  try {
-    payload = payload || {};
-    requireBatteryAdmin_(payload.key);
-    return { ok: true, battery: saveBattery_(payload) };
-  } catch (err) {
-    return { ok: false, error: String(err.message || err) };
-  }
-}
-
-/** เปลี่ยนสถานะรายการเดียว — ต้องมี key ของแอดมิน */
-function apiUpdateBatteryStatus(payload) {
-  try {
-    payload = payload || {};
-    requireBatteryAdmin_(payload.key);
-
-    var id = String(payload.batteryId || '').trim();
-    var status = String(payload.status || '').trim();
-    if (!id) throw new Error('ไม่ได้ระบุรายการ');
-    if (BATTERY_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
-
-    var sh = getSheet_(SHEETS.BATTERIES);
-    var rows = readBatteries_();
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].batteryId === id) {
-        sh.getRange(rows[i]._row, colIndex_('Batteries', 'status')).setValue(status);
-        sh.getRange(rows[i]._row, colIndex_('Batteries', 'updatedAt')).setValue(nowStamp_());
-        sh.getRange(rows[i]._row, colIndex_('Batteries', 'updatedBy'))
-          .setValue(String(payload.updatedBy || '').trim());
-        return { ok: true, batteryId: id, status: status };
-      }
-    }
-    throw new Error('ไม่พบรายการ ' + id);
-  } catch (err) {
-    return { ok: false, error: String(err.message || err) };
-  }
-}
-
-function saveBattery_(p) {
-  var branch = String(p.branch || '').trim();
-  if (!branch) throw new Error('ยังไม่ได้เลือกสาขา');
-
-  var status = String(p.status || '').trim() || BATTERY_STATUSES[0];
-  if (BATTERY_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
-
-  var receivedDate = String(p.receivedDate || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) receivedDate = todayIso_();
-
-  var branchInfo = findBranch_(branch);
-  var row = {
-    receivedDate: receivedDate,
-    branch: branch,
-    zone: branchInfo ? branchInfo.zone : '',
-    serial: String(p.serial || '').trim(),
-    model: String(p.model || '').trim(),
-    qty: p.qty === '' || p.qty == null ? 1 : Number(p.qty),
-    status: status,
-    note: String(p.note || '').trim(),
-    updatedAt: nowStamp_(),
-    updatedBy: String(p.updatedBy || '').trim()
-  };
-
-  var originalId = String(p.batteryId || '').trim();
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่');
-
-  var id;
-  try {
-    var sh = getSheet_(SHEETS.BATTERIES);
-    var target = null;
-    if (originalId) {
-      var rows = readBatteries_();
-      for (var i = 0; i < rows.length; i++) {
-        if (rows[i].batteryId === originalId) { target = rows[i]; break; }
-      }
-      if (!target) throw new Error('ไม่พบรายการ ' + originalId);
-    }
-
-    id = target ? target.batteryId : nextBatteryId_(sh);
-    var values = HEADERS.Batteries.map(function (h) {
-      return h === 'batteryId' ? id : row[h];
-    });
-
-    if (target) sh.getRange(target._row, 1, 1, HEADERS.Batteries.length).setValues([values]);
-    else sh.getRange(sh.getLastRow() + 1, 1, 1, HEADERS.Batteries.length).setValues([values]);
-  } finally {
-    lock.releaseLock();
-  }
-
-  row.batteryId = id;
-  return row;
-}
-
-/** เลขที่รายการแบต รูปแบบ BT-YYYYMMDD-NNN (เรียกใต้ lock เท่านั้น) */
-function nextBatteryId_(sh) {
-  var prefix = 'BT-' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd') + '-';
-  var last = sh.getLastRow();
-  var max = 0;
-  if (last > 1) {
-    var ids = sh.getRange(2, 1, last - 1, 1).getValues();
-    for (var i = 0; i < ids.length; i++) {
-      var v = String(ids[i][0]);
-      if (v.indexOf(prefix) === 0) {
-        var n = parseInt(v.substring(prefix.length), 10);
-        if (!isNaN(n) && n > max) max = n;
-      }
-    }
-  }
-  return prefix + ('00' + (max + 1)).slice(-3);
-}
-
-/* =======================================================================
  * ส่วนที่ 5 — อ่านข้อมูลจากรูปใบโอนย้ายสินค้า (OCR) และเก็บรูปเป็นหลักฐาน
  * ===================================================================== */
 
@@ -1633,34 +1385,6 @@ function showWebAppUrl() {
   var url = ScriptApp.getService().getUrl();
   Logger.log(url);
   return url;
-}
-
-/**
- * ดูลิงก์ของระบบติดตามแบตเตอรี่
- * รันฟังก์ชันนี้แล้วดูใน "บันทึกการดำเนินการ" จะได้ลิงก์ 2 อัน
- */
-function showBatteryLinks() {
-  var url = '';
-  try {
-    url = ScriptApp.getService().getUrl() || '';
-  } catch (err) {
-    url = '';
-  }
-  if (!url) return 'ยังไม่ได้ Deploy เว็บแอป — Deploy ก่อนแล้วรันฟังก์ชันนี้อีกครั้ง';
-
-  var key = getBatteryAdminKey_();
-  var out = [
-    'ลิงก์สำหรับสาขา (ดูอย่างเดียว แก้ไขอะไรไม่ได้):',
-    url + '?page=battery',
-    '',
-    'ลิงก์สำหรับแอดมิน (อัปเดตสถานะได้ — อย่าส่งให้สาขา):',
-    url + '?page=battery&key=' + key,
-    '',
-    'ลิงก์เจาะจงสาขาเดียว เช่นสาขาคง (ส่งให้สาขานั้นดูเฉพาะของตัวเอง):',
-    url + '?page=battery&branch=' + encodeURIComponent('คง')
-  ].join('\n');
-  Logger.log(out);
-  return out;
 }
 
 /** ตรวจว่าตั้งค่าครบหรือยัง */
