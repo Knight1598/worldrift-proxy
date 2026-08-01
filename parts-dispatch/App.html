@@ -274,6 +274,19 @@
     <form id="form" autocomplete="off">
 
       <div class="card">
+        <h2>แนบรูปใบโอนย้าย (ถ้ามี)</h2>
+        <div class="muted" style="margin-bottom:10px;">
+          ถ่ายรูปหรือแนบภาพใบโอนย้าย ระบบจะอ่านเลขที่ใบ สาขาปลายทาง และรายการอะไหล่มาเติมให้
+          แล้วเก็บรูปไว้เป็นหลักฐานดูย้อนหลังได้
+        </div>
+        <input type="file" id="slipFile" accept="image/*" capture="environment">
+        <button type="button" class="primary" id="slipReadBtn">อ่านข้อมูลจากรูป</button>
+        <div id="slipMsg" class="banner ok hidden" style="margin-top:12px;"></div>
+        <img id="slipPreview" class="hidden"
+             style="max-width:100%;border-radius:10px;margin-top:12px;border:1px solid var(--line);">
+      </div>
+
+      <div class="card">
         <h2>เอกสาร</h2>
 
         <label for="prNo">เลขที่ใบ PR *</label>
@@ -449,6 +462,7 @@
   var partsLoaded = false;
   var booted = false;
   var comboReplacedBy = null;
+  var APP_URL = '';   // URL ของเว็บแอป ใช้ทำลิงก์เปิดรูปหลักฐาน (หน้าอยู่ในไอเฟรมจึงอ่านเองไม่ได้)
   var editingCode = '';   // รหัสเดิมตอนกำลังแก้ไข ถ้าว่าง = กำลังเพิ่มใหม่
 
   function $(id) { return document.getElementById(id); }
@@ -737,6 +751,7 @@
       if (!res || !res.ok) throw new Error((res && res.error) || 'โหลดข้อมูลไม่สำเร็จ');
 
       MASTERS = res;
+      APP_URL = res.appUrl || '';
       booted = true;
       $('loading').classList.add('hidden');
       $('viewForm').classList.remove('hidden');
@@ -997,6 +1012,7 @@
       receiverName: $('receiverName').value.trim(),
       note: $('note').value.trim(),
       sender: $('sender').value.trim(),
+      slipFileId: slipFileId,
       items: collectItems()
     };
 
@@ -1076,6 +1092,10 @@
     $('note').value = '';
     $('items').innerHTML = '';
     addItemRow();
+    slipFileId = '';
+    $('slipFile').value = '';
+    $('slipMsg').classList.add('hidden');
+    $('slipPreview').classList.add('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
     $('prNo').focus();
   });
@@ -1172,6 +1192,20 @@
         el.appendChild(note);
       }
 
+      if (s.slipFileId) {
+        var slip = document.createElement('div');
+        slip.className = 'meta';
+        slip.style.marginTop = '8px';
+        var link = document.createElement('a');
+        link.href = APP_URL + '?img=' + encodeURIComponent(s.slipFileId);
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.style.color = 'var(--primary)';
+        link.textContent = '📎 ดูรูปใบโอนย้าย';
+        slip.appendChild(link);
+        el.appendChild(slip);
+      }
+
       box.appendChild(el);
     });
   }
@@ -1179,6 +1213,128 @@
   function thaiDate(iso) {
     var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? m[3] + '/' + m[2] + '/' + m[1] : iso;
+  }
+
+  /* ---------- แนบรูปใบโอนย้าย แล้วอ่านข้อมูลมาเติมให้ ---------- */
+
+  var slipFileId = '';
+
+  $('slipReadBtn').addEventListener('click', readSlip);
+
+  $('slipFile').addEventListener('change', function () {
+    slipFileId = '';
+    $('slipMsg').classList.add('hidden');
+    $('slipPreview').classList.add('hidden');
+  });
+
+  /**
+   * ย่อรูปก่อนส่ง เพื่อให้อัปโหลดเร็วและ OCR ไม่ต้องรับไฟล์ใหญ่เกินจำเป็น
+   * ย่อด้านยาวสุดเหลือ 1600px ซึ่งยังอ่านตัวหนังสือในใบได้สบาย
+   */
+  function shrinkImage(file, done) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1600;
+        var scale = Math.min(1, max / Math.max(img.width, img.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        done({ dataUrl: dataUrl, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+      };
+      img.onerror = function () { done(null); };
+      img.src = reader.result;
+    };
+    reader.onerror = function () { done(null); };
+    reader.readAsDataURL(file);
+  }
+
+  function setSlipMsg(text, isError) {
+    var box = $('slipMsg');
+    box.className = 'banner ' + (isError ? 'err' : 'ok');
+    box.style.marginTop = '12px';
+    box.style.whiteSpace = 'pre-line';
+    box.textContent = text;
+    box.classList.remove('hidden');
+  }
+
+  function readSlip() {
+    var file = $('slipFile').files[0];
+    if (!file) return setSlipMsg('ยังไม่ได้เลือกรูป', true);
+
+    $('slipReadBtn').disabled = true;
+    $('slipReadBtn').textContent = 'กำลังอ่านรูป…';
+    setSlipMsg('กำลังย่อรูปและส่งไปอ่าน อาจใช้เวลาสัก 10-30 วินาที');
+
+    shrinkImage(file, function (img) {
+      if (!img) {
+        $('slipReadBtn').disabled = false;
+        $('slipReadBtn').textContent = 'อ่านข้อมูลจากรูป';
+        return setSlipMsg('เปิดไฟล์รูปไม่ได้ ลองเลือกรูปใหม่', true);
+      }
+
+      $('slipPreview').src = img.dataUrl;
+      $('slipPreview').classList.remove('hidden');
+
+      call('apiReadSlip', { base64: img.base64, mimeType: img.mimeType }).then(function (res) {
+        $('slipReadBtn').disabled = false;
+        $('slipReadBtn').textContent = 'อ่านข้อมูลจากรูป';
+        if (!res || !res.ok) return setSlipMsg('อ่านรูปไม่สำเร็จ: ' + ((res && res.error) || ''), true);
+        applySlip(res);
+      }).catch(function (err) {
+        $('slipReadBtn').disabled = false;
+        $('slipReadBtn').textContent = 'อ่านข้อมูลจากรูป';
+        setSlipMsg('อ่านรูปไม่สำเร็จ: ' + (err.message || err), true);
+      });
+    });
+  }
+
+  /** เอาข้อมูลที่อ่านได้มาเติมในฟอร์ม แล้วสรุปให้ผู้ใช้ตรวจ */
+  function applySlip(res) {
+    slipFileId = res.slipFileId || '';
+    var notes = [];
+
+    if (res.prNo) { $('prNo').value = res.prNo; notes.push('เลขที่ใบ: ' + res.prNo); }
+    else notes.push('⚠️ อ่านเลขที่ใบไม่ออก กรอกเอง');
+
+    if (res.shipDate) $('shipDate').value = res.shipDate;
+
+    if (res.destMatched) {
+      comboZone.setValue(res.zone);
+      applyZoneScope(res.zone);
+      comboBranch.setValue(res.destBranch);
+      $('warnBranch').textContent = 'สาขา' + res.destBranch;
+      notes.push('ปลายทาง: ' + res.destBranch + ' (เขต' + res.zone + ')');
+    } else if (res.destCode) {
+      notes.push('⚠️ ไม่พบสาขารหัส ' + res.destCode +
+        (res.destNameFromSlip ? ' (' + res.destNameFromSlip + ')' : '') + ' ในตาราง เลือกเอง');
+    } else {
+      notes.push('⚠️ อ่านสาขาปลายทางไม่ออก เลือกเอง');
+    }
+
+    if (res.items && res.items.length) {
+      $('items').innerHTML = '';
+      res.items.forEach(function (it) {
+        addItemRow();
+        var wrap = $('items').lastChild;
+        wrap._codeCombo.setFreeValue(it.partCode);
+        wrap.querySelector('.name').value = it.partName || '';
+        wrap.querySelector('.qty').value = it.qty || 1;
+      });
+      var unmatched = res.items.filter(function (i) { return !i.matched; });
+      notes.push('รายการอะไหล่: ' + res.items.length + ' รายการ' +
+        (unmatched.length ? ' (⚠️ ' + unmatched.length + ' รายการยังไม่มีในตารางแม่)' : ''));
+    } else {
+      notes.push('⚠️ อ่านรายการอะไหล่ไม่ออก ใส่เอง');
+    }
+
+    notes.push('📎 เก็บรูปเป็นหลักฐานแล้ว');
+    setSlipMsg('อ่านข้อมูลมาเติมให้แล้ว — กรุณาตรวจก่อนกดบันทึก\n' + notes.join('\n'),
+      notes.some(function (n) { return n.indexOf('⚠️') === 0; }));
+    $('prNo').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   /* ---------- หน้าจัดการอะไหล่ ---------- */

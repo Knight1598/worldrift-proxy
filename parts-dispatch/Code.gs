@@ -23,7 +23,7 @@ var HEADERS = {
   Shipments: [
     'shipmentId', 'createdAt', 'shipDate', 'prNo', 'destBranch', 'zone', 'dropPoint',
     'isTransfer', 'carrier', 'trackingNo', 'boxCount', 'sender', 'receiverName', 'note',
-    'itemsSummary', 'clientToken'
+    'itemsSummary', 'slipFileId', 'clientToken'
   ],
   Items: ['shipmentId', 'lineNo', 'partCode', 'partName', 'qty', 'unit', 'note']
 };
@@ -102,17 +102,47 @@ function nowStamp_() {
  * ส่วนที่ 2 — เราต์ของเว็บแอป และ API ที่หน้าเว็บเรียกใช้
  * ===================================================================== */
 
-function doGet() {
+function doGet(e) {
+  // เปิดดูรูปหลักฐาน: ?img=<fileId>
+  // เสิร์ฟผ่านเว็บแอปแทนการเปิดลิงก์ Drive ตรง ๆ จะได้ไม่ต้องแชร์ไฟล์ให้เป็นสาธารณะ
+  var imgId = e && e.parameter ? String(e.parameter.img || '').trim() : '';
+  if (imgId) return serveSlipImage_(imgId);
+
   return HtmlService.createHtmlOutputFromFile('App')
     .setTitle('บันทึกส่งอะไหล่')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
+/** เว็บแอปส่งไฟล์ไบนารีตรง ๆ ไม่ได้ จึงฝังรูปเป็น data URI ในหน้า HTML แทน */
+function serveSlipImage_(fileId) {
+  try {
+    var file = DriveApp.getFileById(fileId);
+    var blob = file.getBlob();
+    var dataUri = 'data:' + blob.getContentType() + ';base64,' +
+      Utilities.base64Encode(blob.getBytes());
+    var html = '<div style="margin:0;background:#111;text-align:center">' +
+      '<img src="' + dataUri + '" style="max-width:100%;height:auto">' +
+      '</div>';
+    return HtmlService.createHtmlOutput(html)
+      .setTitle(file.getName())
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  } catch (err) {
+    return HtmlService.createHtmlOutput('<p>เปิดรูปไม่ได้: ' + String(err.message || err) + '</p>');
+  }
+}
+
 /** ข้อมูลตั้งต้นของฟอร์ม: รายชื่อเขต/สาขา/ขนส่ง/จุดฝากลง */
 function apiBootstrap() {
   var masters = getMasters_();
+  var appUrl = '';
+  try {
+    appUrl = ScriptApp.getService().getUrl() || '';
+  } catch (err) {
+    // ยังไม่ได้ deploy ก็ไม่เป็นไร แค่จะยังเปิดลิงก์รูปไม่ได้
+  }
   return {
     ok: true,
+    appUrl: appUrl,
     today: todayIso_(),
     zones: masters.zones,
     branches: masters.branches,
@@ -539,6 +569,7 @@ function validateShipment_(payload) {
     receiverName: String(p.receiverName || '').trim(),
     note: String(p.note || '').trim(),
     items: items,
+    slipFileId: String(p.slipFileId || '').trim(),
     clientToken: String(p.clientToken || '').trim()
   };
 }
@@ -560,6 +591,7 @@ function buildShipmentRow_(shipmentId, c) {
     receiverName: c.receiverName,
     note: c.note,
     itemsSummary: itemsSummary_(c.items),
+    slipFileId: c.slipFileId,
     clientToken: c.clientToken
   };
   return HEADERS.Shipments.map(function (h) { return map[h]; });
@@ -667,6 +699,7 @@ function searchShipments_(opts) {
       sender: String(s.sender || ''),
       receiverName: String(s.receiverName || ''),
       note: String(s.note || ''),
+      slipFileId: String(s.slipFileId || ''),
       items: items
     });
   }
@@ -692,7 +725,228 @@ function groupItems_() {
 }
 
 /* =======================================================================
- * ส่วนที่ 5 — ติดตั้งและตรวจสอบระบบ (รันเองจากเมนู Apps Script)
+ * ส่วนที่ 5 — อ่านข้อมูลจากรูปใบโอนย้ายสินค้า (OCR) และเก็บรูปเป็นหลักฐาน
+ * ===================================================================== */
+
+var SLIP_FOLDER_NAME = 'หลักฐานการส่งอะไหล่';
+
+/**
+ * แยกข้อมูลจากข้อความที่ OCR อ่านได้จากใบโอนย้ายสินค้า
+ * แยกเป็นฟังก์ชันล้วน ๆ (ไม่แตะ Drive/ชีต) เพื่อให้ทดสอบได้ง่าย
+ */
+function parseSlipText_(text) {
+  var raw = String(text || '');
+  var lines = raw.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l; });
+
+  var out = { prNo: '', shipDate: '', originCode: '', destCode: '', destName: '', items: [] };
+
+  // เลขที่ใบโอนย้าย เช่น 0907TR690004839
+  var mPr = raw.match(/เลขที่ใบโอนย้าย\s*[:：]?\s*([A-Za-z0-9\-\/]+)/);
+  if (mPr) out.prNo = mPr[1];
+  if (!out.prNo) {
+    var mPr2 = raw.match(/\b(\d{3,4}[A-Z]{2}\d{8,12})\b/);
+    if (mPr2) out.prNo = mPr2[1];
+  }
+
+  // สาขาต้นทาง / ปลายทาง เช่น "สาขาปลายทาง : 0132:คง"
+  var mOrigin = raw.match(/สาขาต้นทาง\s*[:：]?\s*(\d{3,4})\s*[:：]?\s*([^\n]*)/);
+  if (mOrigin) out.originCode = mOrigin[1];
+
+  var mDest = raw.match(/สาขาปลายทาง\s*[:：]?\s*(\d{3,4})\s*[:：]?\s*([^\n]*)/);
+  if (mDest) {
+    out.destCode = mDest[1];
+    out.destName = String(mDest[2] || '').trim();
+  }
+  // สำรอง: อ่านจากคอลัมน์ "ย้ายไป" เช่น 0907/T09 ->0132/S02
+  if (!out.destCode) {
+    var mMove = raw.match(/->\s*(\d{3,4})\s*\//);
+    if (mMove) out.destCode = mMove[1];
+  }
+
+  // วันที่ เช่น 01/08/2569 (พ.ศ.) → 2026-08-01
+  var mDate = raw.match(/วันที่\s*[:：]?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (mDate) {
+    var year = parseInt(mDate[3], 10);
+    if (year > 2400) year -= 543;          // แปลง พ.ศ. เป็น ค.ศ.
+    out.shipDate = year + '-' + pad2_(mDate[2]) + '-' + pad2_(mDate[1]);
+  }
+
+  // แถวรายการสินค้า: ลำดับ รหัส [ซีเรียล] ชื่อสินค้า [สี] จำนวน ราคาขาย รวมขาย
+  var rowRe = /^(\d{1,3})\s+(\S+)\s+(.+?)\s+(\d[\d,]*)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/;
+  lines.forEach(function (line) {
+    var m = line.match(rowRe);
+    if (m) {
+      out.items.push({
+        partCode: m[2],
+        partName: String(m[3]).trim(),
+        qty: Number(String(m[4]).replace(/,/g, ''))
+      });
+      return;
+    }
+    // สำรอง: บรรทัดที่มีรหัสสินค้า (ตัวอักษร 1-4 ตัว ตามด้วยเลข 6-10 หลัก) แล้วมีราคาแบบ .00
+    var m2 = line.match(/([ก-๙A-Za-z]{1,4}\d{6,10})\s+(.+?)\s+(\d[\d,]*)\s+[\d,]+\.\d{2}/);
+    if (m2) {
+      out.items.push({
+        partCode: m2[1],
+        partName: String(m2[2]).trim(),
+        qty: Number(String(m2[3]).replace(/,/g, ''))
+      });
+    }
+  });
+
+  return out;
+}
+
+function pad2_(v) {
+  var s = String(v);
+  return s.length < 2 ? '0' + s : s;
+}
+
+/** หาสาขาจากรหัสสาขา (คอลัมน์ branchCode ในชีต Branches) */
+function findBranchByCode_(code) {
+  var key = String(code || '').trim();
+  if (!key) return null;
+  var list = getMasters_().branches;
+  for (var i = 0; i < list.length; i++) {
+    if (String(list[i].code).trim() === key) return list[i];
+  }
+  return null;
+}
+
+/**
+ * เทียบข้อมูลที่ OCR อ่านได้กับตารางแม่ เพื่อแก้จุดที่ OCR อ่านเพี้ยน
+ * รหัสสาขา/รหัสสินค้าเป็นตัวเลขซึ่ง OCR อ่านแม่นกว่าตัวอักษรไทย จึงใช้เป็นตัวยึด
+ */
+function resolveSlip_(parsed) {
+  var branch = findBranchByCode_(parsed.destCode);
+  var result = {
+    prNo: parsed.prNo,
+    shipDate: parsed.shipDate,
+    originCode: parsed.originCode,
+    destCode: parsed.destCode,
+    destBranch: branch ? branch.name : '',
+    zone: branch ? branch.zone : '',
+    destMatched: !!branch,
+    destNameFromSlip: parsed.destName,
+    items: []
+  };
+
+  var parts = readParts_();
+  var byCode = {};
+  parts.forEach(function (p) { byCode[p.code.toLowerCase()] = p; });
+
+  parsed.items.forEach(function (it) {
+    var code = String(it.partCode || '').trim();
+    var hit = byCode[code.toLowerCase()];
+    // OCR มักอ่านช่องว่างเกินมา ลองตัดช่องว่างในรหัสแล้วหาอีกครั้ง
+    if (!hit) hit = byCode[code.replace(/\s+/g, '').toLowerCase()];
+    result.items.push({
+      partCode: hit ? hit.code : code,
+      partName: hit ? hit.name : String(it.partName || '').trim(),
+      qty: it.qty,
+      matched: !!hit,
+      status: hit ? hit.status : '',
+      replacedBy: hit ? hit.replacedBy : ''
+    });
+  });
+
+  return result;
+}
+
+/** โฟลเดอร์เก็บรูปหลักฐาน (สร้างอัตโนมัติครั้งแรก แล้วจำ id ไว้) */
+function getSlipFolder_() {
+  var id = prop_('SLIP_FOLDER_ID');
+  if (id) {
+    try {
+      return DriveApp.getFolderById(id);
+    } catch (err) {
+      // โฟลเดอร์ถูกลบไป สร้างใหม่ให้
+    }
+  }
+  var folder = DriveApp.createFolder(SLIP_FOLDER_NAME);
+  props_().setProperty('SLIP_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+/**
+ * แปลงรูปเป็นข้อความด้วย OCR ของ Google Drive
+ * ทำโดยอัปโหลดรูปแล้วสั่งแปลงเป็น Google Docs พร้อม ocrLanguage=th
+ * อ่านข้อความออกมาแล้วลบไฟล์ชั่วคราวทิ้ง
+ */
+function ocrImage_(blob) {
+  var token = ScriptApp.getOAuthToken();
+  var boundary = 'slipBoundary' + Date.now();
+  var metadata = { name: 'ocr-temp-' + Date.now(), mimeType: 'application/vnd.google-apps.document' };
+
+  var payload = Utilities.newBlob(
+    '--' + boundary + '\r\n' +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    JSON.stringify(metadata) + '\r\n' +
+    '--' + boundary + '\r\n' +
+    'Content-Type: ' + blob.getContentType() + '\r\n\r\n'
+  ).getBytes()
+    .concat(blob.getBytes())
+    .concat(Utilities.newBlob('\r\n--' + boundary + '--\r\n').getBytes());
+
+  var upload = UrlFetchApp.fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&ocrLanguage=th&fields=id',
+    {
+      method: 'post',
+      contentType: 'multipart/related; boundary=' + boundary,
+      payload: Utilities.newBlob(payload).getBytes(),
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    }
+  );
+
+  if (upload.getResponseCode() !== 200) {
+    throw new Error('อ่านรูปไม่สำเร็จ (อัปโหลดเพื่อ OCR ไม่ผ่าน HTTP ' +
+      upload.getResponseCode() + ') ' + upload.getContentText().substring(0, 200));
+  }
+
+  var docId = JSON.parse(upload.getContentText()).id;
+  try {
+    var exported = UrlFetchApp.fetch(
+      'https://www.googleapis.com/drive/v3/files/' + docId + '/export?mimeType=text/plain',
+      { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true }
+    );
+    if (exported.getResponseCode() !== 200) {
+      throw new Error('อ่านข้อความจากรูปไม่สำเร็จ (HTTP ' + exported.getResponseCode() + ')');
+    }
+    return exported.getContentText();
+  } finally {
+    try { DriveApp.getFileById(docId).setTrashed(true); } catch (err) { /* ลบไม่ได้ก็ข้าม */ }
+  }
+}
+
+/**
+ * รับรูปจากหน้าเว็บ → เก็บรูปไว้เป็นหลักฐาน → OCR → แยกข้อมูล → เทียบกับตารางแม่
+ * คืนข้อมูลให้หน้าเว็บเอาไปเติมในฟอร์มให้ผู้ใช้ตรวจก่อนบันทึก
+ */
+function apiReadSlip(payload) {
+  try {
+    payload = payload || {};
+    var base64 = String(payload.base64 || '');
+    if (!base64) throw new Error('ไม่พบข้อมูลรูป');
+
+    var mimeType = String(payload.mimeType || 'image/jpeg');
+    var name = 'slip-' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd-HHmmss') +
+      (mimeType.indexOf('png') >= 0 ? '.png' : '.jpg');
+    var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, name);
+
+    var file = getSlipFolder_().createFile(blob);
+    var text = ocrImage_(blob);
+    var resolved = resolveSlip_(parseSlipText_(text));
+    resolved.slipFileId = file.getId();
+    resolved.ok = true;
+    return resolved;
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/* =======================================================================
+ * ส่วนที่ 6 — ติดตั้งและตรวจสอบระบบ (รันเองจากเมนู Apps Script)
  * ===================================================================== */
 
 /**
