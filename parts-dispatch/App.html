@@ -162,7 +162,9 @@
     margin-bottom: 12px;
   }
 
-  .item-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
+  .item-wrap { margin-bottom: 8px; }
+  .item-wrap .warn { margin: 6px 0 0; }
+  .item-row { display: flex; gap: 8px; align-items: flex-start; }
   .item-row .code { flex: 4; }
   .item-row .name { flex: 5; }
   .item-row .qty  { flex: 2; }
@@ -243,6 +245,7 @@
   <div class="tabs">
     <button id="tabForm" class="active">บันทึกใหม่</button>
     <button id="tabHistory">รายงาน</button>
+    <button id="tabParts">อะไหล่</button>
   </div>
 </header>
 
@@ -394,13 +397,59 @@
     <div id="searchStatus" class="card hidden"></div>
     <div id="results"></div>
   </div>
+
+  <!-- ================= หน้าจัดการอะไหล่ ================= -->
+  <div id="viewParts" class="hidden">
+
+    <!-- ฟอร์มเพิ่ม/แก้ไข -->
+    <div id="partFormCard" class="card hidden">
+      <h2 id="partFormTitle">เพิ่มอะไหล่ใหม่</h2>
+
+      <label for="pfCode">รหัสสินค้า *</label>
+      <input type="text" id="pfCode" autocomplete="off">
+
+      <label for="pfName">ชื่อสินค้า *</label>
+      <input type="text" id="pfName" autocomplete="off">
+
+      <label for="pfStatus">สถานะ</label>
+      <select id="pfStatus">
+        <option value="ใช้งาน">ใช้งาน</option>
+        <option value="เลิกใช้">เลิกใช้</option>
+      </select>
+
+      <div id="pfReplaceWrap" class="hidden">
+        <label for="pfReplacedBy-input">ใช้รหัสนี้แทน</label>
+        <div class="combo" id="pfReplacedBy"></div>
+      </div>
+
+      <label for="pfNote">หมายเหตุ</label>
+      <input type="text" id="pfNote" autocomplete="off" placeholder="เช่น เปลี่ยนรุ่นใหม่ / ของเลิกผลิต">
+
+      <div id="partFormMsg" class="banner err hidden"></div>
+      <button class="primary" id="pfSaveBtn">บันทึก</button>
+      <button type="button" class="add-item" id="pfCancelBtn" style="margin-top:8px;">ยกเลิก</button>
+    </div>
+
+    <div class="card" id="partSearchCard">
+      <label for="partQuery">ค้นหาอะไหล่</label>
+      <input type="search" id="partQuery" placeholder="พิมพ์รหัสสินค้าหรือชื่อสินค้า">
+      <button class="primary" id="partSearchBtn">ค้นหา</button>
+      <button type="button" class="add-item" id="pfNewBtn" style="margin-top:8px;">+ เพิ่มอะไหล่ใหม่</button>
+    </div>
+
+    <div id="partStatus" class="card hidden"></div>
+    <div id="partResults"></div>
+  </div>
 </div>
 
 <script>
   var MASTERS = { zones: [], branches: [], carriers: [], dropPoints: [] };
   var clientToken = newToken();
   var historyLoaded = false;
+  var partsLoaded = false;
   var booted = false;
+  var comboReplacedBy = null;
+  var editingCode = '';   // รหัสเดิมตอนกำลังแก้ไข ถ้าว่าง = กำลังเพิ่มใหม่
 
   function $(id) { return document.getElementById(id); }
 
@@ -624,6 +673,11 @@
         value = v || '';
         input.value = value ? labelOf(value) : '';
       },
+      /** ตั้งค่าที่ไม่ได้อยู่ในรายการ (ใช้กับช่องโหมด freeText เช่น รหัสสินค้า) */
+      setFreeValue: function (v) {
+        value = v || '';
+        input.value = value;
+      },
       clear: function () { value = ''; input.value = ''; closeList(); },
       setEnabled: function (on) {
         input.disabled = !on;
@@ -653,18 +707,25 @@
 
   $('tabForm').addEventListener('click', function () { showTab('form'); });
   $('tabHistory').addEventListener('click', function () { showTab('history'); });
+  $('tabParts').addEventListener('click', function () { showTab('parts'); });
 
   function showTab(name) {
     if (!booted) return;
-    var isForm = name === 'form';
-    $('tabForm').classList.toggle('active', isForm);
-    $('tabHistory').classList.toggle('active', !isForm);
-    $('viewForm').classList.toggle('hidden', !isForm);
-    $('viewHistory').classList.toggle('hidden', isForm);
+    $('tabForm').classList.toggle('active', name === 'form');
+    $('tabHistory').classList.toggle('active', name === 'history');
+    $('tabParts').classList.toggle('active', name === 'parts');
+    $('viewForm').classList.toggle('hidden', name !== 'form');
+    $('viewHistory').classList.toggle('hidden', name !== 'history');
+    $('viewParts').classList.toggle('hidden', name !== 'parts');
     window.scrollTo({ top: 0 });
-    if (!isForm && !historyLoaded) {
+
+    if (name === 'history' && !historyLoaded) {
       historyLoaded = true;
       search();
+    }
+    if (name === 'parts' && !partsLoaded) {
+      partsLoaded = true;
+      searchParts();
     }
   }
 
@@ -764,6 +825,29 @@
 
     comboZoneFilter = makeCombo('zoneFilter');
     comboBranchFilter = makeCombo('branchFilter');
+
+    // ช่อง "ใช้รหัสนี้แทน" ในหน้าจัดการอะไหล่ — ค้นจากตารางอะไหล่เหมือนกัน
+    comboReplacedBy = makeCombo('pfReplacedBy', {
+      placeholder: 'พิมพ์รหัสสินค้าที่ใช้แทน',
+      freeText: true,
+      minChars: 2,
+      emptyText: 'ไม่พบรหัสนี้ (พิมพ์เองได้)',
+      remote: lookupPartsRemote
+    });
+  }
+
+  /** ตัวค้นรายการสินค้าจากเซิร์ฟเวอร์ ใช้ร่วมกันหลายช่อง */
+  function lookupPartsRemote(query, done) {
+    call('apiLookupParts', query).then(function (res) {
+      done((res && res.ok ? res.results : []).map(function (p) {
+        var label = p.code;
+        var sub = p.name;
+        if (p.status === 'เลิกใช้') {
+          sub = (sub ? sub + ' ' : '') + '⚠️ เลิกใช้' + (p.replacedBy ? ' → ' + p.replacedBy : '');
+        }
+        return { value: p.code, label: label, sub: sub, part: p };
+      }));
+    }).catch(function () { done([]); });
   }
 
   /** จำกัดรายการสาขาให้เหลือเฉพาะเขตที่เลือก (ยังพิมพ์หาสาขาข้ามเขตได้ ระบบจะสลับเขตให้เอง) */
@@ -800,6 +884,9 @@
 
   function addItemRow(focus) {
     var id = 'itemCode' + (++itemSeq);
+    var wrap = document.createElement('div');
+    wrap.className = 'item-wrap';
+
     var row = document.createElement('div');
     row.className = 'item-row';
     row.innerHTML =
@@ -808,39 +895,67 @@
       '<input class="qty" type="number" min="0" step="1" value="1" inputmode="numeric">' +
       '<button type="button" title="ลบรายการ">×</button>';
 
-    $('items').appendChild(row);
+    var alert = document.createElement('div');
+    alert.className = 'warn hidden';
+
+    wrap.appendChild(row);
+    wrap.appendChild(alert);
+    $('items').appendChild(wrap);
 
     var name = row.querySelector('.name');
+
+    /** เตือนเมื่ออะไหล่ที่เลือกถูกเลิกใช้แล้ว พร้อมปุ่มสลับไปตัวที่ใช้แทน */
+    function showRetired(part) {
+      if (!part || part.status !== 'เลิกใช้') { alert.classList.add('hidden'); return; }
+      alert.innerHTML = '';
+      alert.appendChild(document.createTextNode(
+        '⚠️ ' + part.code + ' เลิกใช้แล้ว' + (part.replacedBy ? ' — ใช้ ' + part.replacedBy + ' แทน ' : '')
+      ));
+      if (part.replacedBy) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'link';
+        btn.textContent = 'เปลี่ยนให้';
+        btn.addEventListener('click', function () {
+          call('apiLookupPartByCode', part.replacedBy).then(function (res) {
+            var np = res && res.ok ? res.part : null;
+            wrap._codeCombo.setFreeValue(part.replacedBy);
+            name.value = np ? np.name : '';
+            showRetired(np);
+          });
+        });
+        alert.appendChild(btn);
+      }
+      alert.classList.remove('hidden');
+    }
 
     // ช่องรหัส: พิมพ์รหัส (หรือชื่อ) แล้วค้นจากชีต Parts เลือกแล้วเติมชื่อให้อัตโนมัติ
     var codeCombo = makeCombo(id, {
       placeholder: 'รหัสสินค้า',
       freeText: true,
       minChars: 2,
-      emptyText: 'ไม่พบรหัสนี้ (พิมพ์ชื่อเองได้)',
-      remote: function (query, done) {
-        call('apiLookupParts', query).then(function (res) {
-          done((res && res.ok ? res.results : []).map(function (p) {
-            return { value: p.code, label: p.code, sub: p.name };
-          }));
-        }).catch(function () { done([]); });
-      },
+      emptyText: 'ไม่พบรหัสนี้ (บันทึกได้ ระบบจะเก็บเข้าตารางให้)',
+      remote: lookupPartsRemote,
       onChange: function (code, option) {
-        if (option && option.sub) name.value = option.sub;
+        var part = option && option.part;
+        if (part && part.name) name.value = part.name;
+        showRetired(part);
       },
       // พิมพ์รหัสเต็มแล้วคลิกออกโดยไม่ได้เลือกจากรายการ ก็ให้ไปหาชื่อมาเติมให้
       onBlur: function (code) {
-        if (!code || name.value.trim()) return;
+        if (!code) { alert.classList.add('hidden'); return; }
         call('apiLookupPartByCode', code).then(function (res) {
-          if (res && res.ok && res.part && !name.value.trim()) name.value = res.part.name;
+          var part = res && res.ok ? res.part : null;
+          if (part && !name.value.trim()) name.value = part.name;
+          showRetired(part);
         }).catch(function () { /* หาไม่เจอก็ปล่อยให้พิมพ์ชื่อเอง */ });
       }
     });
 
-    row._codeCombo = codeCombo;
+    wrap._codeCombo = codeCombo;
 
     row.querySelector('button').addEventListener('click', function () {
-      row.remove();
+      wrap.remove();
       if (!$('items').children.length) addItemRow();
     });
 
@@ -848,11 +963,11 @@
   }
 
   function collectItems() {
-    return Array.prototype.slice.call($('items').children).map(function (row) {
+    return Array.prototype.slice.call($('items').children).map(function (wrap) {
       return {
-        partCode: row._codeCombo ? row._codeCombo.getValue().trim() : '',
-        partName: row.querySelector('.name').value.trim(),
-        qty: row.querySelector('.qty').value
+        partCode: wrap._codeCombo ? wrap._codeCombo.getValue().trim() : '',
+        partName: wrap.querySelector('.name').value.trim(),
+        qty: wrap.querySelector('.qty').value
       };
     }).filter(function (it) { return it.partCode || it.partName; });
   }
@@ -930,6 +1045,11 @@
     if (res.summary && res.summary.zone) detail += ' (เขต' + res.summary.zone + ')';
     if (res.summary && res.summary.isTransfer) detail += ' — ฝากลงที่ ' + res.summary.dropPoint;
     detail += ' | ' + payload.carrier + ' | ' + payload.items.length + ' รายการ';
+    if (res.addedParts && res.addedParts.length) {
+      detail += '\n➕ เก็บอะไหล่ใหม่เข้าตารางให้แล้ว: ' + res.addedParts.join(', ');
+      partsLoaded = false; // ให้หน้าอะไหล่โหลดใหม่เมื่อเปิด
+    }
+    $('resultDetail').style.whiteSpace = 'pre-line';
     $('resultDetail').textContent = detail;
 
     $('form').classList.add('hidden');
@@ -1059,6 +1179,160 @@
   function thaiDate(iso) {
     var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? m[3] + '/' + m[2] + '/' + m[1] : iso;
+  }
+
+  /* ---------- หน้าจัดการอะไหล่ ---------- */
+
+  $('partSearchBtn').addEventListener('click', searchParts);
+  $('partQuery').addEventListener('keydown', function (e) { if (e.key === 'Enter') searchParts(); });
+  $('pfNewBtn').addEventListener('click', function () { openPartForm(null); });
+  $('pfCancelBtn').addEventListener('click', closePartForm);
+  $('pfSaveBtn').addEventListener('click', savePart);
+
+  $('pfStatus').addEventListener('change', function () {
+    $('pfReplaceWrap').classList.toggle('hidden', this.value !== 'เลิกใช้');
+  });
+
+  function setPartStatus(msg, isError) {
+    var box = $('partStatus');
+    box.classList.remove('hidden');
+    box.innerHTML = '';
+    var div = document.createElement('div');
+    div.className = isError ? 'banner err' : 'muted';
+    div.textContent = msg;
+    box.appendChild(div);
+  }
+
+  function searchParts() {
+    setPartStatus('กำลังค้นหา…');
+    $('partResults').innerHTML = '';
+    call('apiListParts', $('partQuery').value.trim()).then(function (res) {
+      if (!res || !res.ok) return setPartStatus((res && res.error) || 'ค้นหาไม่สำเร็จ', true);
+      renderParts(res.results);
+    }).catch(function (err) {
+      setPartStatus('ค้นหาไม่สำเร็จ: ' + (err.message || err), true);
+    });
+  }
+
+  function renderParts(rows) {
+    if (!rows.length) {
+      return setPartStatus($('partQuery').value.trim()
+        ? 'ไม่พบอะไหล่ที่ตรง — กด "เพิ่มอะไหล่ใหม่" เพื่อเพิ่มเข้าตาราง'
+        : 'ยังไม่มีอะไหล่ในตาราง — กด "เพิ่มอะไหล่ใหม่" เพื่อเริ่ม');
+    }
+    setPartStatus('พบ ' + rows.length + ' รายการ');
+
+    var box = $('partResults');
+    rows.forEach(function (p) {
+      var retired = p.status === 'เลิกใช้';
+      var el = document.createElement('div');
+      el.className = 'ship' + (retired ? ' transfer' : '');
+
+      var head = document.createElement('div');
+      head.className = 'head';
+      var left = document.createElement('span');
+      left.textContent = p.code;
+      var right = document.createElement('span');
+      right.textContent = p.status;
+      head.appendChild(left);
+      head.appendChild(right);
+      el.appendChild(head);
+
+      var name = document.createElement('div');
+      name.className = 'dest';
+      name.textContent = p.name || '(ยังไม่มีชื่อสินค้า)';
+      el.appendChild(name);
+
+      if (retired && p.replacedBy) {
+        var tag = document.createElement('div');
+        tag.className = 'tag';
+        tag.textContent = '⚠️ เลิกใช้แล้ว → ใช้ ' + p.replacedBy + ' แทน';
+        el.appendChild(tag);
+      } else if (retired) {
+        var tag2 = document.createElement('div');
+        tag2.className = 'tag';
+        tag2.textContent = '⚠️ เลิกใช้แล้ว (ยังไม่ได้ระบุตัวแทน)';
+        el.appendChild(tag2);
+      }
+
+      if (p.note) {
+        var note = document.createElement('div');
+        note.className = 'meta';
+        note.textContent = '📝 ' + p.note;
+        el.appendChild(note);
+      }
+
+      var actions = document.createElement('div');
+      actions.className = 'meta';
+      actions.style.marginTop = '8px';
+      var editBtn = document.createElement('button');
+      editBtn.className = 'link';
+      editBtn.textContent = 'แก้ไข';
+      editBtn.addEventListener('click', function () { openPartForm(p); });
+      actions.appendChild(editBtn);
+      el.appendChild(actions);
+
+      box.appendChild(el);
+    });
+  }
+
+  function openPartForm(part) {
+    editingCode = part ? part.code : '';
+    $('partFormTitle').textContent = part ? 'แก้ไขอะไหล่ ' + part.code : 'เพิ่มอะไหล่ใหม่';
+    $('pfCode').value = part ? part.code : $('partQuery').value.trim();
+    $('pfName').value = part ? part.name : '';
+    $('pfStatus').value = (part && part.status === 'เลิกใช้') ? 'เลิกใช้' : 'ใช้งาน';
+    $('pfNote').value = part ? part.note : '';
+    $('pfReplaceWrap').classList.toggle('hidden', $('pfStatus').value !== 'เลิกใช้');
+    comboReplacedBy.clear();
+    if (part && part.replacedBy) comboReplacedBy.setFreeValue(part.replacedBy);
+    $('partFormMsg').classList.add('hidden');
+    $('partFormCard').classList.remove('hidden');
+    $('partSearchCard').classList.add('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('pfCode').focus();
+  }
+
+  function closePartForm() {
+    $('partFormCard').classList.add('hidden');
+    $('partSearchCard').classList.remove('hidden');
+    editingCode = '';
+  }
+
+  function savePart() {
+    var payload = {
+      originalCode: editingCode,
+      partCode: $('pfCode').value.trim(),
+      partName: $('pfName').value.trim(),
+      status: $('pfStatus').value,
+      replacedBy: $('pfStatus').value === 'เลิกใช้' ? comboReplacedBy.getValue().trim() : '',
+      note: $('pfNote').value.trim()
+    };
+
+    if (!payload.partCode) return showPartFormError('ยังไม่ได้กรอกรหัสสินค้า');
+    if (!payload.partName) return showPartFormError('ยังไม่ได้กรอกชื่อสินค้า');
+
+    $('pfSaveBtn').disabled = true;
+    $('pfSaveBtn').textContent = 'กำลังบันทึก…';
+
+    call('apiSavePart', payload).then(function (res) {
+      $('pfSaveBtn').disabled = false;
+      $('pfSaveBtn').textContent = 'บันทึก';
+      if (!res || !res.ok) return showPartFormError((res && res.error) || 'บันทึกไม่สำเร็จ');
+      closePartForm();
+      $('partQuery').value = payload.partCode;
+      searchParts();
+      if (res.warning) setTimeout(function () { setPartStatus('⚠️ ' + res.warning, true); }, 400);
+    }).catch(function (err) {
+      $('pfSaveBtn').disabled = false;
+      $('pfSaveBtn').textContent = 'บันทึก';
+      showPartFormError('บันทึกไม่สำเร็จ: ' + (err.message || err));
+    });
+  }
+
+  function showPartFormError(msg) {
+    $('partFormMsg').textContent = msg;
+    $('partFormMsg').classList.remove('hidden');
   }
 
   boot();

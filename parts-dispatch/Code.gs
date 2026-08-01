@@ -19,7 +19,7 @@ var HEADERS = {
   Branches: ['branchCode', 'branchName', 'zone', 'defaultCarrier', 'defaultDropPoint', 'active'],
   Carriers: ['carrierCode', 'carrierName', 'phone', 'note', 'active'],
   DropPoints: ['dropPointName', 'zone', 'note'],
-  Parts: ['partCode', 'partName'],
+  Parts: ['partCode', 'partName', 'status', 'replacedBy', 'note', 'updatedAt'],
   Shipments: [
     'shipmentId', 'createdAt', 'shipDate', 'prNo', 'destBranch', 'zone', 'dropPoint',
     'isTransfer', 'carrier', 'trackingNo', 'boxCount', 'sender', 'receiverName', 'note',
@@ -157,6 +157,25 @@ function apiLookupPartByCode(code) {
   }
 }
 
+/** รายการอะไหล่สำหรับหน้าจัดการ (คืนได้สูงสุด 100 รายการ) */
+function apiListParts(query) {
+  try {
+    return { ok: true, results: lookupParts_(query, 100) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** เพิ่ม/แก้ไขอะไหล่ 1 รายการ ลงชีต Parts */
+function apiSavePart(payload) {
+  try {
+    var res = savePart_(payload || {});
+    return { ok: true, part: res.part, warning: res.warning, isNew: res.isNew };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
 /* =======================================================================
  * ส่วนที่ 3 — ข้อมูลหลัก (เขต / สาขา / ขนส่ง / จุดฝากลง / อะไหล่)
  * ตารางสาขาผูกกับเขตโดยตรง จึงเลือกเขตก่อนแล้วกรองสาขาในเขตนั้นได้ทันที
@@ -238,45 +257,70 @@ function findBranch_(name) {
   return null;
 }
 
-/** อ่านรายการสินค้าทั้งหมดจากชีต Parts */
+var STATUS_ACTIVE = 'ใช้งาน';
+var STATUS_RETIRED = 'เลิกใช้';
+var AUTO_ADD_NOTE = 'เพิ่มอัตโนมัติตอนบันทึกส่งของ';
+
+/** อ่านรายการสินค้าทั้งหมดจากชีต Parts (แนบเลขแถวไว้ใช้ตอนแก้ไข) */
 function readParts_() {
   var sh = getSheet_(SHEETS.PARTS);
   var last = sh.getLastRow();
   if (last < 2) return [];
-  var values = sh.getRange(2, 1, last - 1, 2).getValues();
+  var values = sh.getRange(2, 1, last - 1, HEADERS.Parts.length).getValues();
   var out = [];
   for (var i = 0; i < values.length; i++) {
-    var code = String(values[i][0] == null ? '' : values[i][0]).trim();
-    var name = String(values[i][1] == null ? '' : values[i][1]).trim();
-    if (code || name) out.push({ code: code, name: name });
+    var row = values[i];
+    var code = String(row[0] == null ? '' : row[0]).trim();
+    var name = String(row[1] == null ? '' : row[1]).trim();
+    if (!code && !name) continue;
+    out.push({
+      code: code,
+      name: name,
+      status: String(row[2] == null ? '' : row[2]).trim() || STATUS_ACTIVE,
+      replacedBy: String(row[3] == null ? '' : row[3]).trim(),
+      note: String(row[4] == null ? '' : row[4]).trim(),
+      updatedAt: String(row[5] == null ? '' : row[5]).trim(),
+      _row: i + 2
+    });
   }
   return out;
+}
+
+/** ตัด _row ออกก่อนส่งกลับหน้าเว็บ */
+function toPartDto_(p) {
+  if (!p) return null;
+  return {
+    code: p.code, name: p.name, status: p.status,
+    replacedBy: p.replacedBy, note: p.note, updatedAt: p.updatedAt
+  };
 }
 
 /**
  * ค้นสินค้าจากรหัสหรือชื่อ
  * เรียงผลลัพธ์ให้ "รหัสที่ขึ้นต้นด้วยคำค้น" มาก่อน เพราะปกติผู้ใช้พิมพ์รหัสเป็นหลัก
+ * ถ้าไม่ใส่คำค้นจะคืนรายการแรก ๆ มาให้ (ใช้ในหน้าจัดการอะไหล่)
  */
-function lookupParts_(query) {
+function lookupParts_(query, limit) {
   var q = String(query || '').trim().toLowerCase();
-  if (!q) return [];
-
+  var max = Math.min(Number(limit) || 20, 200);
   var parts = readParts_();
+
+  if (!q) return parts.slice(0, max).map(toPartDto_);
+
   var starts = [];
   var contains = [];
-
   for (var i = 0; i < parts.length; i++) {
     var p = parts[i];
     var code = p.code.toLowerCase();
     if (code.indexOf(q) === 0) {
-      starts.push(p);
-      if (starts.length >= 20) break;
-    } else if (contains.length < 20 &&
+      if (starts.length < max) starts.push(p);
+    } else if (contains.length < max &&
                (code.indexOf(q) > 0 || p.name.toLowerCase().indexOf(q) >= 0)) {
       contains.push(p);
     }
+    if (starts.length >= max) break;
   }
-  return starts.concat(contains).slice(0, 20);
+  return starts.concat(contains).slice(0, max).map(toPartDto_);
 }
 
 /** หาสินค้าจากรหัสแบบตรงตัว (ไม่สนตัวพิมพ์เล็กใหญ่) */
@@ -285,9 +329,100 @@ function lookupPartByCode_(code) {
   if (!key) return null;
   var parts = readParts_();
   for (var i = 0; i < parts.length; i++) {
-    if (parts[i].code.toLowerCase() === key) return parts[i];
+    if (parts[i].code.toLowerCase() === key) return toPartDto_(parts[i]);
   }
   return null;
+}
+
+/**
+ * เพิ่มหรือแก้ไขอะไหล่ 1 รายการ
+ * ส่ง originalCode มาด้วย = แก้ไขของเดิม, ไม่ส่ง = เพิ่มใหม่
+ */
+function savePart_(p) {
+  var code = String(p.partCode || '').trim();
+  var name = String(p.partName || '').trim();
+  if (!code) throw new Error('ยังไม่ได้กรอกรหัสสินค้า');
+  if (!name) throw new Error('ยังไม่ได้กรอกชื่อสินค้า');
+
+  var status = String(p.status || '').trim() === STATUS_RETIRED ? STATUS_RETIRED : STATUS_ACTIVE;
+  var replacedBy = String(p.replacedBy || '').trim();
+  if (replacedBy && replacedBy.toLowerCase() === code.toLowerCase()) {
+    throw new Error('รหัสที่ใช้แทนต้องไม่ใช่รหัสเดียวกับตัวมันเอง');
+  }
+  var note = String(p.note || '').trim();
+  var originalCode = String(p.originalCode || '').trim();
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่');
+
+  var warning = '';
+  try {
+    var sh = getSheet_(SHEETS.PARTS);
+    var parts = readParts_();
+    var byCode = {};
+    parts.forEach(function (item) { byCode[item.code.toLowerCase()] = item; });
+
+    var target = originalCode ? byCode[originalCode.toLowerCase()] : null;
+    if (originalCode && !target) throw new Error('ไม่พบรหัสเดิม ' + originalCode + ' ในตาราง');
+
+    var clash = byCode[code.toLowerCase()];
+    if (clash && (!target || clash._row !== target._row)) {
+      throw new Error('มีรหัส ' + code + ' อยู่ในตารางแล้ว');
+    }
+
+    // เตือนถ้ารหัสที่ใช้แทนยังไม่มีในตาราง แต่ไม่บล็อก เผื่อกำลังจะเพิ่มทีหลัง
+    if (replacedBy && !byCode[replacedBy.toLowerCase()]) {
+      warning = 'บันทึกแล้ว แต่ยังไม่มีรหัส ' + replacedBy + ' ในตาราง อย่าลืมเพิ่มด้วย';
+    }
+
+    var row = [code, name, status, replacedBy, note, nowStamp_()];
+    if (target) {
+      sh.getRange(target._row, 1, 1, HEADERS.Parts.length).setValues([row]);
+    } else {
+      sh.getRange(sh.getLastRow() + 1, 1, 1, HEADERS.Parts.length).setValues([row]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  clearMasterCache_();
+  return {
+    part: { code: code, name: name, status: status, replacedBy: replacedBy, note: note },
+    warning: warning,
+    isNew: !originalCode
+  };
+}
+
+/**
+ * เก็บอะไหล่ที่ยังไม่มีในตารางแม่เข้าไปตอนบันทึกส่งของ
+ * ใส่หมายเหตุกำกับไว้ว่ามาจากการเพิ่มอัตโนมัติ จะได้ตามไปตรวจ/แก้ชื่อทีหลังได้
+ */
+function autoAddParts_(items) {
+  if (!items || !items.length) return [];
+  var sh = getSheet_(SHEETS.PARTS);
+  var existing = {};
+  readParts_().forEach(function (p) { existing[p.code.toLowerCase()] = true; });
+
+  var stamp = nowStamp_();
+  var rows = [];
+  var added = [];
+  var seen = {};
+
+  items.forEach(function (it) {
+    var code = String(it.partCode || '').trim();
+    if (!code) return;
+    var key = code.toLowerCase();
+    if (existing[key] || seen[key]) return;
+    seen[key] = true;
+    rows.push([code, String(it.partName || '').trim(), STATUS_ACTIVE, '', AUTO_ADD_NOTE, stamp]);
+    added.push(code);
+  });
+
+  if (rows.length) {
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, HEADERS.Parts.length).setValues(rows);
+    clearMasterCache_();
+  }
+  return added;
 }
 
 /* =======================================================================
@@ -324,10 +459,20 @@ function saveShipment_(payload) {
     return { ok: true, shipmentId: shipmentId, duplicate: true };
   }
 
+  // อะไหล่ที่ยังไม่มีในตารางแม่ ให้เก็บเข้าชีต Parts ไปเลย
+  var addedParts = [];
+  try {
+    addedParts = autoAddParts_(clean.items);
+  } catch (err) {
+    // เพิ่มเข้าตารางแม่ไม่สำเร็จ ไม่ควรทำให้การบันทึกส่งของล้มเหลว
+    console.warn('autoAddParts_ ล้มเหลว: ' + err);
+  }
+
   return {
     ok: true,
     shipmentId: shipmentId,
     duplicate: false,
+    addedParts: addedParts,
     summary: {
       prNo: clean.prNo,
       destBranch: clean.destBranch,
