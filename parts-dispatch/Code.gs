@@ -200,6 +200,25 @@ function apiLookupPartByCode(code) {
   }
 }
 
+/** รายชื่อขนส่ง/ผู้มารับของ สำหรับหน้าจัดการ */
+function apiListCarriers(query) {
+  try {
+    return { ok: true, results: lookupCarriers_(query, 100) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** เพิ่ม/แก้ไขขนส่ง 1 รายการ ลงชีต Carriers */
+function apiSaveCarrier(payload) {
+  try {
+    var res = saveCarrier_(payload || {});
+    return { ok: true, carrier: res.carrier, isNew: res.isNew };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
 /** รายการอะไหล่สำหรับหน้าจัดการ (คืนได้สูงสุด 100 รายการ) */
 function apiListParts(query) {
   try {
@@ -466,6 +485,99 @@ function autoAddParts_(items) {
     clearMasterCache_();
   }
   return added;
+}
+
+/* ---------- ขนส่ง / ผู้มารับของ ---------- */
+
+/** อ่านรายชื่อขนส่งทั้งหมด (แนบเลขแถวไว้ใช้ตอนแก้ไข) */
+function readCarriers_() {
+  var sh = getSheet_(SHEETS.CARRIERS);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+  var values = sh.getRange(2, 1, last - 1, HEADERS.Carriers.length).getValues();
+  var out = [];
+  for (var i = 0; i < values.length; i++) {
+    var row = values[i];
+    var code = String(row[0] == null ? '' : row[0]).trim();
+    var name = String(row[1] == null ? '' : row[1]).trim();
+    if (!code && !name) continue;
+    out.push({
+      code: code,
+      name: name,
+      phone: String(row[2] == null ? '' : row[2]).trim(),
+      note: String(row[3] == null ? '' : row[3]).trim(),
+      active: isActive_(row[4]),
+      _row: i + 2
+    });
+  }
+  return out;
+}
+
+function toCarrierDto_(c) {
+  if (!c) return null;
+  return { code: c.code, name: c.name, phone: c.phone, note: c.note, active: c.active };
+}
+
+/** ค้นขนส่งจากชื่อ/รหัส/เบอร์โทร ไม่ใส่คำค้นก็คืนรายการทั้งหมด */
+function lookupCarriers_(query, limit) {
+  var q = String(query || '').trim().toLowerCase();
+  var max = Math.min(Number(limit) || 100, 200);
+  var list = readCarriers_();
+  if (q) {
+    list = list.filter(function (c) {
+      return (c.name + ' ' + c.code + ' ' + c.phone + ' ' + c.note).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  return list.slice(0, max).map(toCarrierDto_);
+}
+
+/**
+ * เพิ่มหรือแก้ไขขนส่ง 1 รายการ
+ * ส่ง originalName มาด้วย = แก้ไขของเดิม, ไม่ส่ง = เพิ่มใหม่
+ * ยึดชื่อเป็นคีย์ เพราะชีต Shipments เก็บ "ชื่อขนส่ง" ไว้ในแถวการส่ง
+ */
+function saveCarrier_(p) {
+  var name = String(p.carrierName || '').trim();
+  if (!name) throw new Error('ยังไม่ได้กรอกชื่อขนส่ง/ผู้มารับ');
+
+  var code = String(p.carrierCode || '').trim();
+  var phone = String(p.phone || '').trim();
+  var note = String(p.note || '').trim();
+  var active = p.active === false ? 'FALSE' : 'TRUE';
+  var originalName = String(p.originalName || '').trim();
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่');
+
+  try {
+    var sh = getSheet_(SHEETS.CARRIERS);
+    var list = readCarriers_();
+    var byName = {};
+    list.forEach(function (c) { byName[c.name.toLowerCase()] = c; });
+
+    var target = originalName ? byName[originalName.toLowerCase()] : null;
+    if (originalName && !target) throw new Error('ไม่พบชื่อเดิม ' + originalName + ' ในตาราง');
+
+    var clash = byName[name.toLowerCase()];
+    if (clash && (!target || clash._row !== target._row)) {
+      throw new Error('มีชื่อ ' + name + ' อยู่ในตารางแล้ว');
+    }
+
+    var row = [code, name, phone, note, active];
+    if (target) {
+      sh.getRange(target._row, 1, 1, HEADERS.Carriers.length).setValues([row]);
+    } else {
+      sh.getRange(sh.getLastRow() + 1, 1, 1, HEADERS.Carriers.length).setValues([row]);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  clearMasterCache_();
+  return {
+    carrier: { code: code, name: name, phone: phone, note: note, active: active === 'TRUE' },
+    isNew: !originalName
+  };
 }
 
 /* =======================================================================

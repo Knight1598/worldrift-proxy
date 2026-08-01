@@ -246,6 +246,7 @@
     <button id="tabForm" class="active">บันทึกใหม่</button>
     <button id="tabHistory">รายงาน</button>
     <button id="tabParts">อะไหล่</button>
+    <button id="tabCarriers">ขนส่ง</button>
   </div>
 </header>
 
@@ -341,10 +342,25 @@
       <div class="card">
         <h2>ขนส่ง</h2>
 
-        <label for="carrier">ขนส่ง *</label>
+        <label for="carrier">ขนส่ง / ผู้มารับของ *</label>
         <select id="carrier" required>
           <option value="">— เลือกขนส่ง —</option>
         </select>
+        <button type="button" class="add-item" id="carrierQuickBtn" style="margin-bottom:12px;">
+          + เพิ่มคนขนส่ง / สาขามารับเอง
+        </button>
+
+        <div id="carrierQuickWrap" class="card hidden" style="background:var(--bg);">
+          <label for="cqName">ชื่อขนส่ง / ผู้มารับ *</label>
+          <input type="text" id="cqName" autocomplete="off" placeholder="เช่น สาขาคง มารับเอง">
+          <label for="cqPhone">เบอร์โทร</label>
+          <input type="text" id="cqPhone" autocomplete="off" inputmode="tel">
+          <div id="cqMsg" class="banner err hidden"></div>
+          <div class="row">
+            <button type="button" class="primary" id="cqSaveBtn">เพิ่มแล้วใช้เลย</button>
+            <button type="button" class="add-item" id="cqCancelBtn" style="margin-top:0;">ยกเลิก</button>
+          </div>
+        </div>
 
         <div class="row">
           <div>
@@ -469,6 +485,50 @@
     <div id="partStatus" class="card hidden"></div>
     <div id="partResults"></div>
   </div>
+
+  <!-- ================= หน้าจัดการขนส่ง ================= -->
+  <div id="viewCarriers" class="hidden">
+
+    <div id="carrierFormCard" class="card hidden">
+      <h2 id="carrierFormTitle">เพิ่มขนส่ง / ผู้มารับของ</h2>
+
+      <label for="cfName">ชื่อขนส่ง / ผู้มารับ *</label>
+      <input type="text" id="cfName" autocomplete="off" placeholder="เช่น นิ่มซี่เส็ง หรือ สาขาคง มารับเอง">
+
+      <div class="row">
+        <div>
+          <label for="cfCode">รหัส/ชื่อเล่น</label>
+          <input type="text" id="cfCode" autocomplete="off">
+        </div>
+        <div>
+          <label for="cfPhone">เบอร์โทร</label>
+          <input type="text" id="cfPhone" autocomplete="off" inputmode="tel">
+        </div>
+      </div>
+
+      <label for="cfNote">หมายเหตุ</label>
+      <input type="text" id="cfNote" autocomplete="off" placeholder="เช่น วิ่งรอบจันทร์/พุธ/ศุกร์">
+
+      <div class="switch">
+        <input type="checkbox" id="cfActive" checked>
+        <label for="cfActive">ใช้งานอยู่ (เอาเครื่องหมายออก = ไม่ให้เลือกในฟอร์มบันทึก)</label>
+      </div>
+
+      <div id="carrierFormMsg" class="banner err hidden"></div>
+      <button class="primary" id="cfSaveBtn">บันทึก</button>
+      <button type="button" class="add-item" id="cfCancelBtn" style="margin-top:8px;">ยกเลิก</button>
+    </div>
+
+    <div class="card" id="carrierSearchCard">
+      <label for="carrierQuery">ค้นหาขนส่ง</label>
+      <input type="search" id="carrierQuery" placeholder="พิมพ์ชื่อ รหัส หรือเบอร์โทร">
+      <button class="primary" id="carrierSearchBtn">ค้นหา</button>
+      <button type="button" class="add-item" id="cfNewBtn" style="margin-top:8px;">+ เพิ่มขนส่งใหม่</button>
+    </div>
+
+    <div id="carrierStatus" class="card hidden"></div>
+    <div id="carrierResults"></div>
+  </div>
 </div>
 
 <script>
@@ -476,6 +536,8 @@
   var clientToken = newToken();
   var historyLoaded = false;
   var partsLoaded = false;
+  var carriersLoaded = false;
+  var editingCarrier = '';   // ชื่อเดิมตอนกำลังแก้ไข ถ้าว่าง = กำลังเพิ่มใหม่
   var booted = false;
   var comboReplacedBy = null;
   var APP_URL = '';   // URL ของเว็บแอป ใช้ทำลิงก์เปิดรูปหลักฐาน (หน้าอยู่ในไอเฟรมจึงอ่านเองไม่ได้)
@@ -738,15 +800,18 @@
   $('tabForm').addEventListener('click', function () { showTab('form'); });
   $('tabHistory').addEventListener('click', function () { showTab('history'); });
   $('tabParts').addEventListener('click', function () { showTab('parts'); });
+  $('tabCarriers').addEventListener('click', function () { showTab('carriers'); });
 
   function showTab(name) {
     if (!booted) return;
     $('tabForm').classList.toggle('active', name === 'form');
     $('tabHistory').classList.toggle('active', name === 'history');
     $('tabParts').classList.toggle('active', name === 'parts');
+    $('tabCarriers').classList.toggle('active', name === 'carriers');
     $('viewForm').classList.toggle('hidden', name !== 'form');
     $('viewHistory').classList.toggle('hidden', name !== 'history');
     $('viewParts').classList.toggle('hidden', name !== 'parts');
+    $('viewCarriers').classList.toggle('hidden', name !== 'carriers');
     window.scrollTo({ top: 0 });
 
     if (name === 'history' && !historyLoaded) {
@@ -756,6 +821,10 @@
     if (name === 'parts' && !partsLoaded) {
       partsLoaded = true;
       searchParts();
+    }
+    if (name === 'carriers' && !carriersLoaded) {
+      carriersLoaded = true;
+      searchCarriers();
     }
   }
 
@@ -1527,6 +1596,208 @@
   function showPartFormError(msg) {
     $('partFormMsg').textContent = msg;
     $('partFormMsg').classList.remove('hidden');
+  }
+
+  /* ---------- หน้าจัดการขนส่ง / ผู้มารับของ ---------- */
+
+  $('carrierSearchBtn').addEventListener('click', searchCarriers);
+  $('carrierQuery').addEventListener('keydown', function (e) { if (e.key === 'Enter') searchCarriers(); });
+  $('cfNewBtn').addEventListener('click', function () { openCarrierForm(null); });
+  $('cfCancelBtn').addEventListener('click', closeCarrierForm);
+  $('cfSaveBtn').addEventListener('click', saveCarrier);
+
+  function setCarrierStatus(msg, isError) {
+    var box = $('carrierStatus');
+    box.classList.remove('hidden');
+    box.innerHTML = '';
+    var div = document.createElement('div');
+    div.className = isError ? 'banner err' : 'muted';
+    div.textContent = msg;
+    box.appendChild(div);
+  }
+
+  function searchCarriers() {
+    setCarrierStatus('กำลังค้นหา…');
+    $('carrierResults').innerHTML = '';
+    call('apiListCarriers', $('carrierQuery').value.trim()).then(function (res) {
+      if (!res || !res.ok) return setCarrierStatus((res && res.error) || 'ค้นหาไม่สำเร็จ', true);
+      renderCarriers(res.results);
+    }).catch(function (err) {
+      setCarrierStatus('ค้นหาไม่สำเร็จ: ' + (err.message || err), true);
+    });
+  }
+
+  function renderCarriers(rows) {
+    if (!rows.length) {
+      return setCarrierStatus('ไม่พบรายการ — กด "เพิ่มขนส่งใหม่" เพื่อเพิ่มเข้าตาราง');
+    }
+    setCarrierStatus('พบ ' + rows.length + ' รายการ');
+
+    var box = $('carrierResults');
+    rows.forEach(function (c) {
+      var el = document.createElement('div');
+      el.className = 'ship' + (c.active ? '' : ' transfer');
+
+      var head = document.createElement('div');
+      head.className = 'head';
+      var left = document.createElement('span');
+      left.textContent = c.code || '';
+      var right = document.createElement('span');
+      right.textContent = c.active ? 'ใช้งาน' : 'ไม่ใช้แล้ว';
+      head.appendChild(left);
+      head.appendChild(right);
+      el.appendChild(head);
+
+      var name = document.createElement('div');
+      name.className = 'dest';
+      name.textContent = c.name;
+      el.appendChild(name);
+
+      var meta = document.createElement('div');
+      meta.className = 'meta';
+      var bits = [];
+      if (c.phone) bits.push('📞 ' + c.phone);
+      if (c.note) bits.push('📝 ' + c.note);
+      meta.textContent = bits.join('  •  ');
+      if (bits.length) el.appendChild(meta);
+
+      var actions = document.createElement('div');
+      actions.className = 'meta';
+      actions.style.marginTop = '8px';
+      var editBtn = document.createElement('button');
+      editBtn.className = 'link';
+      editBtn.textContent = 'แก้ไข';
+      editBtn.addEventListener('click', function () { openCarrierForm(c); });
+      actions.appendChild(editBtn);
+      el.appendChild(actions);
+
+      box.appendChild(el);
+    });
+  }
+
+  function openCarrierForm(c) {
+    editingCarrier = c ? c.name : '';
+    $('carrierFormTitle').textContent = c ? 'แก้ไข ' + c.name : 'เพิ่มขนส่ง / ผู้มารับของ';
+    $('cfName').value = c ? c.name : $('carrierQuery').value.trim();
+    $('cfCode').value = c ? c.code : '';
+    $('cfPhone').value = c ? c.phone : '';
+    $('cfNote').value = c ? c.note : '';
+    $('cfActive').checked = c ? !!c.active : true;
+    $('carrierFormMsg').classList.add('hidden');
+    $('carrierFormCard').classList.remove('hidden');
+    $('carrierSearchCard').classList.add('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('cfName').focus();
+  }
+
+  function closeCarrierForm() {
+    $('carrierFormCard').classList.add('hidden');
+    $('carrierSearchCard').classList.remove('hidden');
+    editingCarrier = '';
+  }
+
+  function saveCarrier() {
+    var payload = {
+      originalName: editingCarrier,
+      carrierName: $('cfName').value.trim(),
+      carrierCode: $('cfCode').value.trim(),
+      phone: $('cfPhone').value.trim(),
+      note: $('cfNote').value.trim(),
+      active: $('cfActive').checked
+    };
+    if (!payload.carrierName) {
+      $('carrierFormMsg').textContent = 'ยังไม่ได้กรอกชื่อขนส่ง/ผู้มารับ';
+      $('carrierFormMsg').classList.remove('hidden');
+      return;
+    }
+
+    $('cfSaveBtn').disabled = true;
+    $('cfSaveBtn').textContent = 'กำลังบันทึก…';
+
+    call('apiSaveCarrier', payload).then(function (res) {
+      $('cfSaveBtn').disabled = false;
+      $('cfSaveBtn').textContent = 'บันทึก';
+      if (!res || !res.ok) {
+        $('carrierFormMsg').textContent = (res && res.error) || 'บันทึกไม่สำเร็จ';
+        $('carrierFormMsg').classList.remove('hidden');
+        return;
+      }
+      refreshCarrierSelect(res.carrier, false);
+      closeCarrierForm();
+      $('carrierQuery').value = payload.carrierName;
+      searchCarriers();
+    }).catch(function (err) {
+      $('cfSaveBtn').disabled = false;
+      $('cfSaveBtn').textContent = 'บันทึก';
+      $('carrierFormMsg').textContent = 'บันทึกไม่สำเร็จ: ' + (err.message || err);
+      $('carrierFormMsg').classList.remove('hidden');
+    });
+  }
+
+  /** อัปเดตตัวเลือกในฟอร์มบันทึกให้เห็นขนส่งที่เพิ่ง เพิ่ม/แก้ไข ทันทีโดยไม่ต้องรีเฟรชหน้า */
+  function refreshCarrierSelect(carrier, selectIt) {
+    if (!carrier) return;
+    var sel = $('carrier');
+    if (carrier.active && !hasOption(sel, carrier.name)) {
+      sel.appendChild(new Option(carrier.name, carrier.name));
+    }
+    if (!carrier.active && hasOption(sel, carrier.name)) {
+      // ตัวที่เลิกใช้แล้วต้องเอาออกเสมอ กันเผลอบันทึกด้วยคนที่ไม่ใช้แล้ว
+      // ถ้ากำลังถูกเลือกอยู่พอดี ให้ล้างค่าไปเลย เดี๋ยวตอนกดบันทึกจะเตือนให้เลือกใหม่เอง
+      var wasSelected = sel.value === carrier.name;
+      Array.prototype.slice.call(sel.options).forEach(function (o) {
+        if (o.value === carrier.name) sel.removeChild(o);
+      });
+      if (wasSelected) sel.value = '';
+    }
+    if (selectIt && carrier.active) sel.value = carrier.name;
+  }
+
+  /* ---------- เพิ่มขนส่งด่วนจากหน้าบันทึก ---------- */
+
+  $('carrierQuickBtn').addEventListener('click', function () {
+    $('carrierQuickWrap').classList.toggle('hidden');
+    if (!$('carrierQuickWrap').classList.contains('hidden')) $('cqName').focus();
+  });
+  $('cqCancelBtn').addEventListener('click', closeQuickCarrier);
+  $('cqSaveBtn').addEventListener('click', quickSaveCarrier);
+
+  function closeQuickCarrier() {
+    $('carrierQuickWrap').classList.add('hidden');
+    $('cqName').value = '';
+    $('cqPhone').value = '';
+    $('cqMsg').classList.add('hidden');
+  }
+
+  function quickSaveCarrier() {
+    var name = $('cqName').value.trim();
+    if (!name) {
+      $('cqMsg').textContent = 'ยังไม่ได้กรอกชื่อ';
+      $('cqMsg').classList.remove('hidden');
+      return;
+    }
+
+    $('cqSaveBtn').disabled = true;
+    $('cqSaveBtn').textContent = 'กำลังเพิ่ม…';
+
+    call('apiSaveCarrier', { carrierName: name, phone: $('cqPhone').value.trim(), active: true })
+      .then(function (res) {
+        $('cqSaveBtn').disabled = false;
+        $('cqSaveBtn').textContent = 'เพิ่มแล้วใช้เลย';
+        if (!res || !res.ok) {
+          $('cqMsg').textContent = (res && res.error) || 'เพิ่มไม่สำเร็จ';
+          $('cqMsg').classList.remove('hidden');
+          return;
+        }
+        refreshCarrierSelect(res.carrier, true);
+        carriersLoaded = false;   // ให้หน้าจัดการขนส่งโหลดใหม่เมื่อเปิด
+        closeQuickCarrier();
+      }).catch(function (err) {
+        $('cqSaveBtn').disabled = false;
+        $('cqSaveBtn').textContent = 'เพิ่มแล้วใช้เลย';
+        $('cqMsg').textContent = 'เพิ่มไม่สำเร็จ: ' + (err.message || err);
+        $('cqMsg').classList.remove('hidden');
+      });
   }
 
   boot();
