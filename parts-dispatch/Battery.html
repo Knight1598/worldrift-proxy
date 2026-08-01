@@ -1,0 +1,507 @@
+<!--
+  หน้าติดตามสถานะการกระตุ้นแบตเตอรี่
+  ก็อปไฟล์นี้ไปวางใน Apps Script เป็นไฟล์ชนิด HTML ชื่อ Battery
+
+  หน้าเดียวใช้ได้ 2 โหมด:
+    - เปิดลิงก์ธรรมดา          → สาขาดูสถานะได้อย่างเดียว
+    - เปิดลิงก์ที่มี ?key=...  → แอดมินอัปเดตสถานะได้
+  การตรวจสิทธิ์อยู่ที่ฝั่งเซิร์ฟเวอร์ ไม่ได้อาศัยการซ่อนปุ่มบนหน้าเว็บอย่างเดียว
+-->
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1b1f27;
+    --muted: #6b7280;
+    --line: #e2e5ea;
+    --primary: #2563eb;
+    --err-bg: #fdecec;
+    --err-text: #9b1c1c;
+    --radius: 12px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --card: #1e2127;
+      --text: #eceef2;
+      --muted: #9aa1ad;
+      --line: #333842;
+      --err-bg: #3a1a1a;
+      --err-text: #f5b5b5;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 0 48px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans Thai", "Sarabun", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 14px; }
+
+  header.app {
+    background: var(--primary);
+    color: #fff;
+    padding: calc(14px + env(safe-area-inset-top)) 14px 14px;
+    margin-bottom: 14px;
+  }
+  header.app h1 { font-size: 19px; margin: 0; font-weight: 600; }
+  header.app .sub { font-size: 13px; opacity: .85; margin-top: 4px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 12px; color: var(--muted); font-weight: 600; }
+
+  label { display: block; font-size: 14px; margin-bottom: 5px; color: var(--muted); }
+
+  input, select, button { font-family: inherit; font-size: 16px; color: var(--text); }
+
+  input, select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    margin-bottom: 12px;
+  }
+
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; min-width: 0; }
+
+  button.primary {
+    width: 100%;
+    padding: 13px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  button.primary:disabled { opacity: .6; cursor: default; }
+
+  button.ghost {
+    width: 100%;
+    padding: 10px;
+    background: none;
+    border: 1px dashed var(--line);
+    color: var(--primary);
+    border-radius: 10px;
+    font-size: 15px;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+
+  .banner { border-radius: 10px; padding: 12px; font-size: 15px; margin-bottom: 12px; }
+  .banner.err { background: var(--err-bg); color: var(--err-text); }
+
+  .muted { color: var(--muted); font-size: 14px; }
+  .hidden { display: none !important; }
+
+  /* สรุปจำนวนตามสถานะ */
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .summary .box {
+    flex: 1 1 130px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--s-color, var(--muted));
+    border-radius: 10px;
+    padding: 10px 12px;
+  }
+  .summary .box .n { font-size: 22px; font-weight: 700; }
+  .summary .box .t { font-size: 13px; color: var(--muted); }
+
+  /* การ์ดรายการแบต */
+  .bat {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--s-color, var(--muted));
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .bat .head { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+  .bat .branch { font-size: 17px; font-weight: 600; margin: 4px 0; }
+  .bat .meta { font-size: 14px; color: var(--muted); }
+  .badge {
+    display: inline-block;
+    background: var(--s-color, var(--muted));
+    color: #fff;
+    border-radius: 999px;
+    padding: 3px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    margin: 6px 0;
+  }
+  .bat select { margin: 8px 0 0; }
+
+  /* สีประจำสถานะ ให้ดูปราดเดียวรู้ว่าอยู่ขั้นไหน */
+  .s0 { --s-color: #9333ea; }
+  .s1 { --s-color: #f59e0b; }
+  .s2 { --s-color: #16a34a; }
+  .s3 { --s-color: #0891b2; }
+  .s4 { --s-color: #2563eb; }
+</style>
+
+<header class="app">
+  <h1>🔋 สถานะการกระตุ้นแบตเตอรี่</h1>
+  <div class="sub" id="modeLabel"></div>
+</header>
+
+<div class="wrap">
+
+  <div id="loading" class="card"><div class="muted">กำลังโหลดข้อมูล…</div></div>
+
+  <div id="fatal" class="card hidden">
+    <div class="banner err" id="fatalMsg"></div>
+    <button class="primary" onclick="location.reload()">ลองใหม่</button>
+  </div>
+
+  <!-- ฟอร์มเพิ่ม/แก้ไข เฉพาะแอดมิน -->
+  <div id="formCard" class="card hidden">
+    <h2 id="formTitle">เพิ่มรายการแบตเตอรี่</h2>
+
+    <label for="fBranch">สาขาเจ้าของแบต *</label>
+    <select id="fBranch"><option value="">— เลือกสาขา —</option></select>
+
+    <div class="row">
+      <div>
+        <label for="fDate">วันที่รับเข้า</label>
+        <input type="date" id="fDate">
+      </div>
+      <div>
+        <label for="fQty">จำนวน (ลูก)</label>
+        <input type="number" id="fQty" min="1" step="1" value="1">
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="fSerial">ซีเรียล/รหัสแบต</label>
+        <input type="text" id="fSerial" autocomplete="off">
+      </div>
+      <div>
+        <label for="fModel">รุ่น/ขนาด</label>
+        <input type="text" id="fModel" autocomplete="off" placeholder="เช่น 12V 25-27Ah">
+      </div>
+    </div>
+
+    <label for="fStatus">สถานะ</label>
+    <select id="fStatus"></select>
+
+    <label for="fNote">หมายเหตุ</label>
+    <input type="text" id="fNote" autocomplete="off">
+
+    <label for="fBy">ผู้อัปเดต</label>
+    <input type="text" id="fBy" autocomplete="off" placeholder="ชื่อผู้ดูแล">
+
+    <div id="formMsg" class="banner err hidden"></div>
+    <button class="primary" id="saveBtn">บันทึก</button>
+    <button type="button" class="ghost" id="cancelBtn">ยกเลิก</button>
+  </div>
+
+  <!-- ตัวกรอง -->
+  <div class="card" id="filterCard">
+    <label for="q">ค้นหา</label>
+    <input type="search" id="q" placeholder="เลขที่รายการ / ซีเรียล / รุ่น / หมายเหตุ">
+
+    <div class="row">
+      <div>
+        <label for="branchFilter">สาขา</label>
+        <select id="branchFilter"><option value="">— ทุกสาขา —</option></select>
+      </div>
+      <div>
+        <label for="statusFilter">สถานะ</label>
+        <select id="statusFilter"><option value="">— ทุกสถานะ —</option></select>
+      </div>
+    </div>
+
+    <button class="primary" id="searchBtn">ค้นหา</button>
+    <button type="button" class="ghost hidden" id="newBtn">+ เพิ่มรายการแบตเตอรี่</button>
+  </div>
+
+  <div id="summary" class="summary"></div>
+  <div id="status" class="card hidden"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+  var IS_ADMIN = <?= isAdmin ? 'true' : 'false' ?>;
+  var ADMIN_KEY = '<?= adminKey ?>';
+  var LOCK_BRANCH = <?= JSON.stringify(lockBranch) ?>;
+
+  var STATUSES = [];
+  var editingId = '';
+
+  function $(id) { return document.getElementById(id); }
+
+  function call(fnName, arg) {
+    return new Promise(function (resolve, reject) {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fnName](arg);
+    });
+  }
+
+  function statusClass(status) {
+    var i = STATUSES.indexOf(status);
+    return i < 0 ? '' : 's' + i;
+  }
+
+  function boot() {
+    $('modeLabel').textContent = IS_ADMIN
+      ? 'โหมดแอดมิน — อัปเดตสถานะได้'
+      : 'ดูสถานะอย่างเดียว';
+
+    call('apiBatteryBootstrap').then(function (res) {
+      if (!res || !res.ok) throw new Error((res && res.error) || 'โหลดข้อมูลไม่สำเร็จ');
+
+      STATUSES = res.statuses;
+      res.branches.forEach(function (b) {
+        $('branchFilter').appendChild(new Option(b, b));
+        $('fBranch').appendChild(new Option(b, b));
+      });
+      STATUSES.forEach(function (s) {
+        $('statusFilter').appendChild(new Option(s, s));
+        $('fStatus').appendChild(new Option(s, s));
+      });
+      $('fDate').value = res.today;
+
+      // ลิงก์ที่เจาะจงสาขา ให้ล็อกตัวกรองไว้เลย
+      if (LOCK_BRANCH) {
+        $('branchFilter').value = LOCK_BRANCH;
+        $('branchFilter').disabled = true;
+        $('modeLabel').textContent += ' • เฉพาะสาขา ' + LOCK_BRANCH;
+      }
+
+      if (IS_ADMIN) $('newBtn').classList.remove('hidden');
+
+      $('loading').classList.add('hidden');
+      search();
+    }).catch(function (err) {
+      $('loading').classList.add('hidden');
+      $('fatal').classList.remove('hidden');
+      $('fatalMsg').textContent = 'โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err);
+    });
+  }
+
+  $('searchBtn').addEventListener('click', search);
+  $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
+  $('newBtn').addEventListener('click', function () { openForm(null); });
+  $('cancelBtn').addEventListener('click', closeForm);
+  $('saveBtn').addEventListener('click', save);
+
+  function setStatus(msg, isError) {
+    var box = $('status');
+    box.classList.remove('hidden');
+    box.innerHTML = '';
+    var div = document.createElement('div');
+    div.className = isError ? 'banner err' : 'muted';
+    div.textContent = msg;
+    box.appendChild(div);
+  }
+
+  function search() {
+    setStatus('กำลังโหลด…');
+    $('results').innerHTML = '';
+    call('apiListBatteries', {
+      q: $('q').value.trim(),
+      branch: LOCK_BRANCH || $('branchFilter').value,
+      status: $('statusFilter').value
+    }).then(function (res) {
+      if (!res || !res.ok) return setStatus((res && res.error) || 'โหลดไม่สำเร็จ', true);
+      renderSummary(res.counts);
+      render(res.results);
+    }).catch(function (err) {
+      setStatus('โหลดไม่สำเร็จ: ' + (err.message || err), true);
+    });
+  }
+
+  function renderSummary(counts) {
+    var box = $('summary');
+    box.innerHTML = '';
+    STATUSES.forEach(function (s, i) {
+      var el = document.createElement('div');
+      el.className = 'box s' + i;
+      var n = document.createElement('div');
+      n.className = 'n';
+      n.textContent = counts[s] || 0;
+      var t = document.createElement('div');
+      t.className = 't';
+      t.textContent = s;
+      el.appendChild(n);
+      el.appendChild(t);
+      box.appendChild(el);
+    });
+  }
+
+  function render(rows) {
+    if (!rows.length) return setStatus('ยังไม่มีรายการที่ตรงกับเงื่อนไข');
+    setStatus('พบ ' + rows.length + ' รายการ (ล่าสุดขึ้นก่อน)');
+
+    var box = $('results');
+    rows.forEach(function (b) {
+      var el = document.createElement('div');
+      el.className = 'bat ' + statusClass(b.status);
+
+      var head = document.createElement('div');
+      head.className = 'head';
+      var left = document.createElement('span');
+      left.textContent = b.batteryId;
+      var right = document.createElement('span');
+      right.textContent = b.receivedDate ? 'รับเข้า ' + thaiDate(b.receivedDate) : '';
+      head.appendChild(left);
+      head.appendChild(right);
+      el.appendChild(head);
+
+      var branch = document.createElement('div');
+      branch.className = 'branch';
+      branch.textContent = b.branch + (b.zone ? ' (เขต' + b.zone + ')' : '');
+      el.appendChild(branch);
+
+      var badge = document.createElement('div');
+      badge.className = 'badge';
+      badge.textContent = b.status || 'ยังไม่ระบุสถานะ';
+      el.appendChild(badge);
+
+      var bits = [];
+      if (b.qty) bits.push(b.qty + ' ลูก');
+      if (b.model) bits.push(b.model);
+      if (b.serial) bits.push('ซีเรียล ' + b.serial);
+      if (bits.length) {
+        var meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = bits.join('  •  ');
+        el.appendChild(meta);
+      }
+
+      if (b.note) {
+        var note = document.createElement('div');
+        note.className = 'meta';
+        note.textContent = '📝 ' + b.note;
+        el.appendChild(note);
+      }
+
+      if (b.updatedAt) {
+        var upd = document.createElement('div');
+        upd.className = 'meta';
+        upd.style.marginTop = '6px';
+        upd.textContent = 'อัปเดตล่าสุด ' + b.updatedAt + (b.updatedBy ? ' โดย ' + b.updatedBy : '');
+        el.appendChild(upd);
+      }
+
+      // ปุ่มแก้ไขและช่องเปลี่ยนสถานะ มีเฉพาะโหมดแอดมิน
+      if (IS_ADMIN) {
+        var sel = document.createElement('select');
+        STATUSES.forEach(function (s) { sel.appendChild(new Option(s, s)); });
+        sel.value = b.status;
+        sel.addEventListener('change', function () {
+          sel.disabled = true;
+          call('apiUpdateBatteryStatus', {
+            key: ADMIN_KEY, batteryId: b.batteryId, status: sel.value,
+            updatedBy: localStorage.getItem('bt_by') || ''
+          }).then(function (res) {
+            sel.disabled = false;
+            if (!res || !res.ok) return setStatus((res && res.error) || 'อัปเดตไม่สำเร็จ', true);
+            search();
+          }).catch(function (err) {
+            sel.disabled = false;
+            setStatus('อัปเดตไม่สำเร็จ: ' + (err.message || err), true);
+          });
+        });
+        el.appendChild(sel);
+
+        var edit = document.createElement('button');
+        edit.className = 'ghost';
+        edit.textContent = 'แก้ไขรายละเอียด';
+        edit.addEventListener('click', function () { openForm(b); });
+        el.appendChild(edit);
+      }
+
+      box.appendChild(el);
+    });
+  }
+
+  function openForm(b) {
+    editingId = b ? b.batteryId : '';
+    $('formTitle').textContent = b ? 'แก้ไข ' + b.batteryId : 'เพิ่มรายการแบตเตอรี่';
+    $('fBranch').value = b ? b.branch : (LOCK_BRANCH || '');
+    $('fDate').value = b ? b.receivedDate : $('fDate').value;
+    $('fQty').value = b ? (b.qty || 1) : 1;
+    $('fSerial').value = b ? b.serial : '';
+    $('fModel').value = b ? b.model : '';
+    $('fStatus').value = b ? b.status : STATUSES[0];
+    $('fNote').value = b ? b.note : '';
+    $('fBy').value = localStorage.getItem('bt_by') || '';
+    $('formMsg').classList.add('hidden');
+    $('formCard').classList.remove('hidden');
+    $('filterCard').classList.add('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function closeForm() {
+    $('formCard').classList.add('hidden');
+    $('filterCard').classList.remove('hidden');
+    editingId = '';
+  }
+
+  function save() {
+    var payload = {
+      key: ADMIN_KEY,
+      batteryId: editingId,
+      branch: $('fBranch').value,
+      receivedDate: $('fDate').value,
+      qty: $('fQty').value,
+      serial: $('fSerial').value.trim(),
+      model: $('fModel').value.trim(),
+      status: $('fStatus').value,
+      note: $('fNote').value.trim(),
+      updatedBy: $('fBy').value.trim()
+    };
+    if (!payload.branch) {
+      $('formMsg').textContent = 'ยังไม่ได้เลือกสาขา';
+      $('formMsg').classList.remove('hidden');
+      return;
+    }
+    localStorage.setItem('bt_by', payload.updatedBy);
+
+    $('saveBtn').disabled = true;
+    $('saveBtn').textContent = 'กำลังบันทึก…';
+
+    call('apiSaveBattery', payload).then(function (res) {
+      $('saveBtn').disabled = false;
+      $('saveBtn').textContent = 'บันทึก';
+      if (!res || !res.ok) {
+        $('formMsg').textContent = (res && res.error) || 'บันทึกไม่สำเร็จ';
+        $('formMsg').classList.remove('hidden');
+        return;
+      }
+      closeForm();
+      search();
+    }).catch(function (err) {
+      $('saveBtn').disabled = false;
+      $('saveBtn').textContent = 'บันทึก';
+      $('formMsg').textContent = 'บันทึกไม่สำเร็จ: ' + (err.message || err);
+      $('formMsg').classList.remove('hidden');
+    });
+  }
+
+  function thaiDate(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? m[3] + '/' + m[2] + '/' + m[1] : iso;
+  }
+
+  boot();
+</script>
