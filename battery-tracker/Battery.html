@@ -350,6 +350,18 @@
     <div id="rResults"></div>
 
   </div><!-- /viewRepair -->
+
+  <!-- เข้าโหมดแอดมินได้จากหน้าเว็บ ไม่ต้องพึ่งลิงก์ที่มี key อย่างเดียว
+       เผื่อลิงก์หาย หรือ Deploy ใหม่แล้ว URL เปลี่ยน -->
+  <div class="card" id="adminBox">
+    <button type="button" class="ghost" id="adminToggle" style="margin-top:0;">🔑 เข้าโหมดแอดมิน</button>
+    <div id="adminKeyWrap" class="hidden" style="margin-top:10px;">
+      <label for="adminKeyInput">กุญแจแอดมิน</label>
+      <input type="password" id="adminKeyInput" autocomplete="off" placeholder="วางกุญแจที่ได้จาก showBatteryLinks">
+      <div id="adminKeyMsg" class="banner err hidden"></div>
+      <button type="button" class="primary" id="adminKeyBtn">เข้าใช้งาน</button>
+    </div>
+  </div>
 </div>
 
 <!--
@@ -419,10 +431,7 @@
   }
 
   function boot() {
-    $('modeLabel').textContent = IS_ADMIN
-      ? 'โหมดแอดมิน — อัปเดตสถานะได้'
-      : 'ดูสถานะอย่างเดียว';
-
+    applyAdminMode();
     call('apiBatteryBootstrap').then(function (res) {
       if (!res || !res.ok) throw new Error((res && res.error) || 'โหลดข้อมูลไม่สำเร็จ');
 
@@ -452,23 +461,97 @@
         $('branchFilter').disabled = true;
         $('rBranchFilter').value = LOCK_BRANCH;
         $('rBranchFilter').disabled = true;
-        $('modeLabel').textContent += ' • เฉพาะสาขา ' + LOCK_BRANCH;
-      } else if (CFG.lockBranchInvalid) {
-        $('modeLabel').textContent += ' • ไม่พบสาขา "' + CFG.wantBranch + '" จึงแสดงทุกสาขา';
       }
 
-      if (IS_ADMIN) {
-        $('newBtn').classList.remove('hidden');
-        $('rNewBtn').classList.remove('hidden');
-      }
-
+      applyAdminMode();
       $('loading').classList.add('hidden');
       search();
+
+      // ลิงก์ไม่มี key แต่เคยกรอกกุญแจไว้ในเครื่องนี้ ก็เข้าโหมดแอดมินให้เลย
+      if (!IS_ADMIN) {
+        var saved = localStorage.getItem('bt_key') || '';
+        if (saved) tryAdminKey(saved, true);
+      }
     }).catch(function (err) {
       $('loading').classList.add('hidden');
       $('fatal').classList.remove('hidden');
       $('fatalMsg').textContent = 'โหลดข้อมูลไม่สำเร็จ: ' + (err.message || err);
     });
+  }
+
+  /* ---------- เข้า/ออกโหมดแอดมิน ---------- */
+
+  /**
+   * โชว์หรือซ่อนของที่เฉพาะแอดมินใช้
+   * นี่เป็นแค่เรื่องหน้าตา — ด่านจริงอยู่ที่เซิร์ฟเวอร์ซึ่งตรวจกุญแจทุกครั้งที่เขียนข้อมูล
+   */
+  function applyAdminMode() {
+    $('modeLabel').textContent = IS_ADMIN
+      ? 'โหมดแอดมิน — อัปเดตสถานะได้'
+      : 'ดูสถานะอย่างเดียว';
+    if (LOCK_BRANCH) {
+      $('modeLabel').textContent += ' • เฉพาะสาขา ' + LOCK_BRANCH;
+    } else if (CFG.lockBranchInvalid) {
+      $('modeLabel').textContent += ' • ไม่พบสาขา "' + CFG.wantBranch + '" จึงแสดงทุกสาขา';
+    }
+
+    $('newBtn').classList.toggle('hidden', !IS_ADMIN);
+    $('rNewBtn').classList.toggle('hidden', !IS_ADMIN);
+    $('adminToggle').textContent = IS_ADMIN ? 'ออกจากโหมดแอดมิน' : '🔑 เข้าโหมดแอดมิน';
+    $('adminKeyWrap').classList.add('hidden');
+  }
+
+  $('adminToggle').addEventListener('click', function () {
+    if (IS_ADMIN) {
+      IS_ADMIN = false;
+      ADMIN_KEY = '';
+      localStorage.removeItem('bt_key');
+      applyAdminMode();
+      refreshBothTabs();
+      return;
+    }
+    $('adminKeyWrap').classList.toggle('hidden');
+    if (!$('adminKeyWrap').classList.contains('hidden')) $('adminKeyInput').focus();
+  });
+
+  $('adminKeyBtn').addEventListener('click', function () { tryAdminKey($('adminKeyInput').value.trim()); });
+  $('adminKeyInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') tryAdminKey(this.value.trim());
+  });
+
+  function tryAdminKey(key, quiet) {
+    if (!key) return adminKeyError('ยังไม่ได้กรอกกุญแจ');
+    $('adminKeyBtn').disabled = true;
+
+    call('apiCheckAdminKey', key).then(function (res) {
+      $('adminKeyBtn').disabled = false;
+      if (!res || !res.ok || !res.isAdmin) {
+        localStorage.removeItem('bt_key');   // กุญแจที่เก็บไว้ใช้ไม่ได้แล้ว ลบทิ้ง
+        if (!quiet) adminKeyError('กุญแจไม่ถูกต้อง');
+        return;
+      }
+      IS_ADMIN = true;
+      ADMIN_KEY = key;
+      localStorage.setItem('bt_key', key);
+      $('adminKeyInput').value = '';
+      $('adminKeyMsg').classList.add('hidden');
+      applyAdminMode();
+      refreshBothTabs();
+    }).catch(function (err) {
+      $('adminKeyBtn').disabled = false;
+      if (!quiet) adminKeyError('ตรวจกุญแจไม่สำเร็จ: ' + (err.message || err));
+    });
+  }
+
+  function adminKeyError(msg) {
+    $('adminKeyMsg').textContent = msg;
+    $('adminKeyMsg').classList.remove('hidden');
+  }
+
+  /** วาดรายการใหม่ทั้งสองแท็บ ให้ปุ่มในการ์ดตรงกับสิทธิ์ปัจจุบัน */
+  function refreshBothTabs() {
+    search();
+    if (repairLoaded) rSearch();
   }
 
   // ห่อไว้ ไม่งั้น event object จะกลายเป็น doneMsg ไปโผล่บนหน้าจอ
