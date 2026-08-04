@@ -208,6 +208,37 @@
     margin-top: 4px;
   }
 
+  /* บันทึกหลายใบพร้อมกัน — หนึ่งใบเท่ากับหนึ่งการ์ด มีรูปหลักฐานอยู่บนหัว */
+  .draft {
+    border: 1px solid var(--line);
+    border-left: 5px solid var(--primary);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 14px;
+    background: var(--bg);
+  }
+  .draft.done { border-left-color: var(--ok-text); opacity: .75; }
+  .draft.failed { border-left-color: var(--err-text); }
+  .draft-head {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 15px; font-weight: 600; margin-bottom: 10px;
+  }
+  .draft-head button {
+    background: none; border: none; color: var(--err-text);
+    font-size: 14px; cursor: pointer; padding: 0;
+  }
+  .draft-img {
+    width: 100%; max-height: 260px; object-fit: contain;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: var(--card); margin-bottom: 10px; cursor: zoom-in;
+  }
+  .draft-img.zoom { max-height: none; cursor: zoom-out; }
+  .draft-state { font-size: 14px; margin-bottom: 10px; white-space: pre-line; }
+  .draft-state.err { color: var(--err-text); }
+  .draft-state.ok { color: var(--ok-text); }
+  .draft-body.locked { display: none; }
+  .draft .sec { font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+
   .banner { border-radius: 10px; padding: 12px; font-size: 15px; margin-bottom: 12px; }
   .banner.ok  { background: var(--ok-bg);  color: var(--ok-text); }
   .banner.err { background: var(--err-bg); color: var(--err-text); }
@@ -272,6 +303,44 @@
       <button class="primary" id="againBtn" style="margin-top:14px;">บันทึกรอบถัดไป</button>
     </div>
 
+    <!-- ================= บันทึกหลายใบพร้อมกัน ================= -->
+    <div id="batchCard" class="hidden">
+      <div class="card">
+        <h2>ตรวจใบโอนย้าย <span id="batchCount"></span></h2>
+        <div class="muted" style="margin-bottom:12px;">
+          ระบบอ่านทุกใบแล้วแยกเป็นรายการละใบให้ ตรวจเลขที่ใบ สาขา เขต และรายการอะไหล่ของแต่ละใบ
+          แล้วกดบันทึกครั้งเดียว ระบบจะบันทึกแยกเป็นคนละรายการ พร้อมเก็บรูปของใบนั้นคู่กับรายการนั้น
+        </div>
+        <div id="batchProgress" class="banner ok hidden"></div>
+
+        <div class="sec" style="font-size:13px;color:var(--muted);margin-bottom:4px;">
+          ข้อมูลด้านล่างใช้ร่วมกันทุกใบ
+        </div>
+        <div class="row">
+          <div>
+            <label for="bShipDate">วันที่ส่ง</label>
+            <input type="date" id="bShipDate">
+          </div>
+          <div>
+            <label for="bSender">ผู้บันทึก</label>
+            <input type="text" id="bSender" autocomplete="off">
+          </div>
+        </div>
+        <label for="bCarrier">ขนส่ง / ผู้มารับของ *</label>
+        <select id="bCarrier"><option value="">— เลือกขนส่ง —</option></select>
+      </div>
+
+      <div id="batchDrafts"></div>
+
+      <div class="card">
+        <div id="batchError" class="banner err hidden"></div>
+        <div id="batchDone" class="banner ok hidden"></div>
+        <button type="button" class="primary" id="batchSaveBtn">บันทึกทั้งหมด</button>
+        <button type="button" class="add-item" id="batchAddBtn">+ แนบรูปเพิ่ม</button>
+        <button type="button" class="add-item" id="batchCancelBtn">ยกเลิก กลับไปบันทึกทีละใบ</button>
+      </div>
+    </div>
+
     <form id="form" autocomplete="off">
 
       <div class="card">
@@ -282,13 +351,17 @@
         </div>
         <!-- แยกสองปุ่ม: ถ่ายรูปสดจากกล้อง กับเลือกไฟล์ที่มีอยู่แล้ว -->
         <input type="file" id="slipCamera" accept="image/*" capture="environment" class="hidden">
-        <input type="file" id="slipFile" accept="image/*" class="hidden">
+        <!-- multiple: เลือกทีเดียวหลายใบได้ ถ้าเลือกตั้งแต่ 2 ใบจะเด้งไปหน้าบันทึกหลายรายการ -->
+        <input type="file" id="slipFile" accept="image/*" multiple class="hidden">
         <div class="row">
           <button type="button" class="primary" id="slipCameraBtn">📷 ถ่ายรูป</button>
           <button type="button" class="primary" id="slipPickBtn"
                   style="background:var(--card);color:var(--primary);border:1px solid var(--primary);">
             🖼️ เลือกรูป
           </button>
+        </div>
+        <div class="muted" style="margin-top:8px;font-size:13px;">
+          เลือกได้ทีละหลายใบ — ถ้าเลือกตั้งแต่ 2 ใบขึ้นไป ระบบจะเปิดหน้าตรวจทีละใบให้ แล้วบันทึกพร้อมกัน
         </div>
         <button type="button" class="primary" id="slipReadBtn" style="margin-top:10px;" disabled>
           อ่านข้อมูลจากรูป
@@ -982,7 +1055,9 @@
 
   var itemSeq = 0;
 
-  function addItemRow(focus) {
+  /** box = กล่องที่จะใส่แถวลงไป เว้นว่างคือฟอร์มบันทึกทีละใบตามปกติ */
+  function addItemRow(focus, box) {
+    box = box || $('items');
     var id = 'itemCode' + (++itemSeq);
     var wrap = document.createElement('div');
     wrap.className = 'item-wrap';
@@ -1000,7 +1075,7 @@
 
     wrap.appendChild(row);
     wrap.appendChild(alert);
-    $('items').appendChild(wrap);
+    box.appendChild(wrap);
 
     var name = row.querySelector('.name');
 
@@ -1056,14 +1131,15 @@
 
     row.querySelector('button').addEventListener('click', function () {
       wrap.remove();
-      if (!$('items').children.length) addItemRow();
+      if (!box.children.length) addItemRow(false, box);
     });
 
     if (focus) codeCombo.input.focus();
+    return wrap;
   }
 
-  function collectItems() {
-    return Array.prototype.slice.call($('items').children).map(function (wrap) {
+  function collectItems(box) {
+    return Array.prototype.slice.call((box || $('items')).children).map(function (wrap) {
       return {
         partCode: wrap._codeCombo ? wrap._codeCombo.getValue().trim() : '',
         partName: wrap.querySelector('.name').value.trim(),
@@ -1316,7 +1392,16 @@
   $('slipCameraBtn').addEventListener('click', function () { $('slipCamera').click(); });
   $('slipPickBtn').addEventListener('click', function () { $('slipFile').click(); });
   $('slipCamera').addEventListener('change', function () { pickSlip(this.files[0]); });
-  $('slipFile').addEventListener('change', function () { pickSlip(this.files[0]); });
+  $('slipFile').addEventListener('change', function () {
+    var files = Array.prototype.slice.call(this.files || []);
+    // ล้างค่าทันที เพื่อให้เลือกไฟล์เดิมซ้ำแล้วยังมี event ให้จับ (File ที่ดึงไว้แล้วยังใช้ได้)
+    this.value = '';
+    if (!files.length) return;
+    if (drafts.length) return enterBatch(files);      // อยู่ในหน้าหลายใบอยู่แล้ว → แนบเพิ่ม
+    // ใบเดียวใช้ฟอร์มปกติ ตั้งแต่ 2 ใบขึ้นไปเด้งไปหน้าตรวจทีละใบแล้วบันทึกพร้อมกัน
+    if (files.length > 1) enterBatch(files);
+    else pickSlip(files[0]);
+  });
 
   $('slipRawBtn').addEventListener('click', function () {
     $('slipRaw').classList.toggle('hidden');
@@ -1442,6 +1527,461 @@
     setSlipMsg('อ่านข้อมูลมาเติมให้แล้ว — กรุณาตรวจก่อนกดบันทึก\n' + notes.join('\n'),
       notes.some(function (n) { return n.indexOf('⚠️') === 0; }));
     $('prNo').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  /* ---------- แนบหลายใบพร้อมกัน แล้วบันทึกแยกเป็นคนละรายการ ----------
+   *
+   * ใบหนึ่ง = การ์ดหนึ่ง = รายการหนึ่งในระบบ
+   * รูปของใบไหนติดอยู่บนหัวการ์ดนั้น และตอนบันทึกก็ถูกส่งไปคู่กับรายการนั้น
+   * ไม่มีการรวมรายการอะไหล่ข้ามใบ
+   */
+
+  var drafts = [];
+  var draftSeq = 0;
+  var batchSaving = false;
+  var batchReading = false;
+
+  /** เปิดหน้าหลายใบ หรือถ้าเปิดอยู่แล้วก็แนบใบเพิ่มเข้าไปในชุดเดิม */
+  function enterBatch(files) {
+    var first = !drafts.length;
+    setSlipMsg('กำลังเตรียมรูป ' + files.length + ' ใบ…');
+
+    shrinkAll(files, function (images) {
+      var usable = images.filter(function (i) { return i; });
+      if (!usable.length) {
+        var noneMsg = 'เปิดไฟล์รูปไม่ได้เลยสักใบ ลองเลือกใหม่';
+        return first ? setSlipMsg(noneMsg, true) : setBatchProgress(noneMsg, true);
+      }
+
+      if (first) {
+        $('form').classList.add('hidden');
+        $('resultCard').classList.add('hidden');
+        $('batchCard').classList.remove('hidden');
+
+        // ค่าที่ใช้ร่วมกันทุกใบ ยกมาจากฟอร์มเดี่ยวเพื่อไม่ให้ต้องกรอกซ้ำ
+        $('bShipDate').value = $('shipDate').value || MASTERS.today || '';
+        $('bSender').value = $('sender').value || localStorage.getItem('pd_sender') || '';
+        if ($('bCarrier').options.length <= 1) {
+          MASTERS.carriers.forEach(function (c) { $('bCarrier').appendChild(new Option(c.name, c.name)); });
+        }
+        var lastCarrier = $('carrier').value || localStorage.getItem('pd_carrier');
+        if (lastCarrier && hasOption($('bCarrier'), lastCarrier)) $('bCarrier').value = lastCarrier;
+      }
+
+      usable.forEach(addDraft);
+      renderBatchCount();
+      if (first) window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      var skipped = images.length - usable.length;
+      if (skipped) setBatchProgress('⚠️ เปิดไม่ได้ ' + skipped + ' ใบ ข้ามไปก่อน', true);
+
+      batchReading = true;
+      renderBatchCount();
+      readDraftsFrom(0);
+    });
+  }
+
+  /** ย่อรูปทีละใบเรียงกันไป กันหน่วยความจำแตกตอนแนบหลายใบพร้อมกัน */
+  function shrinkAll(files, done) {
+    var out = [];
+    (function next(i) {
+      if (i >= files.length) return done(out);
+      setSlipMsg('กำลังเตรียมรูป ' + (i + 1) + ' / ' + files.length + '…');
+      shrinkImage(files[i], function (img) {
+        out.push(img);
+        next(i + 1);
+      });
+    })(0);
+  }
+
+  function addDraft(image) {
+    var d = { n: ++draftSeq, image: image, token: newToken(), saved: false, shipmentId: '' };
+
+    var el = document.createElement('div');
+    el.className = 'draft';
+
+    var head = document.createElement('div');
+    head.className = 'draft-head';
+    d.titleEl = document.createElement('span');
+    head.appendChild(d.titleEl);
+    var del = document.createElement('button');
+    del.type = 'button';
+    del.textContent = 'ลบใบนี้';
+    del.addEventListener('click', function () { removeDraft(d); });
+    head.appendChild(del);
+    d.delBtn = del;
+    el.appendChild(head);
+
+    // รูปหลักฐานอยู่บนหัวรายการ กดเพื่อขยายดูตัวหนังสือในใบได้
+    var img = document.createElement('img');
+    img.className = 'draft-img';
+    img.src = image.dataUrl;
+    img.addEventListener('click', function () { img.classList.toggle('zoom'); });
+    el.appendChild(img);
+
+    d.stateEl = document.createElement('div');
+    d.stateEl.className = 'draft-state';
+    el.appendChild(d.stateEl);
+
+    var body = document.createElement('div');
+    body.className = 'draft-body';
+    body.innerHTML =
+      '<label>เลขที่ใบ PR *</label>' +
+      '<input type="text" class="d-pr" autocomplete="off">' +
+      '<label>เขต *</label><div class="combo" id="bzone' + d.n + '"></div>' +
+      '<label>สาขาปลายทาง *</label><div class="combo" id="bbranch' + d.n + '"></div>' +
+      '<div class="switch">' +
+      '  <input type="checkbox" class="d-transfer" id="btr' + d.n + '">' +
+      '  <label for="btr' + d.n + '">ฝากลงที่อื่น</label>' +
+      '</div>' +
+      '<div class="d-dropwrap hidden">' +
+      '  <label>ฝากลงที่</label><div class="combo" id="bdrop' + d.n + '"></div>' +
+      '  <input type="text" class="d-dropother hidden" placeholder="พิมพ์ชื่อจุดฝากลง">' +
+      '</div>' +
+      '<div class="sec">รายการอะไหล่ *</div>' +
+      '<div class="d-items"></div>' +
+      '<button type="button" class="add-item d-additem">+ เพิ่มรายการ</button>' +
+      '<div class="sec">หมายเหตุ</div>' +
+      '<input type="text" class="d-note" autocomplete="off">';
+    el.appendChild(body);
+
+    $('batchDrafts').appendChild(el);
+
+    d.el = el;
+    d.body = body;
+    d.prEl = body.querySelector('.d-pr');
+    d.itemsBox = body.querySelector('.d-items');
+    d.noteEl = body.querySelector('.d-note');
+    d.transferEl = body.querySelector('.d-transfer');
+    d.dropWrap = body.querySelector('.d-dropwrap');
+    d.dropOther = body.querySelector('.d-dropother');
+
+    // combobox ต้องสร้างหลังจากที่ element อยู่ใน DOM แล้ว เพราะมันหาจาก id
+    d.comboZone = makeCombo('bzone' + d.n, {
+      placeholder: 'พิมพ์เลขเขตหรือชื่อเขต',
+      onChange: function (zone) {
+        applyDraftZoneScope(d, zone);
+        var cur = findBranch(d.comboBranch.getValue());
+        if (cur && cur.zone !== zone) d.comboBranch.clear();
+        d.comboBranch.focusOpen();
+      }
+    });
+    d.comboBranch = makeCombo('bbranch' + d.n, {
+      placeholder: 'พิมพ์ชื่อสาขาหรือรหัสสาขา',
+      onChange: function (name) {
+        var b = findBranch(name);
+        if (b && b.zone && b.zone !== d.comboZone.getValue()) {
+          d.comboZone.setValue(b.zone);
+          applyDraftZoneScope(d, b.zone);
+        }
+      }
+    });
+    d.comboDrop = makeCombo('bdrop' + d.n, {
+      placeholder: 'พิมพ์ชื่อสาขาหรือจุดฝากลง',
+      onChange: function (v) {
+        var other = v === '__other__';
+        d.dropOther.classList.toggle('hidden', !other);
+        if (other) d.dropOther.focus();
+      }
+    });
+
+    d.comboZone.setOptions(MASTERS.zones.map(function (z) { return { value: z, label: z }; }));
+    d.comboBranch.setOptions(branchOptions());
+    var dropOpts = branchOptions();
+    MASTERS.dropPoints.forEach(function (p) { dropOpts.push({ value: p.name, label: p.name }); });
+    dropOpts.push({ value: '__other__', label: 'อื่น ๆ (พิมพ์เอง)' });
+    d.comboDrop.setOptions(dropOpts);
+
+    d.transferEl.addEventListener('change', function () {
+      d.dropWrap.classList.toggle('hidden', !this.checked);
+      if (!this.checked) {
+        d.comboDrop.clear();
+        d.dropOther.value = '';
+        d.dropOther.classList.add('hidden');
+      }
+    });
+    body.querySelector('.d-additem').addEventListener('click', function () {
+      addItemRow(true, d.itemsBox);
+    });
+
+    addItemRow(false, d.itemsBox);
+    drafts.push(d);
+    return d;
+  }
+
+  function branchOptions() {
+    return MASTERS.branches.map(function (b) {
+      return { value: b.name, label: b.name, sub: b.code + ' • ' + b.zone, zone: b.zone };
+    });
+  }
+
+  function applyDraftZoneScope(d, zone) {
+    if (!zone) {
+      d.comboBranch.setScope(null);
+      d.comboBranch.setPlaceholder('พิมพ์ชื่อสาขาหรือรหัสสาขา');
+      return;
+    }
+    var count = MASTERS.branches.filter(function (b) { return b.zone === zone; }).length;
+    d.comboBranch.setScope(function (o) { return o.zone === zone; });
+    d.comboBranch.setPlaceholder('เลือกสาขา (' + count + ' สาขาในเขตนี้)');
+  }
+
+  function removeDraft(d) {
+    if (batchSaving) return;
+    d.el.remove();
+    drafts = drafts.filter(function (x) { return x !== d; });
+    renderBatchCount();
+    if (!drafts.length) exitBatch();
+  }
+
+  function renderBatchCount() {
+    var left = drafts.filter(function (d) { return !d.saved; }).length;
+    $('batchCount').textContent = '(' + drafts.length + ' ใบ)';
+    drafts.forEach(function (d, i) {
+      d.titleEl.textContent = 'ใบที่ ' + (i + 1) + (d.saved ? ' — บันทึกแล้ว' : '');
+    });
+    $('batchSaveBtn').textContent = batchSaving ? 'กำลังบันทึก…'
+      : batchReading ? 'รออ่านรูปให้ครบก่อน…'
+      : left ? 'บันทึกทั้งหมด (' + left + ' ใบ)'
+      : 'บันทึกครบทุกใบแล้ว';
+    $('batchSaveBtn').disabled = !left || batchSaving || batchReading;
+  }
+
+  function setBatchProgress(msg, isError) {
+    var box = $('batchProgress');
+    box.className = 'banner ' + (isError ? 'err' : 'ok');
+    box.textContent = msg;
+    box.classList.remove('hidden');
+  }
+
+  function setDraftState(d, msg, kind) {
+    d.stateEl.className = 'draft-state' + (kind ? ' ' + kind : '');
+    d.stateEl.textContent = msg;
+  }
+
+  /** อ่านทีละใบเรียงกันไป เพราะ OCR ใบหนึ่งกินเวลา 10-30 วินาที ยิงพร้อมกันจะไปชนโควตา */
+  function readDraftsFrom(i) {
+    if (i >= drafts.length) {
+      batchReading = false;
+      setBatchProgress('อ่านครบทุกใบแล้ว — ตรวจข้อมูลแต่ละใบก่อนกดบันทึก');
+      renderBatchCount();
+      return;
+    }
+    var d = drafts[i];
+    if (d.read) return readDraftsFrom(i + 1);
+
+    setBatchProgress('กำลังอ่านใบที่ ' + (i + 1) + ' จาก ' + drafts.length + '… (ใบละ 10-30 วินาที)');
+    setDraftState(d, 'กำลังอ่านรูป…');
+
+    call('apiReadSlip', { base64: d.image.base64, mimeType: d.image.mimeType })
+      .then(function (res) {
+        d.read = true;
+        if (!res || !res.ok) setDraftState(d, '⚠️ อ่านรูปไม่สำเร็จ: ' + ((res && res.error) || '') +
+          '\nกรอกเองได้ตามปกติ', 'err');
+        else applySlipToDraft(d, res);
+        readDraftsFrom(i + 1);
+      }).catch(function (err) {
+        d.read = true;
+        setDraftState(d, '⚠️ อ่านรูปไม่สำเร็จ: ' + (err.message || err) + '\nกรอกเองได้ตามปกติ', 'err');
+        readDraftsFrom(i + 1);
+      });
+  }
+
+  function applySlipToDraft(d, res) {
+    var notes = [];
+
+    if (res.prNo) { d.prEl.value = res.prNo; notes.push('เลขที่ใบ: ' + res.prNo); }
+    else notes.push('⚠️ อ่านเลขที่ใบไม่ออก กรอกเอง');
+
+    if (res.destMatched) {
+      d.comboZone.setValue(res.zone);
+      applyDraftZoneScope(d, res.zone);
+      d.comboBranch.setValue(res.destBranch);
+      notes.push('ปลายทาง: ' + res.destBranch + ' (เขต' + res.zone + ')');
+    } else if (res.destCode) {
+      notes.push('⚠️ ไม่พบสาขารหัส ' + res.destCode +
+        (res.destNameFromSlip ? ' (' + res.destNameFromSlip + ')' : '') + ' ในตาราง เลือกเอง');
+    } else {
+      notes.push('⚠️ อ่านสาขาปลายทางไม่ออก เลือกเอง');
+    }
+
+    if (res.items && res.items.length) {
+      d.itemsBox.innerHTML = '';
+      res.items.forEach(function (it) {
+        var wrap = addItemRow(false, d.itemsBox);
+        wrap._codeCombo.setFreeValue(it.partCode);
+        wrap.querySelector('.name').value = it.partName || '';
+        wrap.querySelector('.qty').value = it.qty || 1;
+      });
+      var unmatched = res.items.filter(function (i) { return !i.matched; });
+      notes.push('รายการอะไหล่: ' + res.items.length + ' รายการ' +
+        (unmatched.length ? ' (⚠️ ' + unmatched.length + ' รายการยังไม่มีในตารางแม่)' : ''));
+    } else {
+      notes.push('⚠️ อ่านรายการอะไหล่ไม่ออก ใส่เอง');
+    }
+
+    var hasWarning = notes.some(function (n) { return n.indexOf('⚠️') === 0; });
+    setDraftState(d, notes.join('\n'), hasWarning ? 'err' : '');
+  }
+
+  $('batchCancelBtn').addEventListener('click', function () {
+    if (batchSaving) return;
+    var unsaved = drafts.filter(function (d) { return !d.saved; }).length;
+    if (unsaved && !window.confirm('ยังไม่ได้บันทึก ' + unsaved + ' ใบ ทิ้งทั้งหมดเลยไหม')) return;
+    exitBatch();
+  });
+
+  $('batchAddBtn').addEventListener('click', function () {
+    if (batchSaving) return;
+    $('slipFile').click();
+  });
+
+  function exitBatch() {
+    drafts = [];
+    $('batchDrafts').innerHTML = '';
+    $('batchCard').classList.add('hidden');
+    $('batchError').classList.add('hidden');
+    $('batchDone').classList.add('hidden');
+    $('batchProgress').classList.add('hidden');
+    $('form').classList.remove('hidden');
+    $('slipFile').value = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  $('batchSaveBtn').addEventListener('click', saveBatch);
+
+  function saveBatch() {
+    $('batchError').classList.add('hidden');
+    $('batchDone').classList.add('hidden');
+
+    var carrier = $('bCarrier').value;
+    if (!carrier) return showBatchError('ยังไม่ได้เลือกขนส่ง');
+
+    var pending = drafts.filter(function (d) { return !d.saved; });
+    if (!pending.length) return showBatchError('บันทึกครบทุกใบแล้ว');
+
+    // ตรวจให้ครบทุกใบก่อน จะได้ไม่บันทึกไปได้ครึ่งเดียวแล้วมาติดกลางทาง
+    var bad = null;
+    pending.forEach(function (d) {
+      var err = validateDraft(d);
+      if (err) {
+        setDraftState(d, '⚠️ ' + err, 'err');
+        if (!bad) bad = d;
+      }
+    });
+    if (bad) {
+      bad.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return showBatchError('มีใบที่ยังกรอกไม่ครบ — ดูใบที่ทำเครื่องหมายไว้');
+    }
+
+    localStorage.setItem('pd_sender', $('bSender').value.trim());
+    localStorage.setItem('pd_carrier', carrier);
+
+    batchSaving = true;
+    renderBatchCount();
+    saveDraftsFrom(pending, 0, { ok: 0, fail: 0 });
+  }
+
+  function validateDraft(d) {
+    if (!d.prEl.value.trim()) return 'ยังไม่ได้กรอกเลขที่ใบ PR';
+    if (!d.comboBranch.getValue()) return 'ยังไม่ได้เลือกสาขาปลายทาง';
+    if (!collectItems(d.itemsBox).length) return 'ยังไม่ได้ใส่รายการอะไหล่';
+    if (d.transferEl.checked && !draftDropPoint(d)) return 'เลือกฝากลงที่อื่นแล้ว ต้องระบุจุดฝากลงด้วย';
+    return '';
+  }
+
+  function draftDropPoint(d) {
+    return d.comboDrop.getValue() === '__other__'
+      ? d.dropOther.value.trim()
+      : d.comboDrop.getValue();
+  }
+
+  /** บันทึกทีละใบเรียงกันไป แต่ละใบเป็นคนละรายการ พร้อมรูปของใบนั้นเอง */
+  function saveDraftsFrom(list, i, tally) {
+    if (i >= list.length) {
+      batchSaving = false;
+      renderBatchCount();
+      historyLoaded = false;
+      clientToken = newToken();
+
+      var msg = 'บันทึกสำเร็จ ' + tally.ok + ' ใบ';
+      if (tally.fail) msg += ' • ไม่สำเร็จ ' + tally.fail + ' ใบ (แก้แล้วกดบันทึกอีกครั้งได้)';
+      setBatchProgress(msg, tally.fail > 0);
+
+      if (!tally.fail) {
+        var done = $('batchDone');
+        done.textContent = '✅ บันทึกครบทุกใบแล้ว รูปหลักฐานถูกเก็บคู่กับแต่ละรายการเรียบร้อย';
+        done.classList.remove('hidden');
+      }
+      return;
+    }
+
+    var d = list[i];
+    setBatchProgress('กำลังบันทึกใบที่ ' + (i + 1) + ' จาก ' + list.length + '…');
+    setDraftState(d, 'กำลังบันทึก…');
+
+    var payload = {
+      clientToken: d.token,
+      prNo: d.prEl.value.trim(),
+      shipDate: $('bShipDate').value,
+      destBranch: d.comboBranch.getValue(),
+      isTransfer: d.transferEl.checked,
+      dropPoint: draftDropPoint(d),
+      carrier: $('bCarrier').value,
+      trackingNo: '',
+      boxCount: '',
+      receiverName: '',
+      note: d.noteEl.value.trim(),
+      sender: $('bSender').value.trim(),
+      slipBase64: d.image.base64,
+      slipMimeType: d.image.mimeType,
+      items: collectItems(d.itemsBox)
+    };
+
+    call('apiSaveShipment', payload).then(function (res) {
+      if (!res || !res.ok) {
+        tally.fail++;
+        d.el.classList.add('failed');
+        setDraftState(d, '❌ บันทึกไม่สำเร็จ: ' + ((res && res.error) || ''), 'err');
+      } else {
+        tally.ok++;
+        markDraftSaved(d, res, payload);
+      }
+      saveDraftsFrom(list, i + 1, tally);
+    }).catch(function (err) {
+      tally.fail++;
+      d.el.classList.add('failed');
+      setDraftState(d, '❌ บันทึกไม่สำเร็จ: ' + (err.message || err), 'err');
+      saveDraftsFrom(list, i + 1, tally);
+    });
+  }
+
+  function markDraftSaved(d, res, payload) {
+    d.saved = true;
+    d.shipmentId = res.shipmentId;
+    d.el.classList.remove('failed');
+    d.el.classList.add('done');
+    d.body.classList.add('locked');   // บันทึกแล้วล็อกไว้ กันแก้ทับโดยไม่ตั้งใจ
+    d.delBtn.classList.add('hidden');
+
+    var line = (res.duplicate ? 'บันทึกไปแล้ว (กันบันทึกซ้ำ) ' : '✅ ') + res.shipmentId +
+      ' • ' + payload.destBranch;
+    if (res.summary && res.summary.zone) line += ' (เขต' + res.summary.zone + ')';
+    if (res.summary && res.summary.isTransfer) line += ' — ฝากลงที่ ' + res.summary.dropPoint;
+    line += ' • ' + payload.items.length + ' รายการ';
+    line += res.slipFileId ? '\n📎 เก็บรูปหลักฐานคู่กับรายการนี้แล้ว'
+                           : '\n⚠️ บันทึกข้อมูลแล้ว แต่เก็บรูปลงไดรฟ์ไม่สำเร็จ';
+    if (res.addedParts && res.addedParts.length) {
+      line += '\n➕ เก็บอะไหล่ใหม่เข้าตารางให้แล้ว: ' + res.addedParts.join(', ');
+      partsLoaded = false;
+    }
+    setDraftState(d, line, 'ok');
+    renderBatchCount();
+  }
+
+  function showBatchError(msg) {
+    $('batchError').textContent = msg;
+    $('batchError').classList.remove('hidden');
   }
 
   /* ---------- หน้าจัดการอะไหล่ ---------- */
