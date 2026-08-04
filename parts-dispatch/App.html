@@ -472,6 +472,12 @@
       </div>
 
       <div id="formError" class="banner err hidden"></div>
+      <div id="dupWarn" class="banner err hidden">
+        <div id="dupWarnMsg" style="white-space:pre-line;"></div>
+        <button type="button" class="link" id="dupForceBtn" style="margin-top:8px;">
+          ยืนยันว่าเป็นคนละรอบ บันทึกซ้ำอยู่ดี
+        </button>
+      </div>
       <button type="submit" class="primary" id="saveBtn">บันทึก</button>
     </form>
   </div>
@@ -621,6 +627,29 @@
   function newToken() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
     return 'tk-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  /**
+   * ลายนิ้วมือของรูป ใช้เทียบว่าแนบไฟล์เดิมซ้ำในหน้าเดียวกันหรือเปล่า
+   * (การกันซ้ำข้ามรอบที่บันทึกไปแล้ว ตรวจที่ฝั่งเซิร์ฟเวอร์อีกชั้นหนึ่ง)
+   * เดินสองสายด้วยตัวคูณคนละตัว แล้วต่อกับความยาว โอกาสชนกันเองต่ำมาก
+   */
+  function fingerprint(str) {
+    var h1 = 0x811c9dc5, h2 = 0xc2b2ae35;
+    for (var i = 0; i < str.length; i++) {
+      var c = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+      h2 = Math.imul(h2 ^ c, 0x85ebca6b) >>> 0;
+    }
+    return str.length.toString(36) + '-' + h1.toString(36) + '-' + h2.toString(36);
+  }
+
+  /** ข้อความบอกว่าซ้ำกับรอบไหน ใช้ร่วมกันทั้งฟอร์มเดี่ยวและหน้าหลายใบ */
+  function dupText(kind, rec) {
+    var what = kind === 'slip' ? 'รูปใบนี้เคยแนบบันทึกไปแล้ว' : 'เลขที่ใบนี้เคยบันทึกไปแล้ว';
+    return '⚠️ ' + what + '\nรอบ ' + rec.shipmentId + ' • ใบ ' + rec.prNo +
+      ' → ' + rec.destBranch + ' • วันที่ส่ง ' + rec.shipDate +
+      (rec.carrier ? ' • ' + rec.carrier : '');
   }
 
   /* ---------- ช่องเลือกแบบพิมพ์ค้นหาได้ ----------
@@ -1152,6 +1181,15 @@
 
   /* ---------- บันทึก ---------- */
 
+  // ผู้ใช้ยืนยันแล้วว่าเป็นคนละรอบ — ส่งใหม่โดยข้ามการตรวจซ้ำ
+  var allowDuplicateOnce = false;
+
+  $('dupForceBtn').addEventListener('click', function () {
+    allowDuplicateOnce = true;
+    $('dupWarn').classList.add('hidden');
+    $('form').dispatchEvent(new Event('submit', { cancelable: true }));
+  });
+
   $('form').addEventListener('submit', function (e) {
     e.preventDefault();
     $('formError').classList.add('hidden');
@@ -1175,6 +1213,7 @@
       sender: $('sender').value.trim(),
       slipBase64: slipImage ? slipImage.base64 : '',
       slipMimeType: slipImage ? slipImage.mimeType : '',
+      allowDuplicate: allowDuplicateOnce,
       items: collectItems()
     };
 
@@ -1190,13 +1229,23 @@
 
     call('apiSaveShipment', payload).then(function (res) {
       setSaving(false);
+      allowDuplicateOnce = false;   // ยืนยันได้ครั้งเดียวต่อการกดหนึ่งครั้ง
+      if (res && !res.ok && res.duplicate) return showDupWarn(res);
       if (!res || !res.ok) return showFormError((res && res.error) || 'บันทึกไม่สำเร็จ');
       showResult(res, payload);
     }).catch(function (err) {
       setSaving(false);
+      allowDuplicateOnce = false;
       showFormError('บันทึกไม่สำเร็จ: ' + (err.message || err));
     });
   });
+
+  function showDupWarn(res) {
+    $('dupWarnMsg').textContent = dupText(res.duplicate, res.existing) +
+      '\nถ้าเป็นการส่งคนละรอบจริง ๆ กดยืนยันด้านล่างเพื่อบันทึกซ้ำได้';
+    $('dupWarn').classList.remove('hidden');
+    $('dupWarn').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 
   function setSaving(on) {
     $('saveBtn').disabled = on;
@@ -1257,6 +1306,8 @@
     $('items').innerHTML = '';
     addItemRow();
     slipImage = null;
+    allowDuplicateOnce = false;
+    $('dupWarn').classList.add('hidden');
     $('slipFile').value = '';
     $('slipCamera').value = '';
     $('slipReadBtn').disabled = true;
@@ -1421,8 +1472,17 @@
       $('slipPreview').src = img.dataUrl;
       $('slipPreview').classList.remove('hidden');
       $('slipReadBtn').disabled = false;
+      $('dupWarn').classList.add('hidden');
       setSlipMsg('แนบรูปแล้ว — กด "อ่านข้อมูลจากรูป" เพื่อให้ระบบเติมข้อมูลให้ ' +
         'หรือกรอกเองแล้วกดบันทึกเลยก็ได้\nรูปจะถูกเก็บลงไดรฟ์ตอนกดบันทึกการขนส่ง');
+
+      // ถามเซิร์ฟเวอร์เลยว่าเคยแนบรูปนี้ไปแล้วหรือยัง จะได้รู้ก่อนคีย์ทั้งใบ
+      call('apiCheckSlipDuplicate', { base64: img.base64 }).then(function (res) {
+        if (!res || !res.ok || !res.slipDuplicate) return;
+        if (!slipImage || slipImage.base64 !== img.base64) return;   // เปลี่ยนรูปไปแล้ว
+        setSlipMsg(dupText('slip', res.slipDuplicate) +
+          '\nถ้าเป็นการส่งคนละรอบจริง ๆ กรอกแล้วกดบันทึกได้ ระบบจะให้ยืนยันอีกครั้ง', true);
+      }).catch(function () { /* ตรวจไม่ได้ก็ยังมีด่านตอนกดบันทึก */ });
     });
   }
 
@@ -1523,6 +1583,9 @@
       notes.push('⚠️ อ่านรายการอะไหล่ไม่ออก ใส่เอง');
     }
 
+    if (res.slipDuplicate) notes.push(dupText('slip', res.slipDuplicate));
+    else if (res.prDuplicate) notes.push(dupText('pr', res.prDuplicate));
+
     notes.push('📎 รูปจะถูกเก็บลงไดรฟ์ตอนกดบันทึกการขนส่ง');
     setSlipMsg('อ่านข้อมูลมาเติมให้แล้ว — กรุณาตรวจก่อนกดบันทึก\n' + notes.join('\n'),
       notes.some(function (n) { return n.indexOf('⚠️') === 0; }));
@@ -1568,12 +1631,28 @@
         if (lastCarrier && hasOption($('bCarrier'), lastCarrier)) $('bCarrier').value = lastCarrier;
       }
 
-      usable.forEach(addDraft);
+      // แนบไฟล์เดิมซ้ำในชุดเดียวกัน — ข้ามไปเลย ไม่ต้องเสีย OCR อีกรอบ
+      var already = {};
+      drafts.forEach(function (d) { already[d.fp] = true; });
+      var dupInBatch = 0;
+      var fresh = usable.filter(function (img) {
+        var fp = fingerprint(img.base64);
+        if (already[fp]) { dupInBatch++; return false; }
+        already[fp] = true;
+        img.fp = fp;
+        return true;
+      });
+
+      fresh.forEach(addDraft);
       renderBatchCount();
       if (first) window.scrollTo({ top: 0, behavior: 'smooth' });
 
       var skipped = images.length - usable.length;
-      if (skipped) setBatchProgress('⚠️ เปิดไม่ได้ ' + skipped + ' ใบ ข้ามไปก่อน', true);
+      var msgs = [];
+      if (skipped) msgs.push('เปิดไม่ได้ ' + skipped + ' ใบ');
+      if (dupInBatch) msgs.push('ข้ามรูปที่ซ้ำกับที่แนบไว้แล้ว ' + dupInBatch + ' ใบ');
+      setBatchNotice(msgs.length ? '⚠️ ' + msgs.join(' • ') : '');
+      if (!fresh.length) { batchReading = false; return renderBatchCount(); }
 
       batchReading = true;
       renderBatchCount();
@@ -1595,7 +1674,10 @@
   }
 
   function addDraft(image) {
-    var d = { n: ++draftSeq, image: image, token: newToken(), saved: false, shipmentId: '' };
+    var d = {
+      n: ++draftSeq, image: image, token: newToken(), saved: false, shipmentId: '',
+      fp: image.fp || fingerprint(image.base64), dup: null
+    };
 
     var el = document.createElement('div');
     el.className = 'draft';
@@ -1622,6 +1704,20 @@
     d.stateEl = document.createElement('div');
     d.stateEl.className = 'draft-state';
     el.appendChild(d.stateEl);
+
+    // โผล่มาเฉพาะตอนที่ระบบเจอว่าใบนี้ซ้ำ — ไม่ติ๊กก็ข้ามใบนี้ไปตอนบันทึก
+    d.dupWrap = document.createElement('div');
+    d.dupWrap.className = 'switch hidden';
+    d.dupOk = document.createElement('input');
+    d.dupOk.type = 'checkbox';
+    d.dupOk.id = 'bdupok' + d.n;
+    var dupLabel = document.createElement('label');
+    dupLabel.setAttribute('for', d.dupOk.id);
+    dupLabel.textContent = 'เป็นคนละรอบ บันทึกใบนี้ซ้ำอยู่ดี';
+    d.dupOk.addEventListener('change', renderBatchCount);
+    d.dupWrap.appendChild(d.dupOk);
+    d.dupWrap.appendChild(dupLabel);
+    el.appendChild(d.dupWrap);
 
     var body = document.createElement('div');
     body.className = 'draft-body';
@@ -1692,6 +1788,11 @@
     dropOpts.push({ value: '__other__', label: 'อื่น ๆ (พิมพ์เอง)' });
     d.comboDrop.setOptions(dropOpts);
 
+    // แก้เลขที่ใบแล้วก็ไม่ใช่ใบซ้ำอีกต่อไป เอาคำเตือนออกให้เลย
+    d.prEl.addEventListener('input', function () {
+      if (d.dup && d.dup.kind === 'pr') { clearDraftDup(d); renderBatchCount(); }
+    });
+
     d.transferEl.addEventListener('change', function () {
       d.dropWrap.classList.toggle('hidden', !this.checked);
       if (!this.checked) {
@@ -1734,8 +1835,14 @@
     if (!drafts.length) exitBatch();
   }
 
+  /** ใบที่จะถูกบันทึกจริง — ใบที่ระบบทักว่าซ้ำจะถูกข้าม จนกว่าจะติ๊กยืนยัน */
+  function savableDrafts() {
+    return drafts.filter(function (d) { return !d.saved && (!d.dup || d.dupOk.checked); });
+  }
+
   function renderBatchCount() {
-    var left = drafts.filter(function (d) { return !d.saved; }).length;
+    var left = savableDrafts().length;
+    var held = drafts.filter(function (d) { return !d.saved && d.dup && !d.dupOk.checked; }).length;
     $('batchCount').textContent = '(' + drafts.length + ' ใบ)';
     drafts.forEach(function (d, i) {
       d.titleEl.textContent = 'ใบที่ ' + (i + 1) + (d.saved ? ' — บันทึกแล้ว' : '');
@@ -1743,15 +1850,34 @@
     $('batchSaveBtn').textContent = batchSaving ? 'กำลังบันทึก…'
       : batchReading ? 'รออ่านรูปให้ครบก่อน…'
       : left ? 'บันทึกทั้งหมด (' + left + ' ใบ)'
+      : held ? 'เหลือแต่ใบที่ซ้ำ (' + held + ' ใบ)'
       : 'บันทึกครบทุกใบแล้ว';
     $('batchSaveBtn').disabled = !left || batchSaving || batchReading;
   }
 
+  var batchNotice = '';       // เรื่องที่ต้องค้างให้เห็น เช่น ข้ามรูปซ้ำไปกี่ใบ
+  var batchProgressMsg = '';  // สถานะที่เปลี่ยนไปเรื่อย ๆ เช่น กำลังอ่านใบที่ 2
+
+  /** ข้อความค้าง ต้องไม่ถูกสถานะที่วิ่งอยู่เขียนทับ ไม่งั้นผู้ใช้ไม่มีทางรู้ว่าถูกข้ามไปกี่ใบ */
+  function setBatchNotice(msg) {
+    batchNotice = msg || '';
+    renderBatchProgress(true);
+  }
+
   function setBatchProgress(msg, isError) {
+    batchProgressMsg = msg || '';
+    renderBatchProgress(isError);
+  }
+
+  function renderBatchProgress(isError) {
+    var lines = [];
+    if (batchNotice) lines.push(batchNotice);
+    if (batchProgressMsg) lines.push(batchProgressMsg);
     var box = $('batchProgress');
-    box.className = 'banner ' + (isError ? 'err' : 'ok');
-    box.textContent = msg;
-    box.classList.remove('hidden');
+    box.className = 'banner ' + (isError || batchNotice ? 'err' : 'ok');
+    box.style.whiteSpace = 'pre-line';
+    box.textContent = lines.join('\n');
+    box.classList.toggle('hidden', !lines.length);
   }
 
   function setDraftState(d, msg, kind) {
@@ -1820,8 +1946,49 @@
       notes.push('⚠️ อ่านรายการอะไหล่ไม่ออก ใส่เอง');
     }
 
+    // ซ้ำกับรอบที่บันทึกไปแล้ว — เซิร์ฟเวอร์ตรวจให้ตอนอ่านรูป
+    if (res.slipDuplicate) markDraftDup(d, 'slip', res.slipDuplicate);
+    else if (res.prDuplicate) markDraftDup(d, 'pr', res.prDuplicate);
+    else checkPrClashInBatch(d);
+
+    if (d.dup) notes.push(dupText(d.dup.kind, d.dup.rec));
+
     var hasWarning = notes.some(function (n) { return n.indexOf('⚠️') === 0; });
     setDraftState(d, notes.join('\n'), hasWarning ? 'err' : '');
+  }
+
+  function markDraftDup(d, kind, rec) {
+    d.dup = { kind: kind, rec: rec };
+    d.dupWrap.classList.remove('hidden');
+    d.el.classList.add('failed');
+    renderBatchCount();
+  }
+
+  function clearDraftDup(d) {
+    d.dup = null;
+    d.dupOk.checked = false;
+    d.dupWrap.classList.add('hidden');
+    d.el.classList.remove('failed');
+  }
+
+  /** ใบสองใบในชุดเดียวกันที่มีเลขที่ใบตรงกัน = แนบใบเดิมมาสองรอบ (คนละรูป) */
+  function checkPrClashInBatch(d) {
+    var pr = d.prEl.value.trim().toUpperCase();
+    if (!pr) return;
+    for (var i = 0; i < drafts.length; i++) {
+      var o = drafts[i];
+      if (o === d || o.saved) continue;
+      if (o.prEl.value.trim().toUpperCase() === pr) {
+        markDraftDup(d, 'pr', {
+          shipmentId: 'ใบที่ ' + (drafts.indexOf(o) + 1) + ' ในชุดนี้',
+          prNo: d.prEl.value.trim(),
+          destBranch: o.comboBranch.getValue() || 'ยังไม่ได้เลือกสาขา',
+          shipDate: $('bShipDate').value,
+          carrier: ''
+        });
+        return;
+      }
+    }
   }
 
   $('batchCancelBtn').addEventListener('click', function () {
@@ -1832,12 +1999,14 @@
   });
 
   $('batchAddBtn').addEventListener('click', function () {
-    if (batchSaving) return;
+    if (batchSaving || batchReading) return;   // กันสั่งอ่านซ้อนกันสองรอบ
     $('slipFile').click();
   });
 
   function exitBatch() {
     drafts = [];
+    batchNotice = '';
+    batchProgressMsg = '';
     $('batchDrafts').innerHTML = '';
     $('batchCard').classList.add('hidden');
     $('batchError').classList.add('hidden');
@@ -1857,8 +2026,13 @@
     var carrier = $('bCarrier').value;
     if (!carrier) return showBatchError('ยังไม่ได้เลือกขนส่ง');
 
-    var pending = drafts.filter(function (d) { return !d.saved; });
-    if (!pending.length) return showBatchError('บันทึกครบทุกใบแล้ว');
+    var pending = savableDrafts();
+    if (!pending.length) {
+      var held = drafts.filter(function (d) { return !d.saved && d.dup; }).length;
+      return showBatchError(held
+        ? 'ใบที่เหลือทั้งหมดซ้ำกับที่บันทึกไปแล้ว — ถ้าเป็นคนละรอบจริง ๆ ให้ติ๊กยืนยันในใบนั้นก่อน'
+        : 'บันทึกครบทุกใบแล้ว');
+    }
 
     // ตรวจให้ครบทุกใบก่อน จะได้ไม่บันทึกไปได้ครึ่งเดียวแล้วมาติดกลางทาง
     var bad = null;
@@ -1879,7 +2053,7 @@
 
     batchSaving = true;
     renderBatchCount();
-    saveDraftsFrom(pending, 0, { ok: 0, fail: 0 });
+    saveDraftsFrom(pending, 0, { ok: 0, fail: 0, dup: 0 });
   }
 
   function validateDraft(d) {
@@ -1905,10 +2079,11 @@
       clientToken = newToken();
 
       var msg = 'บันทึกสำเร็จ ' + tally.ok + ' ใบ';
+      if (tally.dup) msg += ' • ข้ามใบซ้ำ ' + tally.dup + ' ใบ (ติ๊กยืนยันแล้วกดบันทึกอีกครั้งได้)';
       if (tally.fail) msg += ' • ไม่สำเร็จ ' + tally.fail + ' ใบ (แก้แล้วกดบันทึกอีกครั้งได้)';
-      setBatchProgress(msg, tally.fail > 0);
+      setBatchProgress(msg, tally.fail > 0 || tally.dup > 0);
 
-      if (!tally.fail) {
+      if (!tally.fail && !tally.dup) {
         var done = $('batchDone');
         done.textContent = '✅ บันทึกครบทุกใบแล้ว รูปหลักฐานถูกเก็บคู่กับแต่ละรายการเรียบร้อย';
         done.classList.remove('hidden');
@@ -1935,11 +2110,18 @@
       sender: $('bSender').value.trim(),
       slipBase64: d.image.base64,
       slipMimeType: d.image.mimeType,
+      allowDuplicate: !!(d.dup && d.dupOk.checked),
       items: collectItems(d.itemsBox)
     };
 
     call('apiSaveShipment', payload).then(function (res) {
-      if (!res || !res.ok) {
+      if (res && !res.ok && res.duplicate) {
+        // เซิร์ฟเวอร์เพิ่งเจอว่าซ้ำตอนกดบันทึก (เช่นอีกเครื่องบันทึกตัดหน้าไป)
+        tally.dup++;
+        markDraftDup(d, res.duplicate, res.existing);
+        setDraftState(d, dupText(res.duplicate, res.existing) +
+          '\nยังไม่ได้บันทึกใบนี้ — ถ้าเป็นคนละรอบจริง ๆ ติ๊กยืนยันด้านล่างแล้วกดบันทึกอีกครั้ง', 'err');
+      } else if (!res || !res.ok) {
         tally.fail++;
         d.el.classList.add('failed');
         setDraftState(d, '❌ บันทึกไม่สำเร็จ: ' + ((res && res.error) || ''), 'err');
@@ -1963,6 +2145,7 @@
     d.el.classList.add('done');
     d.body.classList.add('locked');   // บันทึกแล้วล็อกไว้ กันแก้ทับโดยไม่ตั้งใจ
     d.delBtn.classList.add('hidden');
+    d.dupWrap.classList.add('hidden');
 
     var line = (res.duplicate ? 'บันทึกไปแล้ว (กันบันทึกซ้ำ) ' : '✅ ') + res.shipmentId +
       ' • ' + payload.destBranch;

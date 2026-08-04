@@ -23,7 +23,7 @@ var HEADERS = {
   Shipments: [
     'shipmentId', 'createdAt', 'shipDate', 'prNo', 'destBranch', 'zone', 'dropPoint',
     'isTransfer', 'carrier', 'trackingNo', 'boxCount', 'sender', 'receiverName', 'note',
-    'itemsSummary', 'slipFileId', 'clientToken'
+    'itemsSummary', 'slipFileId', 'clientToken', 'slipHash'
   ],
   Items: ['shipmentId', 'lineNo', 'partCode', 'partName', 'qty', 'unit', 'note']
 };
@@ -592,7 +592,7 @@ function saveShipment_(payload) {
     throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดบันทึกอีกครั้ง');
   }
 
-  var shipmentId, isDuplicate = false;
+  var shipmentId, isDuplicate = false, blocked = null;
   try {
     var sh = getSheet_(SHEETS.SHIPMENTS);
 
@@ -601,13 +601,19 @@ function saveShipment_(payload) {
       isDuplicate = true;
       shipmentId = dup.shipmentId;
     } else {
-      shipmentId = nextShipmentId_(sh);
-      sh.appendRow(buildShipmentRow_(shipmentId, clean));
-      writeItems_(shipmentId, clean.items);
+      // ตรวจใบซ้ำใต้ lock เดียวกับที่เขียน ไม่งั้นสองเครื่องกดพร้อมกันจะรอดไปทั้งคู่
+      blocked = findConflict_(sh, clean);
+      if (!blocked) {
+        shipmentId = nextShipmentId_(sh);
+        sh.appendRow(buildShipmentRow_(shipmentId, clean));
+        writeItems_(shipmentId, clean.items);
+      }
     }
   } finally {
     lock.releaseLock();
   }
+
+  if (blocked) return blocked;
 
   if (isDuplicate) {
     // กดซ้ำ/เน็ตหลุดแล้วส่งซ้ำ — คืนผลเดิม ไม่เขียนแถวใหม่
@@ -653,6 +659,40 @@ function saveShipment_(payload) {
       itemCount: clean.items.length
     }
   };
+}
+
+/**
+ * หาว่ารอบนี้ชนกับรอบที่บันทึกไปแล้วไหม (เรียกใต้ lock เท่านั้น)
+ * คืน null ถ้าไม่ชน หรือคืนผลลัพธ์สำเร็จรูปที่บอกว่าชนกับรอบไหน
+ * ถ้าผู้ใช้ยืนยันว่าจะบันทึกซ้ำจริง ๆ (allowDuplicate) ก็ไม่ต้องตรวจ
+ */
+function findConflict_(sh, clean) {
+  if (clean.allowDuplicate) return null;
+
+  if (clean.slipHash) {
+    var sameSlip = findBySlipHash_(sh, clean.slipHash);
+    if (sameSlip) {
+      return {
+        ok: false,
+        duplicate: 'slip',
+        existing: sameSlip,
+        error: 'รูปใบนี้เคยแนบบันทึกไปแล้วเป็นรอบ ' + sameSlip.shipmentId +
+          ' (ใบ ' + sameSlip.prNo + ' → ' + sameSlip.destBranch + ' วันที่ ' + sameSlip.shipDate + ')'
+      };
+    }
+  }
+
+  var samePr = findByPrNo_(sh, clean.prNo);
+  if (samePr) {
+    return {
+      ok: false,
+      duplicate: 'pr',
+      existing: samePr,
+      error: 'เลขที่ใบ ' + clean.prNo + ' เคยบันทึกไปแล้วเป็นรอบ ' + samePr.shipmentId +
+        ' (→ ' + samePr.destBranch + ' วันที่ ' + samePr.shipDate + ')'
+    };
+  }
+  return null;
 }
 
 /** ตรวจและปรับข้อมูลจากฟอร์มให้อยู่ในรูปที่พร้อมเขียนลงชีต */
@@ -712,6 +752,10 @@ function validateShipment_(payload) {
     slipFileId: String(p.slipFileId || '').trim(),
     slipBase64: String(p.slipBase64 || ''),
     slipMimeType: String(p.slipMimeType || 'image/jpeg'),
+    // คิดลายนิ้วมือจากรูปที่ฝั่งเซิร์ฟเวอร์ ไม่รับค่าที่หน้าเว็บส่งมา
+    // เพราะถ้าเชื่อค่าจากหน้าเว็บ ระบบกันซ้ำจะถูกข้ามได้ง่าย ๆ
+    slipHash: slipHash_(p.slipBase64),
+    allowDuplicate: !!p.allowDuplicate,
     clientToken: String(p.clientToken || '').trim()
   };
 }
@@ -734,7 +778,8 @@ function buildShipmentRow_(shipmentId, c) {
     note: c.note,
     itemsSummary: itemsSummary_(c.items),
     slipFileId: c.slipFileId,
-    clientToken: c.clientToken
+    clientToken: c.clientToken,
+    slipHash: c.slipHash
   };
   return HEADERS.Shipments.map(function (h) { return map[h]; });
 }
@@ -773,6 +818,93 @@ function nextShipmentId_(sh) {
 }
 
 /** กันบันทึกซ้ำจากการกดสองที/เน็ตหลุด */
+/* ---------- กันบันทึกใบซ้ำ ----------
+ *
+ * มีสองชั้น เพราะซ้ำได้สองแบบ
+ *   1. แนบ "ไฟล์รูปเดิม" ซ้ำ  → เทียบลายนิ้วมือของรูป จับได้แน่นอน
+ *   2. ถ่ายใบเดิมใหม่อีกรอบ   → ไฟล์คนละไฟล์ ลายนิ้วมือไม่ตรง แต่เลขที่ใบ PR ซ้ำ
+ * ทั้งสองแบบไม่ได้ห้ามขาด — บอกว่าซ้ำกับรอบไหน แล้วให้คนตัดสินใจยืนยันเอง
+ */
+
+/** ลายนิ้วมือของรูป คิดจากตัวไฟล์เอง ไฟล์เดียวกันได้ค่าเดียวกันเสมอ */
+function slipHash_(base64) {
+  if (!base64) return '';
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, String(base64));
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) {
+    var b = (bytes[i] + 256) % 256;
+    hex += (b < 16 ? '0' : '') + b.toString(16);
+  }
+  return hex;
+}
+
+/** อ่านข้อมูลรอบส่งของแถวหนึ่งเท่าที่ต้องใช้บอกว่า "ซ้ำกับรอบไหน" */
+function shipmentBrief_(sh, row) {
+  var values = sh.getRange(row, 1, 1, HEADERS.Shipments.length).getValues()[0];
+  function at(field) {
+    var v = values[HEADERS.Shipments.indexOf(field)];
+    return v == null ? '' : String(v).trim();
+  }
+  return {
+    shipmentId: at('shipmentId'),
+    prNo: at('prNo'),
+    destBranch: at('destBranch'),
+    shipDate: at('shipDate'),
+    createdAt: at('createdAt'),
+    carrier: at('carrier'),
+    slipFileId: at('slipFileId')
+  };
+}
+
+/** หารอบส่งที่เคยแนบไฟล์รูปเดียวกันนี้ไปแล้ว */
+function findBySlipHash_(sh, hash) {
+  if (!hash) return null;
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var col = colIndex_('Shipments', 'slipHash');
+  var values = sh.getRange(2, col, last - 1, 1).getValues();
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][0] == null ? '' : values[i][0]).trim() === hash) {
+      return shipmentBrief_(sh, i + 2);
+    }
+  }
+  return null;
+}
+
+/** หารอบส่งที่ใช้เลขที่ใบ PR เดียวกัน */
+function findByPrNo_(sh, prNo) {
+  var key = String(prNo || '').trim().toUpperCase();
+  if (!key) return null;
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var col = colIndex_('Shipments', 'prNo');
+  var values = sh.getRange(2, col, last - 1, 1).getValues();
+  for (var i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][0] == null ? '' : values[i][0]).trim().toUpperCase() === key) {
+      return shipmentBrief_(sh, i + 2);
+    }
+  }
+  return null;
+}
+
+/**
+ * ตรวจว่าใบนี้เคยบันทึกไปแล้วหรือยัง — เรียกได้ตั้งแต่ตอนแนบรูป
+ * ไม่ต้องรอถึงตอนกดบันทึก จะได้รู้ตัวก่อนคีย์ข้อมูลทั้งใบ
+ */
+function apiCheckSlipDuplicate(payload) {
+  try {
+    payload = payload || {};
+    var sh = getSheet_(SHEETS.SHIPMENTS);
+    var out = { ok: true, slipDuplicate: null, prDuplicate: null };
+
+    if (payload.base64) out.slipDuplicate = findBySlipHash_(sh, slipHash_(payload.base64));
+    if (payload.prNo) out.prDuplicate = findByPrNo_(sh, payload.prNo);
+    return out;
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
 function findByClientToken_(sh, token) {
   if (!token) return null;
   var last = sh.getLastRow();
@@ -1099,6 +1231,16 @@ function apiReadSlip(payload) {
     resolved.ok = true;
     // ส่งข้อความที่อ่านได้กลับไปด้วย เผื่อบางใบอ่านรายการไม่ออกจะได้ดูว่า OCR เห็นอะไร
     resolved.rawText = String(text || '').substring(0, 4000);
+
+    // บอกตั้งแต่ตอนอ่านเลยว่าใบนี้เคยบันทึกไปแล้วหรือยัง จะได้ไม่เสียเวลาคีย์ทั้งใบ
+    try {
+      var sh = getSheet_(SHEETS.SHIPMENTS);
+      resolved.slipDuplicate = findBySlipHash_(sh, slipHash_(base64));
+      resolved.prDuplicate = resolved.prNo ? findByPrNo_(sh, resolved.prNo) : null;
+    } catch (err) {
+      // ตรวจซ้ำไม่ได้ก็ไม่ควรทำให้การอ่านรูปล้มไปด้วย ตอนกดบันทึกยังมีด่านตรวจอีกชั้น
+      console.warn('ตรวจใบซ้ำไม่สำเร็จ: ' + err);
+    }
     return resolved;
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
