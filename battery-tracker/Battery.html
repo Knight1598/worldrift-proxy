@@ -130,6 +130,40 @@
   .muted { color: var(--muted); font-size: 14px; }
   .hidden { display: none !important; }
 
+  /* ช่องเลือกแบบพิมพ์ค้นหาได้ (ใช้กับสาขา 166 แห่ง) */
+  .combo { position: relative; margin-bottom: 12px; }
+  .combo input { margin-bottom: 0; }
+  .combo.disabled input { opacity: .55; }
+
+  .combo-list {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 4px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    max-height: 270px;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .combo-item {
+    padding: 11px 12px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .combo-item.active { background: var(--primary); color: #fff; }
+  .combo-item .sub { font-size: 13px; color: var(--muted); margin-left: 6px; }
+  .combo-item.active .sub { color: rgba(255,255,255,.8); }
+  .combo-empty { padding: 11px 12px; font-size: 14px; color: var(--muted); }
+
+
   /* สรุปจำนวนตามสถานะ */
   .summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
   .summary .box {
@@ -258,8 +292,8 @@
   <div id="formCard" class="card hidden">
     <h2 id="formTitle">เพิ่มรายการแบตเตอรี่</h2>
 
-    <label for="fBranch">สาขาเจ้าของแบต *</label>
-    <select id="fBranch"><option value="">— เลือกสาขา —</option></select>
+    <label for="fBranch-input">สาขาเจ้าของแบต *</label>
+    <div class="combo" id="fBranch"></div>
 
     <div class="row">
       <div>
@@ -296,8 +330,8 @@
 
     <div class="row">
       <div>
-        <label for="branchFilter">สาขา</label>
-        <select id="branchFilter"><option value="">— ทุกสาขา —</option></select>
+        <label for="branchFilter-input">สาขา</label>
+        <div class="combo" id="branchFilter"></div>
       </div>
       <div>
         <label for="statusFilter">สถานะ</label>
@@ -332,8 +366,8 @@
         </div>
       </div>
 
-      <label for="rfBranch">สาขาที่ส่งซ่อม *</label>
-      <select id="rfBranch"><option value="">— เลือกสาขา —</option></select>
+      <label for="rfBranch-input">สาขาที่ส่งซ่อม *</label>
+      <div class="combo" id="rfBranch"></div>
 
       <div class="row">
         <div>
@@ -364,8 +398,8 @@
 
       <div class="row">
         <div>
-          <label for="rBranchFilter">สาขา</label>
-          <select id="rBranchFilter"><option value="">— ทุกสาขา —</option></select>
+          <label for="rBranchFilter-input">สาขา</label>
+          <div class="combo" id="rBranchFilter"></div>
         </div>
         <div>
           <label for="rStatusFilter">สถานะ</label>
@@ -409,6 +443,7 @@
   var R_STATUSES = [];        // ขั้นตอนงานซ่อมรถ
   var editingId = '';
   var rEditingId = '';
+  var cbBranch = null, cbBranchFilter = null, cbRBranch = null, cbRBranchFilter = null;
   var items = [];
 
   function $(id) { return document.getElementById(id); }
@@ -417,6 +452,239 @@
     return new Promise(function (resolve, reject) {
       google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fnName](arg);
     });
+  }
+
+  /* ---------- ช่องเลือกแบบพิมพ์ค้นหาได้ ----------
+   * ใช้แทน <select> ที่มีตัวเลือกเยอะ (เขต 53 / สาขา 166)
+   * พิมพ์เลขหรือชื่อก็ได้ เพราะจับคู่แบบ substring บนข้อความเต็มของตัวเลือก
+   */
+  function makeCombo(hostId, config) {
+    config = config || {};
+    var host = $(hostId);
+    var options = [];
+    var filtered = [];
+    var value = '';
+    var activeIndex = -1;
+    var open = false;
+    var blurTimer = null;
+    var scope = null;   // ฟังก์ชันจำกัดขอบเขตตัวเลือก เช่น เอาเฉพาะสาขาในเขตที่เลือกไว้
+    var remoteTimer = null;
+    var remoteSeq = 0;  // กันผลลัพธ์เก่าที่กลับมาช้ามาทับผลใหม่
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = hostId + '-input';
+    input.autocomplete = 'off';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-expanded', 'false');
+    input.placeholder = config.placeholder || '';
+
+    var list = document.createElement('ul');
+    list.className = 'combo-list hidden';
+
+    host.appendChild(input);
+    host.appendChild(list);
+
+    function norm(s) { return String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ''); }
+
+    function labelOf(v) {
+      for (var i = 0; i < options.length; i++) {
+        if (options[i].value === v) return options[i].label;
+      }
+      return '';
+    }
+
+    function matches(pool, q) {
+      return q
+        ? pool.filter(function (o) { return norm(o.label + ' ' + (o.sub || '')).indexOf(q) >= 0; })
+        : pool.slice();
+    }
+
+    function filter(query) {
+      var q = norm(query);
+      if (scope) {
+        filtered = matches(options.filter(scope), q);
+        // ถ้าในขอบเขตไม่เจอ ให้ค้นจากทั้งหมดแทน (เช่น พิมพ์สาขาที่อยู่คนละเขตกับที่เลือกไว้)
+        if (!filtered.length && q) filtered = matches(options, q);
+      } else {
+        filtered = matches(options, q);
+      }
+      if (filtered.length > 50) filtered = filtered.slice(0, 50);
+    }
+
+    function renderMessage(text) {
+      list.innerHTML = '';
+      var el = document.createElement('li');
+      el.className = 'combo-empty';
+      el.textContent = text;
+      list.appendChild(el);
+    }
+
+    function render() {
+      list.innerHTML = '';
+      if (!filtered.length) {
+        var empty = document.createElement('li');
+        empty.className = 'combo-empty';
+        empty.textContent = config.emptyText || 'ไม่พบรายการที่ตรง';
+        list.appendChild(empty);
+        return;
+      }
+      filtered.forEach(function (o, i) {
+        var li = document.createElement('li');
+        li.className = 'combo-item' + (i === activeIndex ? ' active' : '');
+        li.textContent = o.label;
+        if (o.sub) {
+          var sub = document.createElement('span');
+          sub.className = 'sub';
+          sub.textContent = o.sub;
+          li.appendChild(sub);
+        }
+        // ใช้ mousedown/touchstart เพราะ blur ของ input จะยิงก่อน click
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(o); });
+        list.appendChild(li);
+      });
+    }
+
+    function openList(query) {
+      // ยกเลิกการปิดที่ค้างคิวอยู่จากการ blur ครั้งก่อน ไม่งั้นมันจะมาปิดรายการที่เพิ่งกางทิ้ง
+      if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+
+      if (config.remote) return openRemote(query === undefined ? '' : query);
+
+      filter(query === undefined ? '' : query);
+      activeIndex = filtered.length ? 0 : -1;
+      render();
+      show();
+    }
+
+    function show() {
+      list.classList.remove('hidden');
+      input.setAttribute('aria-expanded', 'true');
+      open = true;
+    }
+
+    /** โหมดค้นจากเซิร์ฟเวอร์ — ใช้กับรายการสินค้าที่มีเยอะเกินกว่าจะโหลดมาทั้งหมด */
+    function openRemote(query) {
+      var q = String(query || '').trim();
+      var minChars = config.minChars || 2;
+
+      if (remoteTimer) { clearTimeout(remoteTimer); remoteTimer = null; }
+
+      if (q.length < minChars) {
+        filtered = [];
+        activeIndex = -1;
+        renderMessage('พิมพ์อย่างน้อย ' + minChars + ' ตัวอักษรเพื่อค้นหา');
+        show();
+        return;
+      }
+
+      renderMessage('กำลังค้นหา…');
+      show();
+
+      var seq = ++remoteSeq;
+      remoteTimer = setTimeout(function () {
+        remoteTimer = null;
+        config.remote(q, function (results) {
+          if (seq !== remoteSeq) return;   // มีการพิมพ์ต่อไปแล้ว ทิ้งผลเก่า
+          options = (results || []).map(function (o) {
+            return typeof o === 'string' ? { value: o, label: o } : o;
+          });
+          filtered = options.slice(0, 50);
+          activeIndex = filtered.length ? 0 : -1;
+          render();
+          show();
+        });
+      }, config.debounce || 250);
+    }
+
+    function closeList() {
+      list.classList.add('hidden');
+      input.setAttribute('aria-expanded', 'false');
+      open = false;
+      activeIndex = -1;
+    }
+
+    function choose(option) {
+      value = option.value;
+      input.value = option.label;
+      closeList();
+      if (config.onChange) config.onChange(value, option);
+    }
+
+    input.addEventListener('input', function () {
+      if (config.freeText) value = input.value.trim();
+      openList(input.value);
+    });
+    input.addEventListener('focus', function () { openList(config.remote ? input.value : ''); });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!open) return openList(input.value);
+        if (!filtered.length) return;
+        activeIndex = e.key === 'ArrowDown'
+          ? (activeIndex + 1) % filtered.length
+          : (activeIndex - 1 + filtered.length) % filtered.length;
+        render();
+        var el = list.children[activeIndex];
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        if (open && activeIndex >= 0 && filtered[activeIndex]) {
+          e.preventDefault();
+          choose(filtered[activeIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        closeList();
+      }
+    });
+
+    // พิมพ์ค้างไว้แล้วคลิกออกโดยไม่ได้เลือก → คืนข้อความเป็นค่าที่เลือกไว้ล่าสุด
+    input.addEventListener('blur', function () {
+      blurTimer = setTimeout(function () {
+        blurTimer = null;
+        closeList();
+        if (config.freeText) {
+          // ช่องที่ยอมให้พิมพ์ค่าที่ไม่มีในรายการ (เช่น รหัสสินค้าที่ยังไม่ได้นำเข้า)
+          value = input.value.trim();
+          if (config.onBlur) config.onBlur(value);
+          return;
+        }
+        input.value = value ? labelOf(value) : '';
+      }, 120);
+    });
+
+    return {
+      el: host,
+      input: input,
+      setOptions: function (list_) {
+        options = (list_ || []).map(function (o) {
+          return typeof o === 'string' ? { value: o, label: o } : o;
+        });
+        // ถ้าค่าที่เลือกไว้เดิมไม่มีในชุดใหม่ ต้องล้างทิ้ง ไม่งั้นจะส่งค่าเก่าไปบันทึกทั้งที่ช่องดูว่าง
+        // (ยกเว้นช่องที่ยอมให้พิมพ์ค่านอกรายการ)
+        if (!config.freeText && value && !labelOf(value)) { value = ''; input.value = ''; }
+      },
+      getValue: function () { return value; },
+      setValue: function (v) {
+        value = v || '';
+        input.value = value ? labelOf(value) : '';
+      },
+      /** ตั้งค่าที่ไม่ได้อยู่ในรายการ (ใช้กับช่องโหมด freeText เช่น รหัสสินค้า) */
+      setFreeValue: function (v) {
+        value = v || '';
+        input.value = value;
+      },
+      clear: function () { value = ''; input.value = ''; closeList(); },
+      setEnabled: function (on) {
+        input.disabled = !on;
+        host.classList.toggle('disabled', !on);
+        if (!on) { value = ''; input.value = ''; closeList(); }
+      },
+      setPlaceholder: function (t) { input.placeholder = t; },
+      setScope: function (fn) { scope = fn || null; },
+      focusOpen: function () { input.focus(); openList(''); },
+      count: function () { return options.length; }
+    };
   }
 
   function statusClass(status) {
@@ -451,7 +719,16 @@
     }
   }
 
+  function initCombos() {
+    var hint = 'พิมพ์รหัสสาขาหรือชื่อสาขา';
+    cbBranch = makeCombo('fBranch', { placeholder: hint });
+    cbRBranch = makeCombo('rfBranch', { placeholder: hint });
+    cbBranchFilter = makeCombo('branchFilter', { placeholder: 'ทุกสาขา' });
+    cbRBranchFilter = makeCombo('rBranchFilter', { placeholder: 'ทุกสาขา' });
+  }
+
   function boot() {
+    initCombos();
     applyAdminMode();
     call('apiBatteryBootstrap').then(function (res) {
       if (!res || !res.ok) throw new Error((res && res.error) || 'โหลดข้อมูลไม่สำเร็จ');
@@ -459,12 +736,18 @@
       STATUSES = res.statuses;
       R_STATUSES = res.repairStatuses || [];
 
-      res.branches.forEach(function (b) {
-        $('branchFilter').appendChild(new Option(b, b));
-        $('fBranch').appendChild(new Option(b, b));
-        $('rBranchFilter').appendChild(new Option(b, b));
-        $('rfBranch').appendChild(new Option(b, b));
+      // ตัวเลือกสาขา: พิมพ์ได้ทั้งรหัสและชื่อ เพราะจับคู่กับข้อความทั้งบรรทัด
+      var branchOptions = res.branches.map(function (b) {
+        return typeof b === 'string'
+          ? { value: b, label: b }
+          : { value: b.name, label: b.name, sub: b.code + (b.zone ? ' • เขต' + b.zone : '') };
       });
+      cbBranch.setOptions(branchOptions);
+      cbRBranch.setOptions(branchOptions);
+      // ช่องกรอง: ค่าว่าง = ทุกสาขา
+      var filterOptions = [{ value: '', label: '— ทุกสาขา —' }].concat(branchOptions);
+      cbBranchFilter.setOptions(filterOptions);
+      cbRBranchFilter.setOptions(filterOptions);
       STATUSES.forEach(function (s) {
         $('statusFilter').appendChild(new Option(s, s));
         $('fStatus').appendChild(new Option(s, s));
@@ -478,10 +761,12 @@
 
       // ลิงก์ที่เจาะจงสาขา ให้ล็อกตัวกรองไว้เลย
       if (LOCK_BRANCH) {
-        $('branchFilter').value = LOCK_BRANCH;
-        $('branchFilter').disabled = true;
-        $('rBranchFilter').value = LOCK_BRANCH;
-        $('rBranchFilter').disabled = true;
+        // ตั้งค่าแล้วปิดช่องเอง ไม่ใช้ setEnabled(false) เพราะมันจะล้างค่าที่เพิ่งตั้งทิ้ง
+        [cbBranchFilter, cbRBranchFilter].forEach(function (cb) {
+          cb.setValue(LOCK_BRANCH);
+          cb.input.disabled = true;
+          cb.el.classList.add('disabled');
+        });
       }
 
       applyAdminMode();
@@ -608,7 +893,7 @@
     $('results').innerHTML = '';
     call('apiListBatteries', {
       q: $('q').value.trim(),
-      branch: LOCK_BRANCH || $('branchFilter').value,
+      branch: LOCK_BRANCH || cbBranchFilter.getValue(),
       status: $('statusFilter').value
     }).then(function (res) {
       if (!res || !res.ok) return setStatus((res && res.error) || 'โหลดไม่สำเร็จ', true);
@@ -810,7 +1095,7 @@
   function openForm(b) {
     editingId = b ? b.batteryId : '';
     $('formTitle').textContent = b ? 'แก้ไข ' + b.batteryId : 'เพิ่มรายการแบตเตอรี่';
-    $('fBranch').value = b ? b.branch : (LOCK_BRANCH || '');
+    cbBranch.setValue(b ? b.branch : (LOCK_BRANCH || ''));
     $('fDate').value = b ? b.receivedDate : $('fDate').value;
     $('fAl').value = b ? (b.alNo || '') : '';
     $('fStatus').value = b ? b.status : STATUSES[0];
@@ -844,7 +1129,7 @@
 
     var payload = {
       key: ADMIN_KEY,
-      branch: $('fBranch').value,
+      branch: cbBranch.getValue(),
       receivedDate: $('fDate').value,
       alNo: $('fAl').value.trim(),
       status: $('fStatus').value,
@@ -915,7 +1200,7 @@
     $('rResults').innerHTML = '';
     call('apiListRepairs', {
       q: $('rq').value.trim(),
-      branch: LOCK_BRANCH || $('rBranchFilter').value,
+      branch: LOCK_BRANCH || cbRBranchFilter.getValue(),
       status: $('rStatusFilter').value
     }).then(function (res) {
       if (!res || !res.ok) return rSetStatus((res && res.error) || 'โหลดไม่สำเร็จ', true);
@@ -1041,7 +1326,7 @@
     $('rFormTitle').textContent = r ? 'แก้ไข ' + r.repairId : 'เพิ่มรายการรถส่งซ่อม';
     $('rfJob').value = r ? r.jobNo : '';
     $('rfContract').value = r ? r.contractNo : '';
-    $('rfBranch').value = r ? r.branch : (LOCK_BRANCH || '');
+    cbRBranch.setValue(r ? r.branch : (LOCK_BRANCH || ''));
     $('rfDate').value = r ? r.receivedDate : $('rfDate').value;
     $('rfStatus').value = r ? r.status : R_STATUSES[0];
     $('rfNote').value = r ? r.note : '';
@@ -1070,7 +1355,7 @@
       repairId: rEditingId,
       jobNo: $('rfJob').value.trim(),
       contractNo: $('rfContract').value.trim(),
-      branch: $('rfBranch').value,
+      branch: cbRBranch.getValue(),
       receivedDate: $('rfDate').value,
       status: $('rfStatus').value,
       note: $('rfNote').value.trim(),

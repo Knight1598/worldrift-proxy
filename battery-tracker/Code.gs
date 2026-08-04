@@ -342,7 +342,10 @@ function apiListBatteries(payload) {
 
 function apiBatteryBootstrap() {
   try {
-    var branches = getBranches_().map(function (b) { return b.name; });
+    // ส่งรหัสสาขาไปด้วย หน้าเว็บจะได้ให้พิมพ์รหัสเพื่อเลือกสาขาได้
+    var branches = getBranches_().map(function (b) {
+      return { code: b.code, name: b.name, zone: b.zone };
+    });
     return {
       ok: true, branches: branches, today: todayIso_(),
       statuses: BATTERY_STATUSES,
