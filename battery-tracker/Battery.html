@@ -149,6 +149,21 @@
   }
   .bat select { margin: 8px 0 0; }
 
+  /* บล็อกแบตแต่ละก้อนในฟอร์ม */
+  .items { margin-top: 4px; }
+  .item {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 10px 2px;
+    margin-bottom: 10px;
+    background: var(--bg);
+  }
+  .item .no { font-size: 13px; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .item .del {
+    background: none; border: none; color: var(--err-text);
+    font-size: 13px; cursor: pointer; padding: 0;
+  }
+
   /* สีประจำสถานะ ให้ดูปราดเดียวรู้ว่าอยู่ขั้นไหน */
   .s0 { --s-color: #9333ea; }
   .s1 { --s-color: #f59e0b; }
@@ -184,30 +199,22 @@
         <input type="date" id="fDate">
       </div>
       <div>
-        <label for="fQty">จำนวน (ลูก)</label>
-        <input type="number" id="fQty" min="1" step="1" value="1">
-      </div>
-    </div>
-
-    <div class="row">
-      <div>
-        <label for="fSerial">ซีเรียล/รหัสแบต</label>
-        <input type="text" id="fSerial" autocomplete="off">
-      </div>
-      <div>
-        <label for="fModel">รุ่น/ขนาด</label>
-        <input type="text" id="fModel" autocomplete="off" placeholder="เช่น 12V 25-27Ah">
+        <label for="fAl">อล.</label>
+        <input type="text" id="fAl" autocomplete="off" placeholder="เลขที่ อล.">
       </div>
     </div>
 
     <label for="fStatus">สถานะ</label>
     <select id="fStatus"></select>
 
-    <label for="fNote">หมายเหตุ</label>
-    <input type="text" id="fNote" autocomplete="off">
-
     <label for="fBy">ผู้อัปเดต</label>
     <input type="text" id="fBy" autocomplete="off" placeholder="ชื่อผู้ดูแล">
+
+    <div class="items">
+      <label id="itemsLabel">รายการแบต</label>
+      <div id="itemRows"></div>
+      <button type="button" class="ghost" id="addItemBtn">+ เพิ่มแบตอีกก้อน</button>
+    </div>
 
     <div id="formMsg" class="banner err hidden"></div>
     <button class="primary" id="saveBtn">บันทึก</button>
@@ -239,13 +246,29 @@
   <div id="results"></div>
 </div>
 
+<!--
+  ค่าจากเซิร์ฟเวอร์ส่งผ่าน data attribute ไม่ใช่แปะกลางบล็อกโค้ด
+  เพราะ scriptlet ของ Apps Script จะ escape ให้ตามบริบท HTML
+  ถ้าเอา JSON ไปแปะกลางโค้ด JS เครื่องหมายคำพูดจะเพี้ยน
+  ค่าที่ได้จะไม่ใช่ค่าที่ตั้งใจส่ง ส่วนใน attribute
+  เบราว์เซอร์ถอด entity กลับให้เองอยู่แล้ว
+-->
+<div id="cfg" class="hidden" data-config="<?= configJson ?>"></div>
+
 <script>
-  var IS_ADMIN = <?= isAdmin ? 'true' : 'false' ?>;
-  var ADMIN_KEY = '<?= adminKey ?>';
-  var LOCK_BRANCH = <?= JSON.stringify(lockBranch) ?>;
+  var CFG = {};
+  try {
+    CFG = JSON.parse(document.getElementById('cfg').getAttribute('data-config') || '{}');
+  } catch (err) {
+    CFG = {};
+  }
+  var IS_ADMIN = CFG.isAdmin === true;
+  var ADMIN_KEY = typeof CFG.adminKey === 'string' ? CFG.adminKey : '';
+  var LOCK_BRANCH = typeof CFG.lockBranch === 'string' ? CFG.lockBranch : '';
 
   var STATUSES = [];
   var editingId = '';
+  var items = [];
 
   function $(id) { return document.getElementById(id); }
 
@@ -284,6 +307,8 @@
         $('branchFilter').value = LOCK_BRANCH;
         $('branchFilter').disabled = true;
         $('modeLabel').textContent += ' • เฉพาะสาขา ' + LOCK_BRANCH;
+      } else if (CFG.lockBranchInvalid) {
+        $('modeLabel').textContent += ' • ไม่พบสาขา "' + CFG.wantBranch + '" จึงแสดงทุกสาขา';
       }
 
       if (IS_ADMIN) $('newBtn').classList.remove('hidden');
@@ -297,11 +322,19 @@
     });
   }
 
-  $('searchBtn').addEventListener('click', search);
+  // ห่อไว้ ไม่งั้น event object จะกลายเป็น doneMsg ไปโผล่บนหน้าจอ
+  $('searchBtn').addEventListener('click', function () { search(); });
   $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
   $('newBtn').addEventListener('click', function () { openForm(null); });
   $('cancelBtn').addEventListener('click', closeForm);
   $('saveBtn').addEventListener('click', save);
+  $('addItemBtn').addEventListener('click', function () {
+    collectItems();
+    items.push(blankItem());
+    renderItems();
+    var rows = $('itemRows').querySelectorAll('.item input');
+    if (rows.length) rows[rows.length - 4].focus();
+  });
 
   function setStatus(msg, isError) {
     var box = $('status');
@@ -313,7 +346,8 @@
     box.appendChild(div);
   }
 
-  function search() {
+  /** doneMsg = ข้อความที่อยากให้ค้างไว้หลังโหลดเสร็จ เช่น "บันทึกแล้ว" */
+  function search(doneMsg) {
     setStatus('กำลังโหลด…');
     $('results').innerHTML = '';
     call('apiListBatteries', {
@@ -323,7 +357,8 @@
     }).then(function (res) {
       if (!res || !res.ok) return setStatus((res && res.error) || 'โหลดไม่สำเร็จ', true);
       renderSummary(res.counts);
-      render(res.results);
+      render(res.results, res.total);
+      if (doneMsg) setStatus(doneMsg);
     }).catch(function (err) {
       setStatus('โหลดไม่สำเร็จ: ' + (err.message || err), true);
     });
@@ -347,8 +382,13 @@
     });
   }
 
-  function render(rows) {
-    if (!rows.length) return setStatus('ยังไม่มีรายการที่ตรงกับเงื่อนไข');
+  function render(rows, total) {
+    if (!rows.length) {
+      // แยกให้ชัดว่า "ยังไม่มีข้อมูลเลย" กับ "มีข้อมูลแต่ตัวกรองไม่ตรง" คนละเรื่องกัน
+      return setStatus(total
+        ? 'ในระบบมี ' + total + ' รายการ แต่ไม่มีรายการไหนตรงกับตัวกรองที่เลือกไว้'
+        : 'ยังไม่มีรายการแบตในระบบ');
+    }
     setStatus('พบ ' + rows.length + ' รายการ (ล่าสุดขึ้นก่อน)');
 
     var box = $('results');
@@ -378,6 +418,7 @@
 
       var bits = [];
       if (b.qty) bits.push(b.qty + ' ลูก');
+      if (b.alNo) bits.push('อล. ' + b.alNo);
       if (b.model) bits.push(b.model);
       if (b.serial) bits.push('ซีเรียล ' + b.serial);
       if (bits.length) {
@@ -434,17 +475,96 @@
     });
   }
 
+  function blankItem() { return { serial: '', model: '', qty: '1', note: '' }; }
+
+  /* ----- รายการแบตหลายก้อนในฟอร์มเดียว ----- */
+
+  function renderItems() {
+    var box = $('itemRows');
+    box.innerHTML = '';
+    items.forEach(function (it, idx) {
+      var el = document.createElement('div');
+      el.className = 'item';
+
+      var head = document.createElement('div');
+      head.className = 'no';
+      var label = document.createElement('span');
+      label.textContent = editingId ? 'รายละเอียด' : 'ก้อนที่ ' + (idx + 1);
+      head.appendChild(label);
+      if (!editingId && items.length > 1) {
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'del';
+        del.textContent = 'ลบก้อนนี้';
+        del.addEventListener('click', function () {
+          collectItems();
+          items.splice(idx, 1);
+          renderItems();
+        });
+        head.appendChild(del);
+      }
+      el.appendChild(head);
+
+      var row = document.createElement('div');
+      row.className = 'row';
+      row.appendChild(field('ซีเรียล/รหัสแบต', 'text', it.serial, 'serial', idx, ''));
+      row.appendChild(field('รุ่น/ขนาด', 'text', it.model, 'model', idx, 'เช่น 12V 25-27Ah'));
+      el.appendChild(row);
+
+      var row2 = document.createElement('div');
+      row2.className = 'row';
+      row2.appendChild(field('จำนวน (ลูก)', 'number', it.qty, 'qty', idx, ''));
+      row2.appendChild(field('หมายเหตุ', 'text', it.note, 'note', idx, ''));
+      el.appendChild(row2);
+
+      box.appendChild(el);
+    });
+    $('addItemBtn').classList.toggle('hidden', !!editingId);
+    $('itemsLabel').textContent = editingId
+      ? 'รายละเอียดแบต'
+      : 'รายการแบต (' + items.length + ' ก้อน)';
+  }
+
+  function field(labelText, type, value, name, idx, placeholder) {
+    var wrap = document.createElement('div');
+    var lab = document.createElement('label');
+    lab.textContent = labelText;
+    var inp = document.createElement('input');
+    inp.type = type;
+    inp.value = value == null ? '' : value;
+    inp.setAttribute('data-name', name);
+    inp.setAttribute('data-idx', String(idx));
+    inp.autocomplete = 'off';
+    if (placeholder) inp.placeholder = placeholder;
+    if (type === 'number') { inp.min = '1'; inp.step = '1'; }
+    wrap.appendChild(lab);
+    wrap.appendChild(inp);
+    return wrap;
+  }
+
+  /** ดึงค่าที่พิมพ์ไว้กลับเข้า items ก่อนวาดใหม่ ไม่งั้นของที่พิมพ์ค้างจะหาย */
+  function collectItems() {
+    var inputs = $('itemRows').querySelectorAll('input[data-name]');
+    for (var i = 0; i < inputs.length; i++) {
+      var idx = Number(inputs[i].getAttribute('data-idx'));
+      if (items[idx]) items[idx][inputs[i].getAttribute('data-name')] = inputs[i].value;
+    }
+  }
+
   function openForm(b) {
     editingId = b ? b.batteryId : '';
     $('formTitle').textContent = b ? 'แก้ไข ' + b.batteryId : 'เพิ่มรายการแบตเตอรี่';
     $('fBranch').value = b ? b.branch : (LOCK_BRANCH || '');
     $('fDate').value = b ? b.receivedDate : $('fDate').value;
-    $('fQty').value = b ? (b.qty || 1) : 1;
-    $('fSerial').value = b ? b.serial : '';
-    $('fModel').value = b ? b.model : '';
+    $('fAl').value = b ? (b.alNo || '') : '';
     $('fStatus').value = b ? b.status : STATUSES[0];
-    $('fNote').value = b ? b.note : '';
     $('fBy').value = localStorage.getItem('bt_by') || '';
+
+    items = b
+      ? [{ serial: b.serial, model: b.model, qty: b.qty || '1', note: b.note }]
+      : [blankItem()];
+    renderItems();
+
     $('formMsg').classList.add('hidden');
     $('formCard').classList.remove('hidden');
     $('filterCard').classList.add('hidden');
@@ -455,46 +575,57 @@
     $('formCard').classList.add('hidden');
     $('filterCard').classList.remove('hidden');
     editingId = '';
+    items = [];
+  }
+
+  function formError(msg) {
+    $('formMsg').textContent = msg;
+    $('formMsg').classList.remove('hidden');
   }
 
   function save() {
+    collectItems();
+
     var payload = {
       key: ADMIN_KEY,
-      batteryId: editingId,
       branch: $('fBranch').value,
       receivedDate: $('fDate').value,
-      qty: $('fQty').value,
-      serial: $('fSerial').value.trim(),
-      model: $('fModel').value.trim(),
+      alNo: $('fAl').value.trim(),
       status: $('fStatus').value,
-      note: $('fNote').value.trim(),
-      updatedBy: $('fBy').value.trim()
+      updatedBy: $('fBy').value.trim(),
+      items: items.map(function (it) {
+        return {
+          serial: String(it.serial || '').trim(),
+          model: String(it.model || '').trim(),
+          qty: String(it.qty || '').trim() || '1',
+          note: String(it.note || '').trim()
+        };
+      })
     };
-    if (!payload.branch) {
-      $('formMsg').textContent = 'ยังไม่ได้เลือกสาขา';
-      $('formMsg').classList.remove('hidden');
-      return;
+    if (editingId) payload.items[0].batteryId = editingId;
+
+    if (!payload.branch) return formError('ยังไม่ได้เลือกสาขา');
+    for (var i = 0; i < payload.items.length; i++) {
+      if (!(Number(payload.items[i].qty) > 0)) {
+        return formError('ก้อนที่ ' + (i + 1) + ' ใส่จำนวนไม่ถูกต้อง');
+      }
     }
     localStorage.setItem('bt_by', payload.updatedBy);
 
     $('saveBtn').disabled = true;
     $('saveBtn').textContent = 'กำลังบันทึก…';
 
-    call('apiSaveBattery', payload).then(function (res) {
+    call('apiSaveBatteries', payload).then(function (res) {
       $('saveBtn').disabled = false;
       $('saveBtn').textContent = 'บันทึก';
-      if (!res || !res.ok) {
-        $('formMsg').textContent = (res && res.error) || 'บันทึกไม่สำเร็จ';
-        $('formMsg').classList.remove('hidden');
-        return;
-      }
+      if (!res || !res.ok) return formError((res && res.error) || 'บันทึกไม่สำเร็จ');
+      var msg = editingId ? 'บันทึกการแก้ไขแล้ว' : 'บันทึกแบต ' + (res.count || 0) + ' รายการแล้ว';
       closeForm();
-      search();
+      search(msg);
     }).catch(function (err) {
       $('saveBtn').disabled = false;
       $('saveBtn').textContent = 'บันทึก';
-      $('formMsg').textContent = 'บันทึกไม่สำเร็จ: ' + (err.message || err);
-      $('formMsg').classList.remove('hidden');
+      formError('บันทึกไม่สำเร็จ: ' + (err.message || err));
     });
   }
 

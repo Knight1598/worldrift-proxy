@@ -16,9 +16,15 @@ var SHEETS = {
 var HEADERS = {
   Branches: ['branchCode', 'branchName', 'zone', 'active'],
   Batteries: [
-    'batteryId', 'receivedDate', 'branch', 'zone', 'serial', 'model', 'qty',
+    'batteryId', 'receivedDate', 'alNo', 'branch', 'zone', 'serial', 'model', 'qty',
     'status', 'note', 'updatedAt', 'updatedBy'
   ]
+};
+
+/** คอลัมน์ที่ต้องบังคับให้ชีตเก็บเป็นข้อความ ไม่งั้น Sheets จะแปลงเป็นวันที่/ตัวเลขให้เอง */
+var TEXT_COLUMNS = {
+  Branches: ['branchCode'],
+  Batteries: ['receivedDate', 'alNo', 'serial', 'updatedAt']
 };
 
 /** ขั้นตอนการกระตุ้นแบตเตอรี่ เรียงตามลำดับงานจริง */
@@ -73,6 +79,20 @@ function colIndex_(sheetName, field) {
   var idx = HEADERS[sheetName].indexOf(field);
   if (idx < 0) throw new Error('ไม่รู้จักคอลัมน์ ' + field + ' ในชีต ' + sheetName);
   return idx + 1;
+}
+
+/**
+ * อ่านค่าจากช่องในชีตให้ออกมาเป็นข้อความเสมอ
+ * Sheets ชอบแปลง "2026-08-01" เป็นวันที่ และ "12" เป็นตัวเลขให้เอง
+ * ถ้าเอา String() ครอบตรง ๆ วันที่จะกลายเป็น "Sat Aug 01 2026 00:00:00 GMT+0700"
+ */
+function cellText_(v) {
+  if (v === null || v === undefined) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    var hasTime = v.getHours() || v.getMinutes() || v.getSeconds();
+    return Utilities.formatDate(v, TZ, hasTime ? 'yyyy-MM-dd HH:mm:ss' : 'yyyy-MM-dd');
+  }
+  return String(v).trim();
 }
 
 /** ถือว่า active เว้นแต่จะระบุชัดว่าไม่ใช้ */
@@ -180,11 +200,28 @@ function requireBatteryAdmin_(key) {
  * ===================================================================== */
 
 function doGet(e) {
+  var params = (e && e.parameter) ? e.parameter : {};
+  var key = String(params.key || '');
+  var isAdmin = (key === getBatteryAdminKey_());
+
+  // ถ้าลิงก์ระบุสาขามาแล้วสะกดไม่ตรงกับในชีต ต้องบอกให้รู้
+  // ไม่ใช่กรองเงียบ ๆ จนหน้าเว็บว่างเปล่าโดยไม่มีใครเข้าใจว่าทำไม
+  var wantBranch = String(params.branch || '').trim();
+  var lockBranch = (wantBranch && findBranch_(wantBranch)) ? wantBranch : '';
+  var lockBranchInvalid = !!wantBranch && !lockBranch;
+
   var tpl = HtmlService.createTemplateFromFile('Battery');
-  var key = e && e.parameter ? String(e.parameter.key || '') : '';
-  tpl.isAdmin = (key === getBatteryAdminKey_());
-  tpl.adminKey = tpl.isAdmin ? key : '';
-  tpl.lockBranch = e && e.parameter ? String(e.parameter.branch || '') : '';
+  // ส่งค่าไปทาง data attribute ไม่ใช่แปะลงกลาง <script> โดยตรง
+  // เพราะ <?= ?> จะ escape ให้ตามบริบท HTML เครื่องหมายคำพูดใน JSON
+  // ที่แปะกลางโค้ด JS จะเพี้ยนจนค่าที่ได้ไม่ใช่ค่าที่ตั้งใจส่ง
+  tpl.configJson = JSON.stringify({
+    isAdmin: isAdmin,
+    adminKey: isAdmin ? key : '',
+    lockBranch: lockBranch,
+    lockBranchInvalid: lockBranchInvalid,
+    wantBranch: wantBranch
+  });
+
   return tpl.evaluate()
     .setTitle('สถานะการกระตุ้นแบตเตอรี่')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
@@ -198,37 +235,29 @@ function readBatteries_() {
   var sh = getSheet_(SHEETS.BATTERIES);
   var last = sh.getLastRow();
   if (last < 2) return [];
-  var values = sh.getRange(2, 1, last - 1, HEADERS.Batteries.length).getValues();
+
+  // อ่านเท่าที่ชีตมีจริง ถ้าชีตแคบกว่าหัวตาราง getRange จะฟ้อง out of bounds
+  var width = Math.min(HEADERS.Batteries.length, Math.max(1, sh.getLastColumn()));
+  var values = sh.getRange(2, 1, last - 1, width).getValues();
+
   var out = [];
   for (var i = 0; i < values.length; i++) {
     var r = values[i];
-    var id = String(r[0] == null ? '' : r[0]).trim();
-    if (!id) continue;
-    out.push({
-      batteryId: id,
-      receivedDate: String(r[1] == null ? '' : r[1]).trim(),
-      branch: String(r[2] == null ? '' : r[2]).trim(),
-      zone: String(r[3] == null ? '' : r[3]).trim(),
-      serial: String(r[4] == null ? '' : r[4]).trim(),
-      model: String(r[5] == null ? '' : r[5]).trim(),
-      qty: r[6] === '' || r[6] == null ? '' : String(r[6]),
-      status: String(r[7] == null ? '' : r[7]).trim(),
-      note: String(r[8] == null ? '' : r[8]).trim(),
-      updatedAt: String(r[9] == null ? '' : r[9]).trim(),
-      updatedBy: String(r[10] == null ? '' : r[10]).trim(),
-      _row: i + 2
-    });
+    var rec = { _row: i + 2 };
+    for (var c = 0; c < HEADERS.Batteries.length; c++) {
+      rec[HEADERS.Batteries[c]] = cellText_(r[c]);
+    }
+    if (!rec.batteryId) continue;
+    out.push(rec);
   }
   return out;
 }
 
 function toBatteryDto_(b) {
   if (!b) return null;
-  return {
-    batteryId: b.batteryId, receivedDate: b.receivedDate, branch: b.branch, zone: b.zone,
-    serial: b.serial, model: b.model, qty: b.qty, status: b.status, note: b.note,
-    updatedAt: b.updatedAt, updatedBy: b.updatedBy
-  };
+  var dto = {};
+  HEADERS.Batteries.forEach(function (h) { dto[h] = b[h] === undefined ? '' : b[h]; });
+  return dto;
 }
 
 /** ค้นรายการแบต — เปิดให้ทุกคนเรียกได้ เพราะเป็นข้อมูลที่ให้สาขาติดตาม */
@@ -246,7 +275,7 @@ function apiListBatteries(payload) {
       if (branch && b.branch !== branch) continue;
       if (status && b.status !== status) continue;
       if (q) {
-        var hay = [b.batteryId, b.branch, b.zone, b.serial, b.model, b.status, b.note]
+        var hay = [b.batteryId, b.alNo, b.branch, b.zone, b.serial, b.model, b.status, b.note]
           .join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) continue;
       }
@@ -260,7 +289,11 @@ function apiListBatteries(payload) {
       if (counts[b.status] !== undefined) counts[b.status]++;
     });
 
-    return { ok: true, results: results, counts: counts, statuses: BATTERY_STATUSES };
+    // total ไว้ให้หน้าเว็บแยกออกว่า "ยังไม่มีข้อมูลเลย" กับ "มีข้อมูลแต่ตัวกรองไม่ตรง"
+    return {
+      ok: true, results: results, counts: counts,
+      statuses: BATTERY_STATUSES, total: rows.length
+    };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
@@ -275,12 +308,31 @@ function apiBatteryBootstrap() {
   }
 }
 
-/** เพิ่ม/แก้ไขรายการแบต — ต้องมี key ของแอดมิน */
+/** เพิ่ม/แก้ไขรายการแบตทีละรายการ — ต้องมี key ของแอดมิน */
 function apiSaveBattery(payload) {
   try {
     payload = payload || {};
     requireBatteryAdmin_(payload.key);
-    return { ok: true, battery: saveBattery_(payload) };
+    var saved = saveBatteries_(payload, [payload]);
+    return { ok: true, battery: saved[0], batteries: saved };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/**
+ * บันทึกแบตหลายก้อนในครั้งเดียว — ต้องมี key ของแอดมิน
+ * สาขา / วันที่ / อล. / สถานะ / ผู้บันทึก ใช้ร่วมกันทั้งชุด
+ * ส่วน items คือแต่ละก้อน { serial, model, qty, note }
+ */
+function apiSaveBatteries(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+    var items = payload.items || [];
+    if (!items.length) throw new Error('ยังไม่ได้ใส่รายการแบตสักก้อน');
+    var saved = saveBatteries_(payload, items);
+    return { ok: true, batteries: saved, count: saved.length };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
@@ -314,77 +366,98 @@ function apiUpdateBatteryStatus(payload) {
   }
 }
 
-function saveBattery_(p) {
-  var branch = String(p.branch || '').trim();
+/**
+ * บันทึกแบตทั้งชุดใต้ lock เดียว
+ * base = ข้อมูลที่ใช้ร่วมกัน (สาขา วันที่ อล. สถานะ ผู้บันทึก)
+ * items = แต่ละก้อน ถ้ามี batteryId แปลว่าแก้ของเดิม ไม่งั้นเพิ่มใหม่
+ */
+function saveBatteries_(base, items) {
+  var branch = String(base.branch || '').trim();
   if (!branch) throw new Error('ยังไม่ได้เลือกสาขา');
 
-  var status = String(p.status || '').trim() || BATTERY_STATUSES[0];
+  var status = String(base.status || '').trim() || BATTERY_STATUSES[0];
   if (BATTERY_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
 
-  var receivedDate = String(p.receivedDate || '').trim();
+  var receivedDate = String(base.receivedDate || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) receivedDate = todayIso_();
 
   var branchInfo = findBranch_(branch);
-  var row = {
-    receivedDate: receivedDate,
-    branch: branch,
-    zone: branchInfo ? branchInfo.zone : '',
-    serial: String(p.serial || '').trim(),
-    model: String(p.model || '').trim(),
-    qty: p.qty === '' || p.qty == null ? 1 : Number(p.qty),
-    status: status,
-    note: String(p.note || '').trim(),
-    updatedAt: nowStamp_(),
-    updatedBy: String(p.updatedBy || '').trim()
-  };
+  var stamp = nowStamp_();
+  var updatedBy = String(base.updatedBy || '').trim();
+  var alNo = String(base.alNo || '').trim();
 
-  var originalId = String(p.batteryId || '').trim();
+  var rows = items.map(function (it) {
+    it = it || {};
+    return {
+      batteryId: String(it.batteryId || '').trim(),
+      receivedDate: receivedDate,
+      alNo: it.alNo === undefined ? alNo : String(it.alNo || '').trim(),
+      branch: branch,
+      zone: branchInfo ? branchInfo.zone : '',
+      serial: String(it.serial || '').trim(),
+      model: String(it.model || '').trim(),
+      qty: it.qty === '' || it.qty == null ? 1 : Number(it.qty),
+      status: String(it.status || '').trim() || status,
+      note: String(it.note || '').trim(),
+      updatedAt: stamp,
+      updatedBy: updatedBy
+    };
+  });
+
+  rows.forEach(function (r) {
+    if (BATTERY_STATUSES.indexOf(r.status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + r.status);
+    if (!(r.qty > 0)) throw new Error('จำนวนต้องมากกว่า 0');
+  });
+
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(30000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่');
 
-  var id;
   try {
     var sh = getSheet_(SHEETS.BATTERIES);
-    var target = null;
-    if (originalId) {
-      var rows = readBatteries_();
-      for (var i = 0; i < rows.length; i++) {
-        if (rows[i].batteryId === originalId) { target = rows[i]; break; }
-      }
-      if (!target) throw new Error('ไม่พบรายการ ' + originalId);
-    }
+    var existing = readBatteries_();
+    var seq = nextBatterySeq_(existing);
+    var appended = [];
 
-    id = target ? target.batteryId : nextBatteryId_(sh);
-    var values = HEADERS.Batteries.map(function (h) {
-      return h === 'batteryId' ? id : row[h];
+    rows.forEach(function (r) {
+      if (r.batteryId) {
+        var target = null;
+        for (var i = 0; i < existing.length; i++) {
+          if (existing[i].batteryId === r.batteryId) { target = existing[i]; break; }
+        }
+        if (!target) throw new Error('ไม่พบรายการ ' + r.batteryId);
+        sh.getRange(target._row, 1, 1, HEADERS.Batteries.length).setValues([toSheetRow_(r)]);
+      } else {
+        r.batteryId = seq.prefix + ('00' + (++seq.max)).slice(-3);
+        appended.push(toSheetRow_(r));
+      }
     });
 
-    if (target) sh.getRange(target._row, 1, 1, HEADERS.Batteries.length).setValues([values]);
-    else sh.getRange(sh.getLastRow() + 1, 1, 1, HEADERS.Batteries.length).setValues([values]);
+    if (appended.length) {
+      sh.getRange(sh.getLastRow() + 1, 1, appended.length, HEADERS.Batteries.length)
+        .setValues(appended);
+    }
   } finally {
     lock.releaseLock();
   }
 
-  row.batteryId = id;
-  return row;
+  return rows;
+}
+
+function toSheetRow_(r) {
+  return HEADERS.Batteries.map(function (h) { return r[h] === undefined ? '' : r[h]; });
 }
 
 /** เลขที่รายการแบต รูปแบบ BT-YYYYMMDD-NNN (เรียกใต้ lock เท่านั้น) */
-function nextBatteryId_(sh) {
+function nextBatterySeq_(existing) {
   var prefix = 'BT-' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd') + '-';
-  var last = sh.getLastRow();
   var max = 0;
-  if (last > 1) {
-    var ids = sh.getRange(2, 1, last - 1, 1).getValues();
-    for (var i = 0; i < ids.length; i++) {
-      var v = String(ids[i][0]);
-      if (v.indexOf(prefix) === 0) {
-        var n = parseInt(v.substring(prefix.length), 10);
-        if (!isNaN(n) && n > max) max = n;
-      }
+  existing.forEach(function (b) {
+    if (b.batteryId.indexOf(prefix) === 0) {
+      var n = parseInt(b.batteryId.substring(prefix.length), 10);
+      if (!isNaN(n) && n > max) max = n;
     }
-  }
-  return prefix + ('00' + (max + 1)).slice(-3);
+  });
+  return { prefix: prefix, max: max };
 }
 
 /* =======================================================================
@@ -566,17 +639,29 @@ function setupSheets() {
   var ss = getSpreadsheet_();
   var created = [];
 
+  var moved = [];
   Object.keys(HEADERS).forEach(function (name) {
     var sh = ss.getSheetByName(name);
     if (!sh) {
       sh = ss.insertSheet(name);
       created.push(name);
+    } else if (migrateColumns_(sh, HEADERS[name])) {
+      // ต้องย้ายข้อมูลเดิมให้ตรงคอลัมน์ใหม่ก่อน ไม่งั้นเขียนหัวตารางทับแล้วข้อมูลจะเหลื่อม
+      moved.push(name);
     }
+
     var headers = HEADERS[name];
     sh.getRange(1, 1, 1, headers.length).setValues([headers])
       .setFontWeight('bold')
       .setBackground('#eef2ff');
     sh.setFrozenRows(1);
+
+    // ล็อกคอลัมน์พวกวันที่/ซีเรียลเป็นข้อความ กัน Sheets แปลงเป็นวันที่หรือตัวเลขเอง
+    (TEXT_COLUMNS[name] || []).forEach(function (field) {
+      var col = headers.indexOf(field) + 1;
+      if (col > 0) sh.getRange(2, col, Math.max(sh.getMaxRows() - 1, 1), 1).setNumberFormat('@');
+    });
+
     sh.autoResizeColumns(1, headers.length);
   });
 
@@ -592,9 +677,48 @@ function setupSheets() {
   var msg = created.length
     ? 'สร้างชีตใหม่: ' + created.join(', ')
     : 'ชีตครบอยู่แล้ว — อัปเดตหัวตารางให้เรียบร้อย';
+  if (moved.length) msg += ' | ย้ายข้อมูลเดิมให้ตรงคอลัมน์ใหม่: ' + moved.join(', ');
   msg += ' | สาขาในระบบ ' + Math.max(0, br.getLastRow() - 1) + ' สาขา';
   Logger.log(msg);
   return msg;
+}
+
+/**
+ * ชีตเก่าที่หัวตารางไม่ตรงกับรุ่นปัจจุบัน (เช่นยังไม่มีคอลัมน์ อล.)
+ * ให้จับคู่ข้อมูลตาม "ชื่อหัวตารางเดิม" แล้วเขียนกลับตามลำดับคอลัมน์ใหม่
+ * คอลัมน์ที่ไม่มีในรุ่นใหม่จะถูกตัดทิ้ง คอลัมน์ที่เพิ่งเพิ่มจะได้ค่าว่าง
+ */
+function migrateColumns_(sh, want) {
+  var lastCol = sh.getLastColumn();
+  if (lastCol < 1) return false;
+
+  var current = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(function (h) {
+    return String(h == null ? '' : h).trim();
+  });
+
+  var same = true;
+  for (var i = 0; i < want.length; i++) {
+    if (current[i] !== want[i]) { same = false; break; }
+  }
+  if (same) return false;
+
+  var lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    var values = sh.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    var rebuilt = values.map(function (row) {
+      return want.map(function (field) {
+        var at = current.indexOf(field);
+        return at < 0 ? '' : (row[at] === undefined ? '' : row[at]);
+      });
+    });
+    sh.getRange(2, 1, rebuilt.length, want.length).setValues(rebuilt);
+  }
+
+  // ล้างคอลัมน์ส่วนเกินที่หลุดมาจากโครงเดิม
+  if (lastCol > want.length) {
+    sh.getRange(1, want.length + 1, Math.max(lastRow, 1), lastCol - want.length).clearContent();
+  }
+  return true;
 }
 
 /** ล็อกคอลัมน์รหัสสาขาเป็นข้อความ 4 หลัก กัน 0 นำหน้าหาย */
@@ -647,6 +771,40 @@ function showBatteryLinks() {
   return out;
 }
 
+/**
+ * ตรวจว่าเซิร์ฟเวอร์อ่านอะไรได้จากชีตบ้าง — ใช้ตอนข้อมูลอยู่ในชีตแต่หน้าเว็บไม่ขึ้น
+ * รันแล้วดูที่ "บันทึกการดำเนินการ"
+ */
+function debugBatteries() {
+  var lines = [];
+  try {
+    var sh = getSheet_(SHEETS.BATTERIES);
+    lines.push('ชีต Batteries: ' + sh.getLastRow() + ' แถว × ' + sh.getLastColumn() + ' คอลัมน์');
+    lines.push('หัวตารางที่โค้ดคาดไว้ : ' + HEADERS.Batteries.join(' | '));
+    if (sh.getLastColumn() > 0) {
+      lines.push('หัวตารางที่อยู่ในชีต  : ' +
+        sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].join(' | '));
+    }
+
+    var rows = readBatteries_();
+    lines.push('อ่านได้ ' + rows.length + ' รายการ');
+    rows.slice(-3).forEach(function (b) {
+      lines.push('  • ' + b.batteryId + ' | สาขา "' + b.branch + '" | สถานะ "' + b.status +
+        '" | อล. "' + b.alNo + '" | รับเข้า ' + b.receivedDate);
+    });
+
+    var listed = apiListBatteries({});
+    lines.push('apiListBatteries({}) → ' +
+      (listed.ok ? listed.results.length + ' รายการ (ทั้งหมด ' + listed.total + ')'
+                 : 'ผิดพลาด: ' + listed.error));
+  } catch (err) {
+    lines.push('❌ ' + (err.message || err));
+  }
+  var out = lines.join('\n');
+  Logger.log(out);
+  return out;
+}
+
 /** ตรวจว่าตั้งค่าครบหรือยัง */
 function checkSetup() {
   var lines = [];
@@ -668,8 +826,10 @@ function onOpen() {
     .addItem('ติดตั้ง/ซ่อมโครงสร้างชีต', 'setupSheets')
     .addItem('ดูลิงก์สำหรับแจก', 'showBatteryLinksDialog')
     .addItem('ตรวจการตั้งค่า', 'checkSetupDialog')
+    .addItem('ตรวจข้อมูลแบต (ตอนหน้าเว็บไม่ขึ้น)', 'debugBatteriesDialog')
     .addToUi();
 }
 
 function checkSetupDialog() { SpreadsheetApp.getUi().alert(checkSetup()); }
 function showBatteryLinksDialog() { SpreadsheetApp.getUi().alert(showBatteryLinks()); }
+function debugBatteriesDialog() { SpreadsheetApp.getUi().alert(debugBatteries()); }
