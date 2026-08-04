@@ -55,6 +55,24 @@
   }
   header.app h1 { font-size: 19px; margin: 0; font-weight: 600; }
   header.app .sub { font-size: 13px; opacity: .85; margin-top: 4px; }
+  .head-row { display: flex; align-items: flex-start; gap: 10px; }
+  .head-text { flex: 1; min-width: 0; }
+
+  /* ปุ่มกุญแจมุมขวาบน — ทางเข้าโหมดแอดมิน */
+  .key-btn {
+    flex: none;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, .45);
+    background: rgba(255, 255, 255, .15);
+    color: #fff;
+    font-size: 19px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+  }
+  .key-btn.on { background: #fff; border-color: #fff; }
 
   .card {
     background: var(--card);
@@ -202,8 +220,13 @@
 </style>
 
 <header class="app">
-  <h1 id="appTitle">🔋 ติดตามสถานะ</h1>
-  <div class="sub" id="modeLabel"></div>
+  <div class="head-row">
+    <div class="head-text">
+      <h1 id="appTitle">🔋 ติดตามสถานะ</h1>
+      <div class="sub" id="modeLabel"></div>
+    </div>
+    <button type="button" id="adminToggle" class="key-btn" title="เข้าโหมดแอดมิน">🔑</button>
+  </div>
 </header>
 
 <div class="tabs" id="tabs">
@@ -212,6 +235,15 @@
 </div>
 
 <div class="wrap">
+
+  <!-- ช่องกรอกรหัสแอดมิน เปิดจากปุ่มกุญแจมุมขวาบน -->
+  <div class="card hidden" id="adminKeyWrap">
+    <label for="adminKeyInput">รหัสเข้าโหมดแอดมิน</label>
+    <input type="password" id="adminKeyInput" autocomplete="off"
+           inputmode="numeric" placeholder="กรอกรหัส">
+    <div id="adminKeyMsg" class="banner err hidden"></div>
+    <button type="button" class="primary" id="adminKeyBtn">เข้าใช้งาน</button>
+  </div>
 
   <div id="loading" class="card"><div class="muted">กำลังโหลดข้อมูล…</div></div>
 
@@ -351,17 +383,6 @@
 
   </div><!-- /viewRepair -->
 
-  <!-- เข้าโหมดแอดมินได้จากหน้าเว็บ ไม่ต้องพึ่งลิงก์ที่มี key อย่างเดียว
-       เผื่อลิงก์หาย หรือ Deploy ใหม่แล้ว URL เปลี่ยน -->
-  <div class="card" id="adminBox">
-    <button type="button" class="ghost" id="adminToggle" style="margin-top:0;">🔑 เข้าโหมดแอดมิน</button>
-    <div id="adminKeyWrap" class="hidden" style="margin-top:10px;">
-      <label for="adminKeyInput">กุญแจแอดมิน</label>
-      <input type="password" id="adminKeyInput" autocomplete="off" placeholder="วางกุญแจที่ได้จาก showBatteryLinks">
-      <div id="adminKeyMsg" class="banner err hidden"></div>
-      <button type="button" class="primary" id="adminKeyBtn">เข้าใช้งาน</button>
-    </div>
-  </div>
 </div>
 
 <!--
@@ -497,7 +518,10 @@
 
     $('newBtn').classList.toggle('hidden', !IS_ADMIN);
     $('rNewBtn').classList.toggle('hidden', !IS_ADMIN);
-    $('adminToggle').textContent = IS_ADMIN ? 'ออกจากโหมดแอดมิน' : '🔑 เข้าโหมดแอดมิน';
+
+    $('adminToggle').textContent = IS_ADMIN ? '🔓' : '🔑';
+    $('adminToggle').title = IS_ADMIN ? 'ออกจากโหมดแอดมิน' : 'เข้าโหมดแอดมิน';
+    $('adminToggle').classList.toggle('on', IS_ADMIN);
     $('adminKeyWrap').classList.add('hidden');
   }
 
