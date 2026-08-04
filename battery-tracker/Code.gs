@@ -10,7 +10,8 @@
 
 var SHEETS = {
   BRANCHES: 'Branches',
-  BATTERIES: 'Batteries'
+  BATTERIES: 'Batteries',
+  REPAIRS: 'Repairs'
 };
 
 var HEADERS = {
@@ -18,13 +19,18 @@ var HEADERS = {
   Batteries: [
     'batteryId', 'receivedDate', 'alNo', 'branch', 'zone', 'serial', 'model', 'qty',
     'status', 'note', 'updatedAt', 'updatedBy'
+  ],
+  Repairs: [
+    'repairId', 'receivedDate', 'jobNo', 'contractNo', 'branch', 'zone',
+    'status', 'note', 'updatedAt', 'updatedBy'
   ]
 };
 
 /** คอลัมน์ที่ต้องบังคับให้ชีตเก็บเป็นข้อความ ไม่งั้น Sheets จะแปลงเป็นวันที่/ตัวเลขให้เอง */
 var TEXT_COLUMNS = {
   Branches: ['branchCode'],
-  Batteries: ['receivedDate', 'alNo', 'serial', 'updatedAt']
+  Batteries: ['receivedDate', 'alNo', 'serial', 'updatedAt'],
+  Repairs: ['receivedDate', 'jobNo', 'contractNo', 'updatedAt']
 };
 
 /** ขั้นตอนการกระตุ้นแบตเตอรี่ เรียงตามลำดับงานจริง */
@@ -34,6 +40,14 @@ var BATTERY_STATUSES = [
   'กระตุ้นเสร็จแล้ว',
   'รอจัดส่ง',
   'กำลังจัดส่ง'
+];
+
+/** ขั้นตอนการซ่อมรถ เรียงจากยังไม่ได้ลงมือ → ติดของ → กำลังทำ → เสร็จ */
+var REPAIR_STATUSES = [
+  'รอซ่อม',
+  'รออะไหล่',
+  'กำลังซ่อม',
+  'ซ่อมเสร็จแล้ว'
 ];
 
 var TZ = 'Asia/Bangkok';
@@ -223,7 +237,7 @@ function doGet(e) {
   });
 
   return tpl.evaluate()
-    .setTitle('สถานะการกระตุ้นแบตเตอรี่')
+    .setTitle('ติดตามสถานะแบตเตอรี่ / รถส่งซ่อม')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
@@ -302,7 +316,11 @@ function apiListBatteries(payload) {
 function apiBatteryBootstrap() {
   try {
     var branches = getBranches_().map(function (b) { return b.name; });
-    return { ok: true, branches: branches, statuses: BATTERY_STATUSES, today: todayIso_() };
+    return {
+      ok: true, branches: branches, today: todayIso_(),
+      statuses: BATTERY_STATUSES,
+      repairStatuses: REPAIR_STATUSES
+    };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
@@ -458,6 +476,195 @@ function nextBatterySeq_(existing) {
     }
   });
   return { prefix: prefix, max: max };
+}
+
+/* =======================================================================
+ * ส่วนที่ 5ข — รถส่งซ่อม
+ *
+ * โครงเดียวกับแบตเตอรี่ ต่างกันที่ตัวระบุงานคือเลข JOB กับเลขที่สัญญา
+ * สิทธิ์แก้ข้อมูลใช้กุญแจแอดมินตัวเดียวกัน ลิงก์ของสาขายังดูได้อย่างเดียวเหมือนเดิม
+ * ===================================================================== */
+
+function readRepairs_() {
+  var sh = getSheet_(SHEETS.REPAIRS);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+
+  var width = Math.min(HEADERS.Repairs.length, Math.max(1, sh.getLastColumn()));
+  var values = sh.getRange(2, 1, last - 1, width).getValues();
+
+  var out = [];
+  for (var i = 0; i < values.length; i++) {
+    var rec = { _row: i + 2 };
+    for (var c = 0; c < HEADERS.Repairs.length; c++) {
+      rec[HEADERS.Repairs[c]] = cellText_(values[i][c]);
+    }
+    if (!rec.repairId) continue;
+    out.push(rec);
+  }
+  return out;
+}
+
+function toRepairDto_(r) {
+  if (!r) return null;
+  var dto = {};
+  HEADERS.Repairs.forEach(function (h) { dto[h] = r[h] === undefined ? '' : r[h]; });
+  return dto;
+}
+
+/** ค้นรายการรถส่งซ่อม — เปิดให้ทุกคนเรียกได้ เพราะเป็นข้อมูลที่ให้สาขาติดตาม */
+function apiListRepairs(payload) {
+  try {
+    payload = payload || {};
+    var q = String(payload.q || '').trim().toLowerCase();
+    var branch = String(payload.branch || '').trim();
+    var status = String(payload.status || '').trim();
+
+    var rows = readRepairs_();
+    var results = [];
+    for (var i = rows.length - 1; i >= 0 && results.length < 200; i--) {
+      var r = rows[i];
+      if (branch && r.branch !== branch) continue;
+      if (status && r.status !== status) continue;
+      if (q) {
+        var hay = [r.repairId, r.jobNo, r.contractNo, r.branch, r.zone, r.status, r.note]
+          .join(' ').toLowerCase();
+        if (hay.indexOf(q) < 0) continue;
+      }
+      results.push(toRepairDto_(r));
+    }
+
+    var counts = {};
+    REPAIR_STATUSES.forEach(function (s) { counts[s] = 0; });
+    rows.forEach(function (r) {
+      if (branch && r.branch !== branch) return;
+      if (counts[r.status] !== undefined) counts[r.status]++;
+    });
+
+    return {
+      ok: true, results: results, counts: counts,
+      statuses: REPAIR_STATUSES, total: rows.length
+    };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** เพิ่ม/แก้ไขรายการรถส่งซ่อม — ต้องมี key ของแอดมิน */
+function apiSaveRepair(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+    return { ok: true, repair: saveRepair_(payload) };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** เปลี่ยนสถานะรายการเดียว — ต้องมี key ของแอดมิน */
+function apiUpdateRepairStatus(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+
+    var id = String(payload.repairId || '').trim();
+    var status = String(payload.status || '').trim();
+    if (!id) throw new Error('ไม่ได้ระบุรายการ');
+    if (REPAIR_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
+
+    var sh = getSheet_(SHEETS.REPAIRS);
+    var rows = readRepairs_();
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].repairId === id) {
+        sh.getRange(rows[i]._row, colIndex_('Repairs', 'status')).setValue(status);
+        sh.getRange(rows[i]._row, colIndex_('Repairs', 'updatedAt')).setValue(nowStamp_());
+        sh.getRange(rows[i]._row, colIndex_('Repairs', 'updatedBy'))
+          .setValue(String(payload.updatedBy || '').trim());
+        return { ok: true, repairId: id, status: status };
+      }
+    }
+    throw new Error('ไม่พบรายการ ' + id);
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+function saveRepair_(p) {
+  var jobNo = String(p.jobNo || '').trim();
+  if (!jobNo) throw new Error('ยังไม่ได้กรอกเลข JOB');
+
+  var branch = String(p.branch || '').trim();
+  if (!branch) throw new Error('ยังไม่ได้เลือกสาขา');
+
+  var status = String(p.status || '').trim() || REPAIR_STATUSES[0];
+  if (REPAIR_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
+
+  var receivedDate = String(p.receivedDate || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) receivedDate = todayIso_();
+
+  var branchInfo = findBranch_(branch);
+  var originalId = String(p.repairId || '').trim();
+  var row = {
+    repairId: originalId,
+    receivedDate: receivedDate,
+    jobNo: jobNo,
+    contractNo: String(p.contractNo || '').trim(),
+    branch: branch,
+    zone: branchInfo ? branchInfo.zone : '',
+    status: status,
+    note: String(p.note || '').trim(),
+    updatedAt: nowStamp_(),
+    updatedBy: String(p.updatedBy || '').trim()
+  };
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่');
+
+  try {
+    var sh = getSheet_(SHEETS.REPAIRS);
+    var rows = readRepairs_();
+
+    // เลข JOB ต้องไม่ซ้ำ ไม่งั้นตามงานไม่ถูกคัน
+    var key = jobNo.toUpperCase();
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].repairId === originalId) continue;
+      if (rows[i].jobNo.toUpperCase() === key) {
+        throw new Error('เลข JOB ' + jobNo + ' มีอยู่แล้วในรายการ ' + rows[i].repairId +
+          ' (' + rows[i].branch + ' • ' + rows[i].status + ')');
+      }
+    }
+
+    var target = null;
+    if (originalId) {
+      for (var j = 0; j < rows.length; j++) {
+        if (rows[j].repairId === originalId) { target = rows[j]; break; }
+      }
+      if (!target) throw new Error('ไม่พบรายการ ' + originalId);
+    }
+
+    if (!target) row.repairId = nextRepairId_(rows);
+    var values = HEADERS.Repairs.map(function (h) { return row[h] === undefined ? '' : row[h]; });
+
+    if (target) sh.getRange(target._row, 1, 1, HEADERS.Repairs.length).setValues([values]);
+    else sh.getRange(sh.getLastRow() + 1, 1, 1, HEADERS.Repairs.length).setValues([values]);
+  } finally {
+    lock.releaseLock();
+  }
+
+  return row;
+}
+
+/** เลขที่รายการซ่อม รูปแบบ RP-YYYYMMDD-NNN (เรียกใต้ lock เท่านั้น) */
+function nextRepairId_(existing) {
+  var prefix = 'RP-' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd') + '-';
+  var max = 0;
+  existing.forEach(function (r) {
+    if (r.repairId.indexOf(prefix) === 0) {
+      var n = parseInt(r.repairId.substring(prefix.length), 10);
+      if (!isNaN(n) && n > max) max = n;
+    }
+  });
+  return prefix + ('00' + (max + 1)).slice(-3);
 }
 
 /* =======================================================================
@@ -797,6 +1004,20 @@ function debugBatteries() {
     lines.push('apiListBatteries({}) → ' +
       (listed.ok ? listed.results.length + ' รายการ (ทั้งหมด ' + listed.total + ')'
                  : 'ผิดพลาด: ' + listed.error));
+
+    var rp = getSheet_(SHEETS.REPAIRS);
+    lines.push('');
+    lines.push('ชีต Repairs: ' + rp.getLastRow() + ' แถว × ' + rp.getLastColumn() + ' คอลัมน์');
+    var repairs = readRepairs_();
+    lines.push('อ่านได้ ' + repairs.length + ' รายการ');
+    repairs.slice(-3).forEach(function (r) {
+      lines.push('  • ' + r.repairId + ' | JOB ' + r.jobNo + ' | สัญญา ' + r.contractNo +
+        ' | สาขา "' + r.branch + '" | สถานะ "' + r.status + '"');
+    });
+    var listedRp = apiListRepairs({});
+    lines.push('apiListRepairs({}) → ' +
+      (listedRp.ok ? listedRp.results.length + ' รายการ (ทั้งหมด ' + listedRp.total + ')'
+                   : 'ผิดพลาด: ' + listedRp.error));
   } catch (err) {
     lines.push('❌ ' + (err.message || err));
   }
@@ -822,11 +1043,11 @@ function checkSetup() {
 /** เมนูลัดบนชีต */
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('ระบบแบตเตอรี่')
+    .createMenu('ระบบติดตามสถานะ')
     .addItem('ติดตั้ง/ซ่อมโครงสร้างชีต', 'setupSheets')
     .addItem('ดูลิงก์สำหรับแจก', 'showBatteryLinksDialog')
     .addItem('ตรวจการตั้งค่า', 'checkSetupDialog')
-    .addItem('ตรวจข้อมูลแบต (ตอนหน้าเว็บไม่ขึ้น)', 'debugBatteriesDialog')
+    .addItem('ตรวจข้อมูล (ตอนหน้าเว็บไม่ขึ้น)', 'debugBatteriesDialog')
     .addToUi();
 }
 

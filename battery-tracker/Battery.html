@@ -164,18 +164,52 @@
     font-size: 13px; cursor: pointer; padding: 0;
   }
 
+  /* แถบสลับระหว่างงานแบตกับงานซ่อมรถ */
+  .tabs {
+    display: flex;
+    background: var(--card);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin-bottom: 14px;
+  }
+  .tab {
+    flex: 1;
+    padding: 13px 8px;
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
   /* สีประจำสถานะ ให้ดูปราดเดียวรู้ว่าอยู่ขั้นไหน */
   .s0 { --s-color: #9333ea; }
   .s1 { --s-color: #f59e0b; }
   .s2 { --s-color: #16a34a; }
   .s3 { --s-color: #0891b2; }
   .s4 { --s-color: #2563eb; }
+
+  /* งานซ่อมใช้ชุดสีของตัวเอง จบงานแล้วต้องเป็นเขียว ไม่ใช่กลางทางเป็นเขียว */
+  .r0 { --s-color: #9333ea; }   /* รอซ่อม */
+  .r1 { --s-color: #dc2626; }   /* รออะไหล่ — ติดของ ต้องสะดุดตา */
+  .r2 { --s-color: #f59e0b; }   /* กำลังซ่อม */
+  .r3 { --s-color: #16a34a; }   /* ซ่อมเสร็จแล้ว */
 </style>
 
 <header class="app">
-  <h1>🔋 สถานะการกระตุ้นแบตเตอรี่</h1>
+  <h1 id="appTitle">🔋 ติดตามสถานะ</h1>
   <div class="sub" id="modeLabel"></div>
 </header>
+
+<div class="tabs" id="tabs">
+  <button type="button" class="tab active" id="tabBattery">🔋 แบตเตอรี่</button>
+  <button type="button" class="tab" id="tabRepair">🔧 รถส่งซ่อม</button>
+</div>
 
 <div class="wrap">
 
@@ -185,6 +219,8 @@
     <div class="banner err" id="fatalMsg"></div>
     <button class="primary" onclick="location.reload()">ลองใหม่</button>
   </div>
+
+  <div id="viewBattery">
 
   <!-- ฟอร์มเพิ่ม/แก้ไข เฉพาะแอดมิน -->
   <div id="formCard" class="card hidden">
@@ -244,6 +280,76 @@
   <div id="summary" class="summary"></div>
   <div id="status" class="card hidden"></div>
   <div id="results"></div>
+
+  </div><!-- /viewBattery -->
+
+  <div id="viewRepair" class="hidden">
+
+    <!-- ฟอร์มเพิ่ม/แก้ไขรถส่งซ่อม เฉพาะแอดมิน -->
+    <div id="rFormCard" class="card hidden">
+      <h2 id="rFormTitle">เพิ่มรายการรถส่งซ่อม</h2>
+
+      <div class="row">
+        <div>
+          <label for="rfJob">เลข JOB *</label>
+          <input type="text" id="rfJob" autocomplete="off" placeholder="เลขที่ JOB">
+        </div>
+        <div>
+          <label for="rfContract">เลขที่สัญญา</label>
+          <input type="text" id="rfContract" autocomplete="off">
+        </div>
+      </div>
+
+      <label for="rfBranch">สาขาที่ส่งซ่อม *</label>
+      <select id="rfBranch"><option value="">— เลือกสาขา —</option></select>
+
+      <div class="row">
+        <div>
+          <label for="rfDate">วันที่รับเข้า</label>
+          <input type="date" id="rfDate">
+        </div>
+        <div>
+          <label for="rfStatus">สถานะ</label>
+          <select id="rfStatus"></select>
+        </div>
+      </div>
+
+      <label for="rfNote">หมายเหตุ</label>
+      <input type="text" id="rfNote" autocomplete="off" placeholder="เช่น ทะเบียน / อาการ / อะไหล่ที่รอ">
+
+      <label for="rfBy">ผู้อัปเดต</label>
+      <input type="text" id="rfBy" autocomplete="off" placeholder="ชื่อผู้ดูแล">
+
+      <div id="rFormMsg" class="banner err hidden"></div>
+      <button class="primary" id="rSaveBtn">บันทึก</button>
+      <button type="button" class="ghost" id="rCancelBtn">ยกเลิก</button>
+    </div>
+
+    <!-- ตัวกรอง -->
+    <div class="card" id="rFilterCard">
+      <label for="rq">ค้นหา</label>
+      <input type="search" id="rq" placeholder="เลข JOB / เลขที่สัญญา / เลขที่รายการ / หมายเหตุ">
+
+      <div class="row">
+        <div>
+          <label for="rBranchFilter">สาขา</label>
+          <select id="rBranchFilter"><option value="">— ทุกสาขา —</option></select>
+        </div>
+        <div>
+          <label for="rStatusFilter">สถานะ</label>
+          <select id="rStatusFilter"><option value="">— ทุกสถานะ —</option></select>
+        </div>
+      </div>
+
+      <button class="primary" id="rSearchBtn">ค้นหา</button>
+      <button type="button" class="ghost hidden" id="rNewBtn">+ เพิ่มรายการรถส่งซ่อม</button>
+    </div>
+
+    <div id="rSummary" class="summary"></div>
+    <div id="rStatus" class="card hidden"></div>
+    <div id="rResults"></div>
+
+  </div><!-- /viewRepair -->
 </div>
 
 <!--
@@ -266,8 +372,10 @@
   var ADMIN_KEY = typeof CFG.adminKey === 'string' ? CFG.adminKey : '';
   var LOCK_BRANCH = typeof CFG.lockBranch === 'string' ? CFG.lockBranch : '';
 
-  var STATUSES = [];
+  var STATUSES = [];          // ขั้นตอนงานแบต
+  var R_STATUSES = [];        // ขั้นตอนงานซ่อมรถ
   var editingId = '';
+  var rEditingId = '';
   var items = [];
 
   function $(id) { return document.getElementById(id); }
@@ -283,6 +391,33 @@
     return i < 0 ? '' : 's' + i;
   }
 
+  function rStatusClass(status) {
+    var i = R_STATUSES.indexOf(status);
+    return i < 0 ? '' : 'r' + i;
+  }
+
+  /* ---------- สลับระหว่างงานแบตกับงานซ่อมรถ ---------- */
+
+  var repairLoaded = false;
+
+  $('tabBattery').addEventListener('click', function () { showTab('battery'); });
+  $('tabRepair').addEventListener('click', function () { showTab('repair'); });
+
+  function showTab(name) {
+    var repair = name === 'repair';
+    $('tabBattery').classList.toggle('active', !repair);
+    $('tabRepair').classList.toggle('active', repair);
+    $('viewBattery').classList.toggle('hidden', repair);
+    $('viewRepair').classList.toggle('hidden', !repair);
+    $('appTitle').textContent = repair ? '🔧 สถานะรถส่งซ่อม' : '🔋 สถานะการกระตุ้นแบตเตอรี่';
+    window.scrollTo({ top: 0 });
+
+    if (repair && !repairLoaded) {
+      repairLoaded = true;
+      rSearch();
+    }
+  }
+
   function boot() {
     $('modeLabel').textContent = IS_ADMIN
       ? 'โหมดแอดมิน — อัปเดตสถานะได้'
@@ -292,26 +427,40 @@
       if (!res || !res.ok) throw new Error((res && res.error) || 'โหลดข้อมูลไม่สำเร็จ');
 
       STATUSES = res.statuses;
+      R_STATUSES = res.repairStatuses || [];
+
       res.branches.forEach(function (b) {
         $('branchFilter').appendChild(new Option(b, b));
         $('fBranch').appendChild(new Option(b, b));
+        $('rBranchFilter').appendChild(new Option(b, b));
+        $('rfBranch').appendChild(new Option(b, b));
       });
       STATUSES.forEach(function (s) {
         $('statusFilter').appendChild(new Option(s, s));
         $('fStatus').appendChild(new Option(s, s));
       });
+      R_STATUSES.forEach(function (s) {
+        $('rStatusFilter').appendChild(new Option(s, s));
+        $('rfStatus').appendChild(new Option(s, s));
+      });
       $('fDate').value = res.today;
+      $('rfDate').value = res.today;
 
       // ลิงก์ที่เจาะจงสาขา ให้ล็อกตัวกรองไว้เลย
       if (LOCK_BRANCH) {
         $('branchFilter').value = LOCK_BRANCH;
         $('branchFilter').disabled = true;
+        $('rBranchFilter').value = LOCK_BRANCH;
+        $('rBranchFilter').disabled = true;
         $('modeLabel').textContent += ' • เฉพาะสาขา ' + LOCK_BRANCH;
       } else if (CFG.lockBranchInvalid) {
         $('modeLabel').textContent += ' • ไม่พบสาขา "' + CFG.wantBranch + '" จึงแสดงทุกสาขา';
       }
 
-      if (IS_ADMIN) $('newBtn').classList.remove('hidden');
+      if (IS_ADMIN) {
+        $('newBtn').classList.remove('hidden');
+        $('rNewBtn').classList.remove('hidden');
+      }
 
       $('loading').classList.add('hidden');
       search();
@@ -632,6 +781,213 @@
   function thaiDate(iso) {
     var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
     return m ? m[3] + '/' + m[2] + '/' + m[1] : iso;
+  }
+
+  /* =====================================================================
+   * งานรถส่งซ่อม — โครงเดียวกับงานแบต ต่างที่ตัวระบุงานคือเลข JOB
+   * =================================================================== */
+
+  $('rSearchBtn').addEventListener('click', function () { rSearch(); });
+  $('rq').addEventListener('keydown', function (e) { if (e.key === 'Enter') rSearch(); });
+  $('rNewBtn').addEventListener('click', function () { rOpenForm(null); });
+  $('rCancelBtn').addEventListener('click', rCloseForm);
+  $('rSaveBtn').addEventListener('click', rSave);
+
+  function rSetStatus(msg, isError) {
+    var box = $('rStatus');
+    box.classList.remove('hidden');
+    box.innerHTML = '';
+    var div = document.createElement('div');
+    div.className = isError ? 'banner err' : 'muted';
+    div.textContent = msg;
+    box.appendChild(div);
+  }
+
+  function rSearch(doneMsg) {
+    rSetStatus('กำลังโหลด…');
+    $('rResults').innerHTML = '';
+    call('apiListRepairs', {
+      q: $('rq').value.trim(),
+      branch: LOCK_BRANCH || $('rBranchFilter').value,
+      status: $('rStatusFilter').value
+    }).then(function (res) {
+      if (!res || !res.ok) return rSetStatus((res && res.error) || 'โหลดไม่สำเร็จ', true);
+      rRenderSummary(res.counts);
+      rRender(res.results, res.total);
+      if (doneMsg) rSetStatus(doneMsg);
+    }).catch(function (err) {
+      rSetStatus('โหลดไม่สำเร็จ: ' + (err.message || err), true);
+    });
+  }
+
+  function rRenderSummary(counts) {
+    var box = $('rSummary');
+    box.innerHTML = '';
+    R_STATUSES.forEach(function (s, i) {
+      var el = document.createElement('div');
+      el.className = 'box r' + i;
+      var n = document.createElement('div');
+      n.className = 'n';
+      n.textContent = counts[s] || 0;
+      var t = document.createElement('div');
+      t.className = 't';
+      t.textContent = s;
+      el.appendChild(n);
+      el.appendChild(t);
+      box.appendChild(el);
+    });
+  }
+
+  function rRender(rows, total) {
+    if (!rows.length) {
+      return rSetStatus(total
+        ? 'ในระบบมี ' + total + ' รายการ แต่ไม่มีรายการไหนตรงกับตัวกรองที่เลือกไว้'
+        : 'ยังไม่มีรายการรถส่งซ่อมในระบบ');
+    }
+    rSetStatus('พบ ' + rows.length + ' รายการ (ล่าสุดขึ้นก่อน)');
+
+    var box = $('rResults');
+    rows.forEach(function (r) {
+      var el = document.createElement('div');
+      el.className = 'bat ' + rStatusClass(r.status);
+
+      var head = document.createElement('div');
+      head.className = 'head';
+      var left = document.createElement('span');
+      left.textContent = r.repairId;
+      var right = document.createElement('span');
+      right.textContent = r.receivedDate ? 'รับเข้า ' + thaiDate(r.receivedDate) : '';
+      head.appendChild(left);
+      head.appendChild(right);
+      el.appendChild(head);
+
+      // เลข JOB เป็นตัวที่คนใช้ตามงานจริง เลยให้เด่นที่สุดบนการ์ด
+      // ถ้าเลขที่กรอกมาขึ้นต้นด้วย JOB อยู่แล้ว ไม่ต้องเติมซ้ำให้อ่านแล้วสะดุด
+      var job = document.createElement('div');
+      job.className = 'branch';
+      job.textContent = /^job/i.test(r.jobNo) ? r.jobNo : 'JOB ' + (r.jobNo || '—');
+      el.appendChild(job);
+
+      var badge = document.createElement('div');
+      badge.className = 'badge';
+      badge.textContent = r.status || 'ยังไม่ระบุสถานะ';
+      el.appendChild(badge);
+
+      var bits = [];
+      if (r.contractNo) bits.push('สัญญา ' + r.contractNo);
+      if (r.branch) bits.push(r.branch + (r.zone ? ' (เขต' + r.zone + ')' : ''));
+      if (bits.length) {
+        var meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = bits.join('  •  ');
+        el.appendChild(meta);
+      }
+
+      if (r.note) {
+        var note = document.createElement('div');
+        note.className = 'meta';
+        note.textContent = '📝 ' + r.note;
+        el.appendChild(note);
+      }
+
+      if (r.updatedAt) {
+        var upd = document.createElement('div');
+        upd.className = 'meta';
+        upd.style.marginTop = '6px';
+        upd.textContent = 'อัปเดตล่าสุด ' + r.updatedAt + (r.updatedBy ? ' โดย ' + r.updatedBy : '');
+        el.appendChild(upd);
+      }
+
+      if (IS_ADMIN) {
+        var sel = document.createElement('select');
+        R_STATUSES.forEach(function (s) { sel.appendChild(new Option(s, s)); });
+        sel.value = r.status;
+        sel.addEventListener('change', function () {
+          sel.disabled = true;
+          call('apiUpdateRepairStatus', {
+            key: ADMIN_KEY, repairId: r.repairId, status: sel.value,
+            updatedBy: localStorage.getItem('bt_by') || ''
+          }).then(function (res) {
+            sel.disabled = false;
+            if (!res || !res.ok) return rSetStatus((res && res.error) || 'อัปเดตไม่สำเร็จ', true);
+            rSearch();
+          }).catch(function (err) {
+            sel.disabled = false;
+            rSetStatus('อัปเดตไม่สำเร็จ: ' + (err.message || err), true);
+          });
+        });
+        el.appendChild(sel);
+
+        var edit = document.createElement('button');
+        edit.className = 'ghost';
+        edit.textContent = 'แก้ไขรายละเอียด';
+        edit.addEventListener('click', function () { rOpenForm(r); });
+        el.appendChild(edit);
+      }
+
+      box.appendChild(el);
+    });
+  }
+
+  function rOpenForm(r) {
+    rEditingId = r ? r.repairId : '';
+    $('rFormTitle').textContent = r ? 'แก้ไข ' + r.repairId : 'เพิ่มรายการรถส่งซ่อม';
+    $('rfJob').value = r ? r.jobNo : '';
+    $('rfContract').value = r ? r.contractNo : '';
+    $('rfBranch').value = r ? r.branch : (LOCK_BRANCH || '');
+    $('rfDate').value = r ? r.receivedDate : $('rfDate').value;
+    $('rfStatus').value = r ? r.status : R_STATUSES[0];
+    $('rfNote').value = r ? r.note : '';
+    $('rfBy').value = localStorage.getItem('bt_by') || '';
+
+    $('rFormMsg').classList.add('hidden');
+    $('rFormCard').classList.remove('hidden');
+    $('rFilterCard').classList.add('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function rCloseForm() {
+    $('rFormCard').classList.add('hidden');
+    $('rFilterCard').classList.remove('hidden');
+    rEditingId = '';
+  }
+
+  function rFormError(msg) {
+    $('rFormMsg').textContent = msg;
+    $('rFormMsg').classList.remove('hidden');
+  }
+
+  function rSave() {
+    var payload = {
+      key: ADMIN_KEY,
+      repairId: rEditingId,
+      jobNo: $('rfJob').value.trim(),
+      contractNo: $('rfContract').value.trim(),
+      branch: $('rfBranch').value,
+      receivedDate: $('rfDate').value,
+      status: $('rfStatus').value,
+      note: $('rfNote').value.trim(),
+      updatedBy: $('rfBy').value.trim()
+    };
+    if (!payload.jobNo) return rFormError('ยังไม่ได้กรอกเลข JOB');
+    if (!payload.branch) return rFormError('ยังไม่ได้เลือกสาขา');
+    localStorage.setItem('bt_by', payload.updatedBy);
+
+    $('rSaveBtn').disabled = true;
+    $('rSaveBtn').textContent = 'กำลังบันทึก…';
+
+    call('apiSaveRepair', payload).then(function (res) {
+      $('rSaveBtn').disabled = false;
+      $('rSaveBtn').textContent = 'บันทึก';
+      if (!res || !res.ok) return rFormError((res && res.error) || 'บันทึกไม่สำเร็จ');
+      var msg = rEditingId ? 'บันทึกการแก้ไขแล้ว' : 'บันทึกรายการ JOB ' + payload.jobNo + ' แล้ว';
+      rCloseForm();
+      rSearch(msg);
+    }).catch(function (err) {
+      $('rSaveBtn').disabled = false;
+      $('rSaveBtn').textContent = 'บันทึก';
+      rFormError('บันทึกไม่สำเร็จ: ' + (err.message || err));
+    });
   }
 
   boot();
