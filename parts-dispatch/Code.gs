@@ -23,7 +23,7 @@ var HEADERS = {
   Shipments: [
     'shipmentId', 'createdAt', 'shipDate', 'prNo', 'destBranch', 'zone', 'dropPoint',
     'isTransfer', 'carrier', 'trackingNo', 'boxCount', 'sender', 'receiverName', 'note',
-    'itemsSummary', 'slipFileId', 'clientToken', 'slipHash'
+    'itemsSummary', 'slipFileId', 'clientToken', 'slipHash', 'updatedAt', 'updatedBy'
   ],
   Items: ['shipmentId', 'lineNo', 'partCode', 'partName', 'qty', 'unit', 'note']
 };
@@ -666,11 +666,11 @@ function saveShipment_(payload) {
  * คืน null ถ้าไม่ชน หรือคืนผลลัพธ์สำเร็จรูปที่บอกว่าชนกับรอบไหน
  * ถ้าผู้ใช้ยืนยันว่าจะบันทึกซ้ำจริง ๆ (allowDuplicate) ก็ไม่ต้องตรวจ
  */
-function findConflict_(sh, clean) {
+function findConflict_(sh, clean, excludeId) {
   if (clean.allowDuplicate) return null;
 
   if (clean.slipHash) {
-    var sameSlip = findBySlipHash_(sh, clean.slipHash);
+    var sameSlip = findBySlipHash_(sh, clean.slipHash, excludeId);
     if (sameSlip) {
       return {
         ok: false,
@@ -682,7 +682,7 @@ function findConflict_(sh, clean) {
     }
   }
 
-  var samePr = findByPrNo_(sh, clean.prNo);
+  var samePr = findByPrNo_(sh, clean.prNo, excludeId);
   if (samePr) {
     return {
       ok: false,
@@ -693,6 +693,108 @@ function findConflict_(sh, clean) {
     };
   }
   return null;
+}
+
+/** แก้ไขรอบส่งที่บันทึกไปแล้ว */
+function apiUpdateShipment(payload) {
+  try {
+    return updateShipment_(payload || {});
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/**
+ * เขียนทับรอบส่งเดิมทั้งแถว พร้อมแทนที่รายการอะไหล่ของรอบนั้น
+ * ค่าที่หน้าเว็บไม่ได้ส่งมา (createdAt / clientToken / รูปเดิม) ต้องรักษาไว้
+ */
+function updateShipment_(payload) {
+  var id = String(payload.shipmentId || '').trim();
+  if (!id) throw new Error('ไม่ได้ระบุรายการที่จะแก้ไข');
+
+  var clean = validateShipment_(payload);
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดบันทึกอีกครั้ง');
+  }
+
+  var conflict = null, before = null;
+  try {
+    var sh = getSheet_(SHEETS.SHIPMENTS);
+    before = findShipmentRow_(sh, id);
+    if (!before) throw new Error('ไม่พบรายการ ' + id + ' — อาจถูกลบไปแล้ว');
+
+    // ตรวจซ้ำโดยไม่นับตัวเอง ไม่งั้นแก้อะไรก็ไม่ได้เลยเพราะเจอแถวของตัวเองทุกที
+    conflict = findConflict_(sh, clean, id);
+    if (!conflict) {
+      var keepSlip = !clean.slipBase64;
+      clean.slipFileId = keepSlip ? String(before.values.slipFileId || '') : '';
+      clean.slipHash = keepSlip ? String(before.values.slipHash || '') : clean.slipHash;
+      clean.clientToken = String(before.values.clientToken || '');
+      clean.updatedAt = nowStamp_();
+      clean.updatedBy = clean.sender;
+
+      var row = buildShipmentRow_(id, clean);
+      row[HEADERS.Shipments.indexOf('createdAt')] = before.values.createdAt;
+      sh.getRange(before.row, 1, 1, HEADERS.Shipments.length).setValues([row]);
+      replaceItems_(id, clean.items);
+    }
+  } finally {
+    lock.releaseLock();
+  }
+
+  if (conflict) return conflict;
+
+  // แนบรูปใหม่มาแทนของเดิม — ทำนอก lock เพราะอัปโหลดใช้เวลา
+  var slipFileId = clean.slipFileId;
+  if (!slipFileId && clean.slipBase64) {
+    try {
+      slipFileId = saveSlipImage_(clean.slipBase64, clean.slipMimeType, clean.shipDate,
+        branchCodeByName_(clean.destBranch), clean.prNo);
+      setShipmentField_(id, 'slipFileId', slipFileId);
+    } catch (err) {
+      console.warn('saveSlipImage_ ล้มเหลว: ' + err);
+      slipFileId = '';
+    }
+  }
+
+  var addedParts = [];
+  try {
+    addedParts = autoAddParts_(clean.items);
+  } catch (err) {
+    console.warn('autoAddParts_ ล้มเหลว: ' + err);
+  }
+
+  return {
+    ok: true,
+    shipmentId: id,
+    updated: true,
+    addedParts: addedParts,
+    slipFileId: slipFileId,
+    summary: {
+      prNo: clean.prNo,
+      destBranch: clean.destBranch,
+      zone: clean.zone,
+      dropPoint: clean.dropPoint,
+      isTransfer: clean.isTransfer,
+      carrier: clean.carrier,
+      itemCount: clean.items.length
+    }
+  };
+}
+
+/** ลบรายการอะไหล่เดิมของรอบนั้นทิ้ง แล้วเขียนชุดใหม่ลงไป */
+function replaceItems_(shipmentId, items) {
+  var sh = getSheet_(SHEETS.ITEMS);
+  var last = sh.getLastRow();
+  if (last > 1) {
+    var ids = sh.getRange(2, colIndex_('Items', 'shipmentId'), last - 1, 1).getValues();
+    // ลบจากล่างขึ้นบน ไม่งั้นเลขแถวที่เหลือจะเลื่อนจนลบผิดแถว
+    for (var i = ids.length - 1; i >= 0; i--) {
+      if (String(ids[i][0] == null ? '' : ids[i][0]).trim() === shipmentId) sh.deleteRow(i + 2);
+    }
+  }
+  if (items.length) writeItems_(shipmentId, items);
 }
 
 /** ตรวจและปรับข้อมูลจากฟอร์มให้อยู่ในรูปที่พร้อมเขียนลงชีต */
@@ -779,7 +881,9 @@ function buildShipmentRow_(shipmentId, c) {
     itemsSummary: itemsSummary_(c.items),
     slipFileId: c.slipFileId,
     clientToken: c.clientToken,
-    slipHash: c.slipHash
+    slipHash: c.slipHash,
+    updatedAt: c.updatedAt || '',
+    updatedBy: c.updatedBy || ''
   };
   return HEADERS.Shipments.map(function (h) { return map[h]; });
 }
@@ -856,32 +960,50 @@ function shipmentBrief_(sh, row) {
   };
 }
 
-/** หารอบส่งที่เคยแนบไฟล์รูปเดียวกันนี้ไปแล้ว */
-function findBySlipHash_(sh, hash) {
-  if (!hash) return null;
+/**
+ * ไล่หาแถวที่ค่าในคอลัมน์หนึ่งตรงกับที่ต้องการ เอาแถวล่าสุดก่อน
+ * excludeId ไว้ตอนแก้ไขรายการเดิม จะได้ไม่ไปเจอตัวเองแล้วหาว่าซ้ำ
+ */
+function findShipmentBy_(sh, field, wanted, excludeId, upper) {
+  if (!wanted) return null;
   var last = sh.getLastRow();
   if (last < 2) return null;
-  var col = colIndex_('Shipments', 'slipHash');
-  var values = sh.getRange(2, col, last - 1, 1).getValues();
+
+  var values = sh.getRange(2, colIndex_('Shipments', field), last - 1, 1).getValues();
+  var ids = sh.getRange(2, colIndex_('Shipments', 'shipmentId'), last - 1, 1).getValues();
   for (var i = values.length - 1; i >= 0; i--) {
-    if (String(values[i][0] == null ? '' : values[i][0]).trim() === hash) {
-      return shipmentBrief_(sh, i + 2);
-    }
+    if (excludeId && String(ids[i][0] == null ? '' : ids[i][0]).trim() === excludeId) continue;
+    var v = String(values[i][0] == null ? '' : values[i][0]).trim();
+    if (upper) v = v.toUpperCase();
+    if (v === wanted) return shipmentBrief_(sh, i + 2);
   }
   return null;
 }
 
+/** หารอบส่งที่เคยแนบไฟล์รูปเดียวกันนี้ไปแล้ว */
+function findBySlipHash_(sh, hash, excludeId) {
+  return findShipmentBy_(sh, 'slipHash', hash, excludeId, false);
+}
+
 /** หารอบส่งที่ใช้เลขที่ใบ PR เดียวกัน */
-function findByPrNo_(sh, prNo) {
-  var key = String(prNo || '').trim().toUpperCase();
-  if (!key) return null;
+function findByPrNo_(sh, prNo, excludeId) {
+  return findShipmentBy_(sh, 'prNo', String(prNo || '').trim().toUpperCase(), excludeId, true);
+}
+
+/** หาแถวของรอบส่งจากเลขที่รายการ คืนทั้งเลขแถวและค่าทุกคอลัมน์ */
+function findShipmentRow_(sh, shipmentId) {
   var last = sh.getLastRow();
   if (last < 2) return null;
-  var col = colIndex_('Shipments', 'prNo');
-  var values = sh.getRange(2, col, last - 1, 1).getValues();
-  for (var i = values.length - 1; i >= 0; i--) {
-    if (String(values[i][0] == null ? '' : values[i][0]).trim().toUpperCase() === key) {
-      return shipmentBrief_(sh, i + 2);
+  var ids = sh.getRange(2, colIndex_('Shipments', 'shipmentId'), last - 1, 1).getValues();
+  for (var i = ids.length - 1; i >= 0; i--) {
+    if (String(ids[i][0] == null ? '' : ids[i][0]).trim() === shipmentId) {
+      var row = i + 2;
+      var raw = sh.getRange(row, 1, 1, HEADERS.Shipments.length).getValues()[0];
+      var values = {};
+      HEADERS.Shipments.forEach(function (h, c) {
+        values[h] = raw[c] == null ? '' : raw[c];
+      });
+      return { row: row, values: values };
     }
   }
   return null;
@@ -988,6 +1110,8 @@ function searchShipments_(opts) {
       receiverName: String(s.receiverName || ''),
       note: String(s.note || ''),
       slipFileId: String(s.slipFileId || ''),
+      updatedAt: String(s.updatedAt || ''),
+      updatedBy: String(s.updatedBy || ''),
       items: items
     });
   }

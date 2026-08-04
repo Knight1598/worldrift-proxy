@@ -326,8 +326,25 @@
             <input type="text" id="bSender" autocomplete="off">
           </div>
         </div>
-        <label for="bCarrier">ขนส่ง / ผู้มารับของ *</label>
-        <select id="bCarrier"><option value="">— เลือกขนส่ง —</option></select>
+        <label for="bCarrier">ขนส่ง / ผู้มารับของ</label>
+        <select id="bCarrier"><option value="">— เลือกเองรายใบ —</option></select>
+        <div class="muted" style="margin:-6px 0 12px;font-size:13px;">
+          เลือกตรงนี้ = ใส่ให้ทุกใบทีเดียว ถ้าใบไหนไปคนละคัน แก้เฉพาะใบนั้นด้านล่างได้
+        </div>
+        <button type="button" class="add-item" id="bcqBtn" style="margin-bottom:12px;">
+          + เพิ่มคนขนส่ง / สาขามารับเอง
+        </button>
+        <div id="bcqWrap" class="card hidden" style="background:var(--bg);">
+          <label for="bcqName">ชื่อขนส่ง / ผู้มารับ *</label>
+          <input type="text" id="bcqName" autocomplete="off" placeholder="เช่น สาขาคง มารับเอง">
+          <label for="bcqPhone">เบอร์โทร</label>
+          <input type="text" id="bcqPhone" autocomplete="off" inputmode="tel">
+          <div id="bcqMsg" class="banner err hidden"></div>
+          <div class="row">
+            <button type="button" class="primary" id="bcqSaveBtn">เพิ่มแล้วใช้เลย</button>
+            <button type="button" class="add-item" id="bcqCancelBtn" style="margin-top:0;">ยกเลิก</button>
+          </div>
+        </div>
       </div>
 
       <div id="batchDrafts"></div>
@@ -342,6 +359,18 @@
     </div>
 
     <form id="form" autocomplete="off">
+
+      <!-- โผล่มาเฉพาะตอนกดแก้ไขรายการเดิมจากหน้ารายงาน -->
+      <div id="editBanner" class="card hidden" style="border-color:var(--primary);">
+        <div id="editBannerMsg" style="font-weight:600;margin-bottom:4px;"></div>
+        <div class="muted" style="margin-bottom:10px;">
+          แก้แล้วกด "บันทึกการแก้ไข" ระบบจะเขียนทับรายการเดิม ไม่สร้างรายการใหม่
+        </div>
+        <div id="editSlipNote" class="muted hidden" style="margin-bottom:10px;"></div>
+        <button type="button" class="add-item" id="editCancelBtn" style="margin-top:0;">
+          ยกเลิกการแก้ไข กลับไปบันทึกรายการใหม่
+        </button>
+      </div>
 
       <div class="card">
         <h2>แนบรูปใบโอนย้าย (ถ้ามี)</h2>
@@ -1200,6 +1229,7 @@
 
     var payload = {
       clientToken: clientToken,
+      shipmentId: editingShipmentId,
       prNo: $('prNo').value.trim(),
       shipDate: $('shipDate').value,
       destBranch: comboBranch.getValue(),
@@ -1227,7 +1257,7 @@
 
     setSaving(true);
 
-    call('apiSaveShipment', payload).then(function (res) {
+    call(editingShipmentId ? 'apiUpdateShipment' : 'apiSaveShipment', payload).then(function (res) {
       setSaving(false);
       allowDuplicateOnce = false;   // ยืนยันได้ครั้งเดียวต่อการกดหนึ่งครั้ง
       if (res && !res.ok && res.duplicate) return showDupWarn(res);
@@ -1249,7 +1279,8 @@
 
   function setSaving(on) {
     $('saveBtn').disabled = on;
-    $('saveBtn').textContent = on ? 'กำลังบันทึก…' : 'บันทึก';
+    $('saveBtn').textContent = on ? 'กำลังบันทึก…'
+      : editingShipmentId ? 'บันทึกการแก้ไข' : 'บันทึก';
   }
 
   function showFormError(msg) {
@@ -1259,12 +1290,16 @@
   }
 
   function showResult(res, payload) {
+    var wasEditing = !!editingShipmentId;
+    stopEdit();
     clientToken = newToken();
     historyLoaded = false; // ให้รายงานโหลดใหม่เมื่อเปิดแท็บ
 
     var banner = $('resultBanner');
     banner.className = 'banner ok';
-    banner.textContent = res.duplicate ? 'รายการนี้บันทึกไปแล้ว (กันบันทึกซ้ำ)' : '✅ บันทึกเรียบร้อย';
+    banner.textContent = res.duplicate ? 'รายการนี้บันทึกไปแล้ว (กันบันทึกซ้ำ)'
+      : wasEditing ? '✅ แก้ไขเรียบร้อย' : '✅ บันทึกเรียบร้อย';
+    $('againBtn').textContent = wasEditing ? 'บันทึกรายการใหม่' : 'บันทึกรอบถัดไป';
 
     $('resultId').textContent = res.shipmentId + '  (PR ' + payload.prNo + ')';
 
@@ -1276,7 +1311,8 @@
       detail += '\n➕ เก็บอะไหล่ใหม่เข้าตารางให้แล้ว: ' + res.addedParts.join(', ');
       partsLoaded = false; // ให้หน้าอะไหล่โหลดใหม่เมื่อเปิด
     }
-    if (res.slipFileId) detail += '\n📎 เก็บรูปหลักฐานลงไดรฟ์แล้ว';
+    if (res.slipFileId && payload.slipBase64) detail += '\n📎 เก็บรูปหลักฐานลงไดรฟ์แล้ว';
+    else if (res.slipFileId) detail += '\n📎 รูปหลักฐานเดิมยังอยู่ครบ';
     else if (payload.slipBase64) detail += '\n⚠️ บันทึกข้อมูลแล้ว แต่เก็บรูปลงไดรฟ์ไม่สำเร็จ';
     $('resultDetail').style.whiteSpace = 'pre-line';
     $('resultDetail').textContent = detail;
@@ -1290,6 +1326,13 @@
   $('againBtn').addEventListener('click', function () {
     $('resultCard').classList.add('hidden');
     $('form').classList.remove('hidden');
+    resetForm();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('prNo').focus();
+  });
+
+  function resetForm() {
+    stopEdit();
     $('prNo').value = '';
     comboZone.clear();
     comboBranch.clear();
@@ -1315,9 +1358,84 @@
     $('slipPreview').classList.add('hidden');
     $('slipRawBtn').classList.add('hidden');
     $('slipRaw').classList.add('hidden');
+  }
+
+  /* ---------- แก้ไขรายการที่บันทึกไปแล้ว ----------
+   *
+   * ใช้ฟอร์มเดิมทั้งชุด ไม่ทำฟอร์มแก้ไขแยกอีกอัน
+   * ช่องค้นอะไหล่ การเลือกเขต/สาขา การแนบรูป จะได้ทำงานเหมือนกันเป๊ะ
+   */
+
+  var editingShipmentId = '';
+
+  $('editCancelBtn').addEventListener('click', function () {
+    resetForm();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    $('prNo').focus();
   });
+
+  function stopEdit() {
+    editingShipmentId = '';
+    $('editBanner').classList.add('hidden');
+    $('editSlipNote').classList.add('hidden');
+    $('saveBtn').textContent = 'บันทึก';
+  }
+
+  function startEdit(s) {
+    showTab('form');
+    $('resultCard').classList.add('hidden');
+    $('form').classList.remove('hidden');
+    resetForm();
+
+    editingShipmentId = s.shipmentId;
+    $('editBannerMsg').textContent = '✏️ กำลังแก้ไข ' + s.shipmentId;
+    $('editBanner').classList.remove('hidden');
+    $('saveBtn').textContent = 'บันทึกการแก้ไข';
+
+    $('prNo').value = s.prNo || '';
+    $('shipDate').value = s.shipDate || '';
+
+    if (s.zone) { comboZone.setValue(s.zone); applyZoneScope(s.zone); }
+    comboBranch.setValue(s.destBranch || '');
+    $('warnBranch').textContent = s.destBranch ? 'สาขา' + s.destBranch : 'สาขาปลายทาง';
+
+    $('isTransfer').checked = !!s.isTransfer;
+    $('dropWrap').classList.toggle('hidden', !s.isTransfer);
+    if (s.isTransfer && s.dropPoint) {
+      // จุดฝากลงที่ไม่มีในลิสต์ ให้ไปอยู่ในช่อง "อื่น ๆ" แทน จะได้ไม่หายไปเฉย ๆ
+      comboDrop.setValue(s.dropPoint);
+      if (comboDrop.getValue() !== s.dropPoint) {
+        comboDrop.setValue('__other__');
+        $('dropPointOther').classList.remove('hidden');
+        $('dropPointOther').value = s.dropPoint;
+      }
+    }
+
+    if (hasOption($('carrier'), s.carrier)) $('carrier').value = s.carrier;
+    else $('carrier').value = '';   // คนขนส่งถูกตั้งเป็นเลิกใช้ไปแล้ว ต้องเลือกใหม่
+
+    $('trackingNo').value = s.trackingNo || '';
+    $('boxCount').value = s.boxCount || '';
+    $('receiverName').value = s.receiverName || '';
+    $('note').value = s.note || '';
+    if (s.sender) $('sender').value = s.sender;
+
+    $('items').innerHTML = '';
+    (s.items || []).forEach(function (it) {
+      var wrap = addItemRow(false, $('items'));
+      wrap._codeCombo.setFreeValue(it.partCode || '');
+      wrap.querySelector('.name').value = it.partName || '';
+      wrap.querySelector('.qty').value = it.qty || 1;
+    });
+    if (!$('items').children.length) addItemRow();
+
+    if (s.slipFileId) {
+      $('editSlipNote').textContent = '📎 รายการนี้มีรูปหลักฐานอยู่แล้ว ' +
+        'ถ้าไม่แนบรูปใหม่ ระบบจะเก็บรูปเดิมไว้ตามเดิม';
+      $('editSlipNote').classList.remove('hidden');
+    }
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   /* ---------- รายงาน ---------- */
 
@@ -1424,6 +1542,21 @@
         slip.appendChild(link);
         el.appendChild(slip);
       }
+
+      if (s.updatedAt) {
+        var upd = document.createElement('div');
+        upd.className = 'meta';
+        upd.style.marginTop = '6px';
+        upd.textContent = '✏️ แก้ไขล่าสุด ' + s.updatedAt + (s.updatedBy ? ' โดย ' + s.updatedBy : '');
+        el.appendChild(upd);
+      }
+
+      var editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'add-item';
+      editBtn.textContent = 'แก้ไขรายการนี้';
+      editBtn.addEventListener('click', function () { startEdit(s); });
+      el.appendChild(editBtn);
 
       box.appendChild(el);
     });
@@ -1624,9 +1757,7 @@
         // ค่าที่ใช้ร่วมกันทุกใบ ยกมาจากฟอร์มเดี่ยวเพื่อไม่ให้ต้องกรอกซ้ำ
         $('bShipDate').value = $('shipDate').value || MASTERS.today || '';
         $('bSender').value = $('sender').value || localStorage.getItem('pd_sender') || '';
-        if ($('bCarrier').options.length <= 1) {
-          MASTERS.carriers.forEach(function (c) { $('bCarrier').appendChild(new Option(c.name, c.name)); });
-        }
+        fillCarrierOptions($('bCarrier'));
         var lastCarrier = $('carrier').value || localStorage.getItem('pd_carrier');
         if (lastCarrier && hasOption($('bCarrier'), lastCarrier)) $('bCarrier').value = lastCarrier;
       }
@@ -1734,6 +1865,8 @@
       '  <label>ฝากลงที่</label><div class="combo" id="bdrop' + d.n + '"></div>' +
       '  <input type="text" class="d-dropother hidden" placeholder="พิมพ์ชื่อจุดฝากลง">' +
       '</div>' +
+      '<label for="bcar' + d.n + '">ขนส่ง / ผู้มารับของ *</label>' +
+      '<select class="d-carrier" id="bcar' + d.n + '"><option value="">— เลือกขนส่ง —</option></select>' +
       '<div class="sec">รายการอะไหล่ *</div>' +
       '<div class="d-items"></div>' +
       '<button type="button" class="add-item d-additem">+ เพิ่มรายการ</button>' +
@@ -1751,6 +1884,15 @@
     d.transferEl = body.querySelector('.d-transfer');
     d.dropWrap = body.querySelector('.d-dropwrap');
     d.dropOther = body.querySelector('.d-dropother');
+    d.carrierEl = body.querySelector('.d-carrier');
+
+    // แต่ละใบเลือกขนส่งของตัวเองได้ เริ่มจากค่าที่ตั้งไว้ให้ทุกใบก่อน
+    fillCarrierOptions(d.carrierEl);
+    if (hasOption(d.carrierEl, $('bCarrier').value)) d.carrierEl.value = $('bCarrier').value;
+    d.carrierEl.addEventListener('change', function () {
+      d.carrierTouched = true;   // เลือกเองแล้ว ค่าเริ่มต้นของสาขาจะไม่มาทับ
+      renderBatchCount();
+    });
 
     // combobox ต้องสร้างหลังจากที่ element อยู่ใน DOM แล้ว เพราะมันหาจาก id
     d.comboZone = makeCombo('bzone' + d.n, {
@@ -1769,6 +1911,11 @@
         if (b && b.zone && b.zone !== d.comboZone.getValue()) {
           d.comboZone.setValue(b.zone);
           applyDraftZoneScope(d, b.zone);
+        }
+        // สาขาที่มีขนส่งประจำอยู่แล้ว ให้เติมให้ เว้นแต่คนคีย์เลือกเองไปแล้ว
+        if (b && b.carrier && !d.carrierTouched && hasOption(d.carrierEl, b.carrier)) {
+          d.carrierEl.value = b.carrier;
+          renderBatchCount();
         }
       }
     });
@@ -1809,6 +1956,25 @@
     drafts.push(d);
     return d;
   }
+
+  /** ใส่รายชื่อขนส่งลงในช่องเลือก (ใช้ทั้งช่องรวมและช่องรายใบ) */
+  function fillCarrierOptions(sel) {
+    MASTERS.carriers.forEach(function (c) {
+      if (!hasOption(sel, c.name)) sel.appendChild(new Option(c.name, c.name));
+    });
+  }
+
+  // เลือกที่ช่องรวม = ตั้งให้ทุกใบที่ยังไม่ได้บันทึกในคราวเดียว
+  $('bCarrier').addEventListener('change', function () {
+    var name = this.value;
+    if (!name) return;
+    drafts.forEach(function (d) {
+      if (d.saved) return;
+      if (hasOption(d.carrierEl, name)) d.carrierEl.value = name;
+      d.carrierTouched = false;   // ตั้งใหม่ทั้งชุด ถือว่าเริ่มนับกันใหม่
+    });
+    renderBatchCount();
+  });
 
   function branchOptions() {
     return MASTERS.branches.map(function (b) {
@@ -2023,9 +2189,6 @@
     $('batchError').classList.add('hidden');
     $('batchDone').classList.add('hidden');
 
-    var carrier = $('bCarrier').value;
-    if (!carrier) return showBatchError('ยังไม่ได้เลือกขนส่ง');
-
     var pending = savableDrafts();
     if (!pending.length) {
       var held = drafts.filter(function (d) { return !d.saved && d.dup; }).length;
@@ -2049,7 +2212,7 @@
     }
 
     localStorage.setItem('pd_sender', $('bSender').value.trim());
-    localStorage.setItem('pd_carrier', carrier);
+    if ($('bCarrier').value) localStorage.setItem('pd_carrier', $('bCarrier').value);
 
     batchSaving = true;
     renderBatchCount();
@@ -2059,6 +2222,7 @@
   function validateDraft(d) {
     if (!d.prEl.value.trim()) return 'ยังไม่ได้กรอกเลขที่ใบ PR';
     if (!d.comboBranch.getValue()) return 'ยังไม่ได้เลือกสาขาปลายทาง';
+    if (!d.carrierEl.value) return 'ยังไม่ได้เลือกขนส่งของใบนี้';
     if (!collectItems(d.itemsBox).length) return 'ยังไม่ได้ใส่รายการอะไหล่';
     if (d.transferEl.checked && !draftDropPoint(d)) return 'เลือกฝากลงที่อื่นแล้ว ต้องระบุจุดฝากลงด้วย';
     return '';
@@ -2102,7 +2266,7 @@
       destBranch: d.comboBranch.getValue(),
       isTransfer: d.transferEl.checked,
       dropPoint: draftDropPoint(d),
-      carrier: $('bCarrier').value,
+      carrier: d.carrierEl.value,
       trackingNo: '',
       boxCount: '',
       receiverName: '',
@@ -2151,7 +2315,7 @@
       ' • ' + payload.destBranch;
     if (res.summary && res.summary.zone) line += ' (เขต' + res.summary.zone + ')';
     if (res.summary && res.summary.isTransfer) line += ' — ฝากลงที่ ' + res.summary.dropPoint;
-    line += ' • ' + payload.items.length + ' รายการ';
+    line += ' • ' + payload.carrier + ' • ' + payload.items.length + ' รายการ';
     line += res.slipFileId ? '\n📎 เก็บรูปหลักฐานคู่กับรายการนี้แล้ว'
                            : '\n⚠️ บันทึกข้อมูลแล้ว แต่เก็บรูปลงไดรฟ์ไม่สำเร็จ';
     if (res.addedParts && res.addedParts.length) {
@@ -2458,70 +2622,111 @@
   }
 
   /** อัปเดตตัวเลือกในฟอร์มบันทึกให้เห็นขนส่งที่เพิ่ง เพิ่ม/แก้ไข ทันทีโดยไม่ต้องรีเฟรชหน้า */
+  /** ช่องเลือกขนส่งทุกช่องบนหน้า — ฟอร์มเดี่ยว ช่องรวมของหน้าหลายใบ และของแต่ละใบ */
+  function allCarrierSelects() {
+    var list = [$('carrier'), $('bCarrier')];
+    drafts.forEach(function (d) { if (d.carrierEl && !d.saved) list.push(d.carrierEl); });
+    return list;
+  }
+
   function refreshCarrierSelect(carrier, selectIt) {
     if (!carrier) return;
-    var sel = $('carrier');
-    if (carrier.active && !hasOption(sel, carrier.name)) {
-      sel.appendChild(new Option(carrier.name, carrier.name));
-    }
-    if (!carrier.active && hasOption(sel, carrier.name)) {
-      // ตัวที่เลิกใช้แล้วต้องเอาออกเสมอ กันเผลอบันทึกด้วยคนที่ไม่ใช้แล้ว
-      // ถ้ากำลังถูกเลือกอยู่พอดี ให้ล้างค่าไปเลย เดี๋ยวตอนกดบันทึกจะเตือนให้เลือกใหม่เอง
-      var wasSelected = sel.value === carrier.name;
-      Array.prototype.slice.call(sel.options).forEach(function (o) {
-        if (o.value === carrier.name) sel.removeChild(o);
+
+    // ตารางแม่ในหน่วยความจำต้องตรงด้วย ไม่งั้นใบที่แนบเพิ่มทีหลังจะไม่เห็นคนใหม่
+    var known = false;
+    MASTERS.carriers = MASTERS.carriers.filter(function (c) {
+      if (c.name !== carrier.name) return true;
+      known = true;
+      return carrier.active;
+    });
+    if (carrier.active && !known) MASTERS.carriers.push({ name: carrier.name, note: '' });
+
+    allCarrierSelects().forEach(function (sel) {
+      if (!sel) return;
+      if (carrier.active && !hasOption(sel, carrier.name)) {
+        sel.appendChild(new Option(carrier.name, carrier.name));
+      }
+      if (!carrier.active && hasOption(sel, carrier.name)) {
+        // ตัวที่เลิกใช้แล้วต้องเอาออกเสมอ กันเผลอบันทึกด้วยคนที่ไม่ใช้แล้ว
+        // ถ้ากำลังถูกเลือกอยู่พอดี ให้ล้างค่าไปเลย เดี๋ยวตอนกดบันทึกจะเตือนให้เลือกใหม่เอง
+        var wasSelected = sel.value === carrier.name;
+        Array.prototype.slice.call(sel.options).forEach(function (o) {
+          if (o.value === carrier.name) sel.removeChild(o);
+        });
+        if (wasSelected) sel.value = '';
+      }
+    });
+
+    if (selectIt && carrier.active) {
+      $('carrier').value = carrier.name;
+      $('bCarrier').value = carrier.name;
+      // ใบที่คนคีย์เลือกขนส่งเองไว้แล้ว อย่าไปทับ — เขาตั้งใจให้ไปคนละคัน
+      drafts.forEach(function (d) {
+        if (!d.saved && !d.carrierTouched) d.carrierEl.value = carrier.name;
       });
-      if (wasSelected) sel.value = '';
     }
-    if (selectIt && carrier.active) sel.value = carrier.name;
+    if (drafts.length) renderBatchCount();
   }
 
   /* ---------- เพิ่มขนส่งด่วนจากหน้าบันทึก ---------- */
 
-  $('carrierQuickBtn').addEventListener('click', function () {
-    $('carrierQuickWrap').classList.toggle('hidden');
-    if (!$('carrierQuickWrap').classList.contains('hidden')) $('cqName').focus();
-  });
-  $('cqCancelBtn').addEventListener('click', closeQuickCarrier);
-  $('cqSaveBtn').addEventListener('click', quickSaveCarrier);
+  /**
+   * แผงเพิ่มขนส่งด่วน มีสองที่ — ในฟอร์มเดี่ยว กับในหน้าบันทึกหลายใบ
+   * ตรรกะเดียวกัน ต่างแค่ element เลยผูกด้วยฟังก์ชันเดียว
+   */
+  function wireQuickCarrier(ids) {
+    var btn = $(ids.btn), wrap = $(ids.wrap), name = $(ids.name);
+    var phone = $(ids.phone), msg = $(ids.msg), save = $(ids.save), cancel = $(ids.cancel);
 
-  function closeQuickCarrier() {
-    $('carrierQuickWrap').classList.add('hidden');
-    $('cqName').value = '';
-    $('cqPhone').value = '';
-    $('cqMsg').classList.add('hidden');
-  }
+    btn.addEventListener('click', function () {
+      wrap.classList.toggle('hidden');
+      if (!wrap.classList.contains('hidden')) name.focus();
+    });
+    cancel.addEventListener('click', close);
+    save.addEventListener('click', submit);
 
-  function quickSaveCarrier() {
-    var name = $('cqName').value.trim();
-    if (!name) {
-      $('cqMsg').textContent = 'ยังไม่ได้กรอกชื่อ';
-      $('cqMsg').classList.remove('hidden');
-      return;
+    function close() {
+      wrap.classList.add('hidden');
+      name.value = '';
+      phone.value = '';
+      msg.classList.add('hidden');
     }
 
-    $('cqSaveBtn').disabled = true;
-    $('cqSaveBtn').textContent = 'กำลังเพิ่ม…';
+    function fail(text) {
+      msg.textContent = text;
+      msg.classList.remove('hidden');
+    }
 
-    call('apiSaveCarrier', { carrierName: name, phone: $('cqPhone').value.trim(), active: true })
-      .then(function (res) {
-        $('cqSaveBtn').disabled = false;
-        $('cqSaveBtn').textContent = 'เพิ่มแล้วใช้เลย';
-        if (!res || !res.ok) {
-          $('cqMsg').textContent = (res && res.error) || 'เพิ่มไม่สำเร็จ';
-          $('cqMsg').classList.remove('hidden');
-          return;
-        }
-        refreshCarrierSelect(res.carrier, true);
-        carriersLoaded = false;   // ให้หน้าจัดการขนส่งโหลดใหม่เมื่อเปิด
-        closeQuickCarrier();
-      }).catch(function (err) {
-        $('cqSaveBtn').disabled = false;
-        $('cqSaveBtn').textContent = 'เพิ่มแล้วใช้เลย';
-        $('cqMsg').textContent = 'เพิ่มไม่สำเร็จ: ' + (err.message || err);
-        $('cqMsg').classList.remove('hidden');
-      });
+    function submit() {
+      if (!name.value.trim()) return fail('ยังไม่ได้กรอกชื่อ');
+
+      save.disabled = true;
+      save.textContent = 'กำลังเพิ่ม…';
+
+      call('apiSaveCarrier', { carrierName: name.value.trim(), phone: phone.value.trim(), active: true })
+        .then(function (res) {
+          save.disabled = false;
+          save.textContent = 'เพิ่มแล้วใช้เลย';
+          if (!res || !res.ok) return fail((res && res.error) || 'เพิ่มไม่สำเร็จ');
+          refreshCarrierSelect(res.carrier, true);
+          carriersLoaded = false;   // ให้หน้าจัดการขนส่งโหลดใหม่เมื่อเปิด
+          close();
+        }).catch(function (err) {
+          save.disabled = false;
+          save.textContent = 'เพิ่มแล้วใช้เลย';
+          fail('เพิ่มไม่สำเร็จ: ' + (err.message || err));
+        });
+    }
   }
+
+  wireQuickCarrier({
+    btn: 'carrierQuickBtn', wrap: 'carrierQuickWrap', name: 'cqName',
+    phone: 'cqPhone', msg: 'cqMsg', save: 'cqSaveBtn', cancel: 'cqCancelBtn'
+  });
+  wireQuickCarrier({
+    btn: 'bcqBtn', wrap: 'bcqWrap', name: 'bcqName',
+    phone: 'bcqPhone', msg: 'bcqMsg', save: 'bcqSaveBtn', cancel: 'bcqCancelBtn'
+  });
 
   boot();
 </script>
