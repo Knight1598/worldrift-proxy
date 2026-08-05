@@ -409,6 +409,9 @@
         </div>
       </div>
 
+      <label for="rfVehicle">รุ่นรถ</label>
+      <input type="text" id="rfVehicle" autocomplete="off" placeholder="เช่น รุ่น A / ทะเบียน">
+
       <label for="rfBranch-input">สาขาที่ส่งซ่อม *</label>
       <div class="combo" id="rfBranch"></div>
 
@@ -1488,6 +1491,7 @@
 
       var bits = [];
       if (r.contractNo) bits.push('สัญญา ' + r.contractNo);
+      if (r.vehicleModel) bits.push('รุ่น ' + r.vehicleModel);
       if (r.branch) bits.push(r.branch + (r.zone ? ' (เขต' + r.zone + ')' : ''));
       if (bits.length) {
         var meta = document.createElement('div');
@@ -1547,6 +1551,7 @@
     $('rFormTitle').textContent = r ? 'แก้ไข ' + r.repairId : 'เพิ่มรายการรถส่งซ่อม';
     $('rfJob').value = r ? r.jobNo : '';
     $('rfContract').value = r ? r.contractNo : '';
+    $('rfVehicle').value = r ? r.vehicleModel : '';
     cbRBranch.setValue(r ? r.branch : (LOCK_BRANCH || ''));
     $('rfDate').value = r ? r.receivedDate : $('rfDate').value;
     $('rfStatus').value = r ? r.status : R_STATUSES[0];
@@ -1576,6 +1581,7 @@
       repairId: rEditingId,
       jobNo: $('rfJob').value.trim(),
       contractNo: $('rfContract').value.trim(),
+      vehicleModel: $('rfVehicle').value.trim(),
       branch: cbRBranch.getValue(),
       receivedDate: $('rfDate').value,
       status: $('rfStatus').value,

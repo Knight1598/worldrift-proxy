@@ -22,7 +22,7 @@ var HEADERS = {
     'deliveredAt', 'receiver', 'deliveryNote', 'deliveryPhotoId'
   ],
   Repairs: [
-    'repairId', 'receivedDate', 'jobNo', 'contractNo', 'branch', 'zone',
+    'repairId', 'receivedDate', 'jobNo', 'contractNo', 'vehicleModel', 'branch', 'zone',
     'status', 'note', 'updatedAt', 'updatedBy'
   ]
 };
@@ -678,8 +678,8 @@ function apiListRepairs(payload) {
       if (branch && r.branch !== branch) continue;
       if (status && r.status !== status) continue;
       if (q) {
-        var hay = [r.repairId, r.jobNo, r.contractNo, r.branch, r.zone, r.status, r.note]
-          .join(' ').toLowerCase();
+        var hay = [r.repairId, r.jobNo, r.contractNo, r.vehicleModel, r.branch, r.zone,
+                   r.status, r.note].join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) continue;
       }
       results.push(toRepairDto_(r));
@@ -760,6 +760,7 @@ function saveRepair_(p) {
     receivedDate: receivedDate,
     jobNo: jobNo,
     contractNo: String(p.contractNo || '').trim(),
+    vehicleModel: String(p.vehicleModel || '').trim(),
     branch: branch,
     zone: branchInfo ? branchInfo.zone : '',
     status: status,
@@ -1193,7 +1194,7 @@ function debugBatteries() {
     lines.push('อ่านได้ ' + repairs.length + ' รายการ');
     repairs.slice(-3).forEach(function (r) {
       lines.push('  • ' + r.repairId + ' | JOB ' + r.jobNo + ' | สัญญา ' + r.contractNo +
-        ' | สาขา "' + r.branch + '" | สถานะ "' + r.status + '"');
+        ' | รุ่นรถ ' + r.vehicleModel + ' | สาขา "' + r.branch + '" | สถานะ "' + r.status + '"');
     });
     var listedRp = apiListRepairs({});
     lines.push('apiListRepairs({}) → ' +
