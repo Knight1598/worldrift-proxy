@@ -201,6 +201,16 @@
   }
   .bat select { margin: 8px 0 0; }
 
+  /* กล่องใบบันทึกการจัดส่งบนการ์ด */
+  .dlv-box {
+    margin-top: 8px;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .dlv-head { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+
   /* บล็อกแบตแต่ละก้อนในฟอร์ม */
   .items { margin-top: 4px; }
   .item {
@@ -321,6 +331,39 @@
     <div id="formMsg" class="banner err hidden"></div>
     <button class="primary" id="saveBtn">บันทึก</button>
     <button type="button" class="ghost" id="cancelBtn">ยกเลิก</button>
+  </div>
+
+  <!-- ใบบันทึกการจัดส่ง เฉพาะแอดมิน -->
+  <div id="dlvCard" class="card hidden">
+    <h2 id="dlvTitle">บันทึกการจัดส่ง</h2>
+    <div class="muted" id="dlvFor" style="margin-bottom:12px;"></div>
+
+    <label>รูปหลักฐานการจัดส่ง</label>
+    <input type="file" id="dlvCamera" accept="image/*" capture="environment" class="hidden">
+    <input type="file" id="dlvFile" accept="image/*" class="hidden">
+    <div class="row">
+      <button type="button" class="primary" id="dlvCameraBtn">📷 ถ่ายรูป</button>
+      <button type="button" class="primary" id="dlvPickBtn"
+              style="background:var(--card);color:var(--primary);border:1px solid var(--primary);">
+        🖼️ เลือกรูป
+      </button>
+    </div>
+    <img id="dlvPreview" class="hidden"
+         style="max-width:100%;border-radius:10px;margin:12px 0;border:1px solid var(--line);">
+    <div id="dlvOldPhoto" class="muted hidden" style="margin:8px 0;"></div>
+
+    <label for="dlvReceiver">ชื่อคนที่มารับ *</label>
+    <input type="text" id="dlvReceiver" autocomplete="off" placeholder="ชื่อผู้มารับของ">
+
+    <label for="dlvNote">รายละเอียดการจัดส่ง</label>
+    <input type="text" id="dlvNote" autocomplete="off" placeholder="เช่น ส่งกับรถรอบบ่าย / ฝากไว้ที่หน้าร้าน">
+
+    <label for="dlvBy">ผู้บันทึก</label>
+    <input type="text" id="dlvBy" autocomplete="off" placeholder="ชื่อผู้ดูแล">
+
+    <div id="dlvMsg" class="banner err hidden"></div>
+    <button class="primary" id="dlvSaveBtn">บันทึกการจัดส่ง</button>
+    <button type="button" class="ghost" id="dlvCancelBtn">ยกเลิก</button>
   </div>
 
   <!-- ตัวกรอง -->
@@ -444,6 +487,10 @@
   var editingId = '';
   var rEditingId = '';
   var cbBranch = null, cbBranchFilter = null, cbRBranch = null, cbRBranchFilter = null;
+  var APP_URL = '';              // ใช้ทำลิงก์เปิดรูป (หน้าอยู่ในไอเฟรม อ่าน URL เองไม่ได้)
+  var DELIVERED_STATUS = 'จัดส่งแล้ว';
+  var dlvBattery = null;         // แบตก้อนที่กำลังกรอกใบจัดส่งให้
+  var dlvImage = null;           // { base64, mimeType, dataUrl }
   var items = [];
 
   function $(id) { return document.getElementById(id); }
@@ -735,6 +782,8 @@
 
       STATUSES = res.statuses;
       R_STATUSES = res.repairStatuses || [];
+      APP_URL = res.appUrl || '';
+      if (res.deliveredStatus) DELIVERED_STATUS = res.deliveredStatus;
 
       // ตัวเลือกสาขา: พิมพ์ได้ทั้งรหัสและชื่อ เพราะจับคู่กับข้อความทั้งบรรทัด
       var branchOptions = res.branches.map(function (b) {
@@ -984,12 +1033,20 @@
         el.appendChild(upd);
       }
 
+      // ใบบันทึกการจัดส่ง — ทุกคนเห็น รวมถึงสาขา แต่แก้ไม่ได้
+      if (b.deliveredAt || b.receiver || b.deliveryPhotoId) el.appendChild(deliveryBlock(b));
+
       // ปุ่มแก้ไขและช่องเปลี่ยนสถานะ มีเฉพาะโหมดแอดมิน
       if (IS_ADMIN) {
         var sel = document.createElement('select');
         STATUSES.forEach(function (s) { sel.appendChild(new Option(s, s)); });
         sel.value = b.status;
         sel.addEventListener('change', function () {
+          // ขั้น "จัดส่งแล้ว" ต้องมีใบจัดส่งกำกับ พาไปกรอกใบก่อน ไม่เปลี่ยนสถานะลอย ๆ
+          if (sel.value === DELIVERED_STATUS) {
+            sel.value = b.status;
+            return openDelivery(b);
+          }
           sel.disabled = true;
           call('apiUpdateBatteryStatus', {
             key: ADMIN_KEY, batteryId: b.batteryId, status: sel.value,
@@ -1004,6 +1061,12 @@
           });
         });
         el.appendChild(sel);
+
+        var dlv = document.createElement('button');
+        dlv.className = 'ghost';
+        dlv.textContent = b.deliveredAt ? '📦 แก้ใบจัดส่ง' : '📦 บันทึกการจัดส่ง';
+        dlv.addEventListener('click', function () { openDelivery(b); });
+        el.appendChild(dlv);
 
         var edit = document.createElement('button');
         edit.className = 'ghost';
@@ -1092,6 +1155,45 @@
     }
   }
 
+  /** กล่องสรุปใบจัดส่งบนการ์ด — อ่านอย่างเดียว ใครเปิดหน้านี้ก็เห็น */
+  function deliveryBlock(b) {
+    var box = document.createElement('div');
+    box.className = 'dlv-box';
+
+    var head = document.createElement('div');
+    head.className = 'dlv-head';
+    head.textContent = '📦 ใบบันทึกการจัดส่ง';
+    box.appendChild(head);
+
+    if (b.receiver) box.appendChild(dlvLine('ผู้มารับ', b.receiver));
+    if (b.deliveredAt) box.appendChild(dlvLine('วันเวลาที่จัดส่ง', b.deliveredAt));
+    if (b.deliveryNote) box.appendChild(dlvLine('รายละเอียด', b.deliveryNote));
+
+    if (b.deliveryPhotoId && APP_URL) {
+      var p = document.createElement('div');
+      p.className = 'meta';
+      p.style.marginTop = '6px';
+      var link = document.createElement('a');
+      link.href = APP_URL + '?img=' + encodeURIComponent(b.deliveryPhotoId);
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.style.color = 'var(--primary)';
+      link.textContent = '📎 ดูรูปหลักฐานการจัดส่ง';
+      p.appendChild(link);
+      box.appendChild(p);
+    } else if (b.deliveryPhotoId) {
+      box.appendChild(dlvLine('รูปหลักฐาน', 'มีรูปเก็บไว้แล้ว (เปิดดูได้จากลิงก์เว็บแอป)'));
+    }
+    return box;
+  }
+
+  function dlvLine(label, value) {
+    var d = document.createElement('div');
+    d.className = 'meta';
+    d.textContent = label + ': ' + value;
+    return d;
+  }
+
   function openForm(b) {
     editingId = b ? b.batteryId : '';
     $('formTitle').textContent = b ? 'แก้ไข ' + b.batteryId : 'เพิ่มรายการแบตเตอรี่';
@@ -1108,6 +1210,7 @@
 
     $('formMsg').classList.add('hidden');
     $('formCard').classList.remove('hidden');
+    $('dlvCard').classList.add('hidden');
     $('filterCard').classList.add('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -1167,6 +1270,124 @@
       $('saveBtn').disabled = false;
       $('saveBtn').textContent = 'บันทึก';
       formError('บันทึกไม่สำเร็จ: ' + (err.message || err));
+    });
+  }
+
+  /* =====================================================================
+   * ใบบันทึกการจัดส่ง — ถ่าย/เลือกรูป ใส่รายละเอียด ใส่ชื่อคนที่มารับ
+   * บันทึกแล้วเด้งกลับไปที่รายงาน ซึ่งสาขาเปิดดูได้แต่แก้ไม่ได้
+   * =================================================================== */
+
+  $('dlvCameraBtn').addEventListener('click', function () { $('dlvCamera').click(); });
+  $('dlvPickBtn').addEventListener('click', function () { $('dlvFile').click(); });
+  $('dlvCamera').addEventListener('change', function () { pickDeliveryPhoto(this.files[0]); });
+  $('dlvFile').addEventListener('change', function () { pickDeliveryPhoto(this.files[0]); });
+  $('dlvCancelBtn').addEventListener('click', closeDelivery);
+  $('dlvSaveBtn').addEventListener('click', saveDelivery);
+
+  function openDelivery(b) {
+    if (!IS_ADMIN) return;   // ปุ่มนี้ไม่โผล่ให้สาขาอยู่แล้ว กันไว้อีกชั้น
+    dlvBattery = b;
+    dlvImage = null;
+
+    $('dlvTitle').textContent = b.deliveredAt ? 'แก้ใบบันทึกการจัดส่ง' : 'บันทึกการจัดส่ง';
+    $('dlvFor').textContent = b.batteryId + ' • ' + b.branch +
+      (b.serial ? ' • ซีเรียล ' + b.serial : '') + (b.qty ? ' • ' + b.qty + ' ลูก' : '');
+    $('dlvReceiver').value = b.receiver || '';
+    $('dlvNote').value = b.deliveryNote || '';
+    $('dlvBy').value = localStorage.getItem('bt_by') || '';
+    $('dlvPreview').classList.add('hidden');
+    $('dlvMsg').classList.add('hidden');
+    $('dlvCamera').value = '';
+    $('dlvFile').value = '';
+
+    // มีรูปเดิมอยู่แล้ว บอกไว้ว่าถ้าไม่แนบใหม่ รูปเดิมยังอยู่
+    if (b.deliveryPhotoId) {
+      $('dlvOldPhoto').textContent = '📎 มีรูปหลักฐานเดิมอยู่แล้ว — ไม่แนบรูปใหม่ ระบบจะเก็บรูปเดิมไว้ตามเดิม';
+      $('dlvOldPhoto').classList.remove('hidden');
+    } else {
+      $('dlvOldPhoto').classList.add('hidden');
+    }
+
+    $('dlvCard').classList.remove('hidden');
+    $('formCard').classList.add('hidden');
+    $('filterCard').classList.add('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function closeDelivery() {
+    $('dlvCard').classList.add('hidden');
+    $('filterCard').classList.remove('hidden');
+    dlvBattery = null;
+    dlvImage = null;
+  }
+
+  function dlvError(msg) {
+    $('dlvMsg').textContent = msg;
+    $('dlvMsg').classList.remove('hidden');
+  }
+
+  /** ย่อรูปก่อนส่ง ด้านยาวสุดเหลือ 1600px ยังเห็นรายละเอียดในรูปได้สบาย */
+  function pickDeliveryPhoto(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var max = 1600;
+        var scale = Math.min(1, max / Math.max(img.width, img.height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        dlvImage = { dataUrl: dataUrl, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' };
+        $('dlvPreview').src = dataUrl;
+        $('dlvPreview').classList.remove('hidden');
+        $('dlvMsg').classList.add('hidden');
+      };
+      img.onerror = function () { dlvError('เปิดไฟล์รูปไม่ได้ ลองเลือกรูปใหม่'); };
+      img.src = reader.result;
+    };
+    reader.onerror = function () { dlvError('อ่านไฟล์รูปไม่ได้ ลองเลือกรูปใหม่'); };
+    reader.readAsDataURL(file);
+  }
+
+  function saveDelivery() {
+    if (!dlvBattery) return;
+    var receiver = $('dlvReceiver').value.trim();
+    if (!receiver) return dlvError('ยังไม่ได้ใส่ชื่อคนที่มารับ');
+    if (!dlvImage && !dlvBattery.deliveryPhotoId) {
+      return dlvError('ยังไม่ได้แนบรูปหลักฐานการจัดส่ง');
+    }
+
+    var by = $('dlvBy').value.trim();
+    localStorage.setItem('bt_by', by);
+
+    $('dlvSaveBtn').disabled = true;
+    $('dlvSaveBtn').textContent = 'กำลังบันทึก…';
+
+    call('apiSaveDelivery', {
+      key: ADMIN_KEY,
+      batteryId: dlvBattery.batteryId,
+      receiver: receiver,
+      deliveryNote: $('dlvNote').value.trim(),
+      updatedBy: by,
+      base64: dlvImage ? dlvImage.base64 : '',
+      mimeType: dlvImage ? dlvImage.mimeType : ''
+    }).then(function (res) {
+      $('dlvSaveBtn').disabled = false;
+      $('dlvSaveBtn').textContent = 'บันทึกการจัดส่ง';
+      if (!res || !res.ok) return dlvError((res && res.error) || 'บันทึกไม่สำเร็จ');
+
+      var id = dlvBattery.batteryId;
+      closeDelivery();
+      // เด้งกลับไปที่รายงาน พร้อมบอกว่ารายการไหนเพิ่งบันทึกไป
+      search('บันทึกการจัดส่ง ' + id + ' แล้ว — สาขาเปิดดูรายละเอียดและรูปหลักฐานได้');
+    }).catch(function (err) {
+      $('dlvSaveBtn').disabled = false;
+      $('dlvSaveBtn').textContent = 'บันทึกการจัดส่ง';
+      dlvError('บันทึกไม่สำเร็จ: ' + (err.message || err));
     });
   }
 

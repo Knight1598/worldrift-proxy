@@ -18,7 +18,8 @@ var HEADERS = {
   Branches: ['branchCode', 'branchName', 'zone', 'active'],
   Batteries: [
     'batteryId', 'receivedDate', 'alNo', 'branch', 'zone', 'serial', 'model', 'qty',
-    'status', 'note', 'updatedAt', 'updatedBy'
+    'status', 'note', 'updatedAt', 'updatedBy',
+    'deliveredAt', 'receiver', 'deliveryNote', 'deliveryPhotoId'
   ],
   Repairs: [
     'repairId', 'receivedDate', 'jobNo', 'contractNo', 'branch', 'zone',
@@ -29,7 +30,7 @@ var HEADERS = {
 /** คอลัมน์ที่ต้องบังคับให้ชีตเก็บเป็นข้อความ ไม่งั้น Sheets จะแปลงเป็นวันที่/ตัวเลขให้เอง */
 var TEXT_COLUMNS = {
   Branches: ['branchCode'],
-  Batteries: ['receivedDate', 'alNo', 'serial', 'updatedAt'],
+  Batteries: ['receivedDate', 'alNo', 'serial', 'updatedAt', 'deliveredAt'],
   Repairs: ['receivedDate', 'jobNo', 'contractNo', 'updatedAt']
 };
 
@@ -39,8 +40,16 @@ var BATTERY_STATUSES = [
   'กำลังกระตุ้น',
   'กระตุ้นเสร็จแล้ว',
   'รอจัดส่ง',
-  'กำลังจัดส่ง'
+  'จัดส่งแล้ว'
 ];
+
+/** ชื่อสถานะเดิมที่เลิกใช้แล้ว → ชื่อใหม่ (setupSheets จะไล่แก้ข้อมูลเก่าให้) */
+var STATUS_RENAMES = { 'กำลังจัดส่ง': 'จัดส่งแล้ว' };
+
+/** สถานะที่ต้องมีใบบันทึกการจัดส่งกำกับ */
+var DELIVERED_STATUS = 'จัดส่งแล้ว';
+
+var DELIVERY_FOLDER_NAME = 'หลักฐานการจัดส่งแบตเตอรี่';
 
 /** ขั้นตอนการซ่อมรถ เรียงจากยังไม่ได้ลงมือ → ติดของ → กำลังทำ → เสร็จ */
 var REPAIR_STATUSES = [
@@ -242,6 +251,11 @@ function apiCheckAdminKey(key) {
 
 function doGet(e) {
   var params = (e && e.parameter) ? e.parameter : {};
+
+  // เปิดดูรูปหลักฐานการจัดส่ง: ?img=<fileId>
+  // เสิร์ฟผ่านเว็บแอปแทนการเปิดลิงก์ Drive ตรง ๆ จะได้ไม่ต้องแชร์ไฟล์เป็นสาธารณะ
+  var imgId = String(params.img || '').trim();
+  if (imgId) return serveDeliveryImage_(imgId);
   var key = String(params.key || '');
   var isAdmin = (key === getBatteryAdminKey_());
 
@@ -316,8 +330,8 @@ function apiListBatteries(payload) {
       if (branch && b.branch !== branch) continue;
       if (status && b.status !== status) continue;
       if (q) {
-        var hay = [b.batteryId, b.alNo, b.branch, b.zone, b.serial, b.model, b.status, b.note]
-          .join(' ').toLowerCase();
+        var hay = [b.batteryId, b.alNo, b.branch, b.zone, b.serial, b.model, b.status, b.note,
+                   b.receiver, b.deliveryNote].join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) continue;
       }
       results.push(toBatteryDto_(b));
@@ -346,10 +360,15 @@ function apiBatteryBootstrap() {
     var branches = getBranches_().map(function (b) {
       return { code: b.code, name: b.name, zone: b.zone };
     });
+    var appUrl = '';
+    try { appUrl = ScriptApp.getService().getUrl() || ''; } catch (err) { appUrl = ''; }
+
     return {
       ok: true, branches: branches, today: todayIso_(),
       statuses: BATTERY_STATUSES,
-      repairStatuses: REPAIR_STATUSES
+      repairStatuses: REPAIR_STATUSES,
+      deliveredStatus: DELIVERED_STATUS,
+      appUrl: appUrl
     };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
@@ -506,6 +525,108 @@ function nextBatterySeq_(existing) {
     }
   });
   return { prefix: prefix, max: max };
+}
+
+/* =======================================================================
+ * ส่วนที่ 5ก — ใบบันทึกการจัดส่ง
+ *
+ * ตอนแบตถึงมือคนรับ แอดมินถ่ายรูปหลักฐาน ใส่ชื่อคนที่มารับ แล้วบันทึก
+ * ระบบเก็บรูปไว้ใน Drive (ไม่แชร์สาธารณะ) แล้วผูกกับรายการแบตก้อนนั้น
+ * ฝั่งสาขาเปิดดูรูปกับรายละเอียดได้ แต่แก้อะไรไม่ได้ เพราะการเขียนต้องมีกุญแจแอดมิน
+ * ===================================================================== */
+
+function getDeliveryFolder_() {
+  var id = prop_('DELIVERY_FOLDER_ID');
+  if (id) {
+    try {
+      return DriveApp.getFolderById(id);
+    } catch (err) {
+      // โฟลเดอร์ถูกลบไป สร้างใหม่ให้
+    }
+  }
+  var folder = DriveApp.createFolder(DELIVERY_FOLDER_NAME);
+  props_().setProperty('DELIVERY_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+/** ตั้งชื่อไฟล์เป็น วันที่_เลขที่รายการ_สาขา เพื่อให้ค้นในไดรฟ์ได้ง่าย */
+function saveDeliveryImage_(base64, mimeType, batteryId, branch) {
+  var type = String(mimeType || 'image/jpeg');
+  var ext = type.indexOf('png') >= 0 ? '.png' : '.jpg';
+  var name = [todayIso_(), batteryId, safeFileNamePart_(branch)].join('_') + ext;
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64), type, name);
+  return getDeliveryFolder_().createFile(blob).getId();
+}
+
+function safeFileNamePart_(v) {
+  return String(v == null ? '' : v).trim().replace(/[\\\/:*?"<>|]+/g, '-');
+}
+
+/** เสิร์ฟรูปหลักฐานผ่านเว็บแอป จะได้ไม่ต้องแชร์ไฟล์ใน Drive เป็นสาธารณะ */
+function serveDeliveryImage_(fileId) {
+  try {
+    var file = DriveApp.getFileById(fileId);
+    var blob = file.getBlob();
+    var dataUri = 'data:' + blob.getContentType() + ';base64,' +
+      Utilities.base64Encode(blob.getBytes());
+    var html = '<div style="margin:0;background:#111;text-align:center">' +
+      '<img src="' + dataUri + '" style="max-width:100%;height:auto">' +
+      '</div>';
+    return HtmlService.createHtmlOutput(html)
+      .setTitle(file.getName())
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  } catch (err) {
+    return HtmlService.createHtmlOutput('<p>เปิดรูปไม่ได้: ' + String(err.message || err) + '</p>');
+  }
+}
+
+/**
+ * บันทึกใบจัดส่งของแบตก้อนหนึ่ง — ต้องมี key ของแอดมิน
+ * บันทึกแล้วสถานะจะกลายเป็น "จัดส่งแล้ว" ให้เอง ไม่ต้องไปกดเปลี่ยนอีกที
+ */
+function apiSaveDelivery(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+
+    var id = String(payload.batteryId || '').trim();
+    if (!id) throw new Error('ไม่ได้ระบุรายการแบต');
+
+    var receiver = String(payload.receiver || '').trim();
+    if (!receiver) throw new Error('ยังไม่ได้ใส่ชื่อคนที่มารับ');
+
+    var rows = readBatteries_();
+    var target = null;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].batteryId === id) { target = rows[i]; break; }
+    }
+    if (!target) throw new Error('ไม่พบรายการ ' + id);
+
+    // อัปโหลดรูปก่อน ถ้าเก็บรูปไม่สำเร็จก็ไม่ควรไปแก้สถานะให้เข้าใจผิดว่ามีหลักฐานแล้ว
+    var photoId = String(payload.photoId || '').trim() || target.deliveryPhotoId;
+    if (payload.base64) {
+      photoId = saveDeliveryImage_(payload.base64, payload.mimeType, id, target.branch);
+    }
+
+    var sh = getSheet_(SHEETS.BATTERIES);
+    var stamp = nowStamp_();
+    var updates = {
+      status: DELIVERED_STATUS,
+      deliveredAt: stamp,
+      receiver: receiver,
+      deliveryNote: String(payload.deliveryNote || '').trim(),
+      deliveryPhotoId: photoId,
+      updatedAt: stamp,
+      updatedBy: String(payload.updatedBy || '').trim()
+    };
+    Object.keys(updates).forEach(function (field) {
+      sh.getRange(target._row, colIndex_('Batteries', field)).setValue(updates[field]);
+    });
+
+    return { ok: true, batteryId: id, delivery: updates, hasPhoto: !!photoId };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
 }
 
 /* =======================================================================
@@ -910,11 +1031,14 @@ function setupSheets() {
   }
   normalizeBranchCodes_();
 
+  var renamed = renameOldStatuses_();
+
   clearBranchCache_();
   var msg = created.length
     ? 'สร้างชีตใหม่: ' + created.join(', ')
     : 'ชีตครบอยู่แล้ว — อัปเดตหัวตารางให้เรียบร้อย';
   if (moved.length) msg += ' | ย้ายข้อมูลเดิมให้ตรงคอลัมน์ใหม่: ' + moved.join(', ');
+  if (renamed) msg += ' | เปลี่ยนชื่อสถานะเดิมให้เป็นชื่อใหม่ ' + renamed + ' รายการ';
   msg += ' | สาขาในระบบ ' + Math.max(0, br.getLastRow() - 1) + ' สาขา';
   Logger.log(msg);
   return msg;
@@ -956,6 +1080,30 @@ function migrateColumns_(sh, want) {
     sh.getRange(1, want.length + 1, Math.max(lastRow, 1), lastCol - want.length).clearContent();
   }
   return true;
+}
+
+/**
+ * สถานะที่เปลี่ยนชื่อไปแล้ว ต้องไล่แก้ข้อมูลเก่าด้วย
+ * ไม่งั้นแถวเดิมจะค้างอยู่ที่ชื่อที่ไม่มีในระบบแล้ว ไม่ถูกนับในแถบสรุปและกรองไม่เจอ
+ */
+function renameOldStatuses_() {
+  var sh = getSpreadsheet_().getSheetByName(SHEETS.BATTERIES);
+  if (!sh) return 0;
+  var last = sh.getLastRow();
+  if (last < 2) return 0;
+
+  var range = sh.getRange(2, colIndex_('Batteries', 'status'), last - 1, 1);
+  var values = range.getValues();
+  var changed = 0;
+  for (var i = 0; i < values.length; i++) {
+    var cur = cellText_(values[i][0]);
+    if (STATUS_RENAMES[cur]) {
+      values[i][0] = STATUS_RENAMES[cur];
+      changed++;
+    }
+  }
+  if (changed) range.setValues(values);
+  return changed;
 }
 
 /** ล็อกคอลัมน์รหัสสาขาเป็นข้อความ 4 หลัก กัน 0 นำหน้าหาย */
