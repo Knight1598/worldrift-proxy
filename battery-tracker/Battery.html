@@ -413,8 +413,8 @@
 
       <div class="row">
         <div>
-          <label for="rfJob">เลข JOB *</label>
-          <input type="text" id="rfJob" autocomplete="off" placeholder="เลขที่ JOB">
+          <label for="rfJob">เลข JOB</label>
+          <input type="text" id="rfJob" autocomplete="off" placeholder="ใส่ทีหลังได้">
         </div>
         <div>
           <label for="rfContract">เลขที่สัญญา</label>
@@ -1716,12 +1716,11 @@
       head.appendChild(right);
       el.appendChild(head);
 
-      // เลข JOB เป็นตัวที่คนใช้ตามงานจริง เลยให้เด่นที่สุดบนการ์ด
-      // ถ้าเลขที่กรอกมาขึ้นต้นด้วย JOB อยู่แล้ว ไม่ต้องเติมซ้ำให้อ่านแล้วสะดุด
-      var job = document.createElement('div');
-      job.className = 'branch';
-      job.textContent = /^job/i.test(r.jobNo) ? r.jobNo : 'JOB ' + (r.jobNo || '—');
-      el.appendChild(job);
+      // สาขาอยู่หัวการ์ด ให้ดูปราดเดียวรู้ว่าเป็นของสาขาไหน (เหมือนฝั่งแบต)
+      var head2 = document.createElement('div');
+      head2.className = 'branch';
+      head2.textContent = (r.branch || 'ยังไม่ระบุสาขา') + (r.zone ? ' (เขต' + r.zone + ')' : '');
+      el.appendChild(head2);
 
       var badge = document.createElement('div');
       badge.className = 'badge';
@@ -1729,9 +1728,10 @@
       el.appendChild(badge);
 
       var bits = [];
+      // เลขที่กรอกมาขึ้นต้นด้วย JOB อยู่แล้ว ไม่ต้องเติมซ้ำให้อ่านแล้วสะดุด
+      if (r.jobNo) bits.push(/^job/i.test(r.jobNo) ? r.jobNo : 'JOB ' + r.jobNo);
       if (r.contractNo) bits.push('สัญญา ' + r.contractNo);
       if (r.vehicleModel) bits.push('รุ่น ' + r.vehicleModel);
-      if (r.branch) bits.push(r.branch + (r.zone ? ' (เขต' + r.zone + ')' : ''));
       if (bits.length) {
         var meta = document.createElement('div');
         meta.className = 'meta';
@@ -1790,7 +1790,7 @@
         // แก้ไข/ลบ ทำในการ์ดนี้เลย เหมือนฝั่งแบต
         var gJob, gContract, gVehicle, gBranch, gDate, gNote;
         var red = cardEditor({
-          label: r.repairId + ' (JOB ' + r.jobNo + ')',
+          label: r.repairId + (r.jobNo ? ' (JOB ' + r.jobNo + ')' : ''),
           saveApi: 'apiSaveRepair',
           deleteApi: 'apiDeleteRepair',
           deletePayload: function () { return { key: ADMIN_KEY, repairId: r.repairId }; },
@@ -1808,7 +1808,6 @@
             gBranch._mount();
           },
           collect: function () {
-            if (!gJob._input.value.trim()) return 'ยังไม่ได้กรอกเลข JOB';
             var branch = gBranch._combo.getValue();
             if (!branch) return 'ยังไม่ได้เลือกสาขา';
             return {
@@ -1873,7 +1872,6 @@
       note: $('rfNote').value.trim(),
       updatedBy: $('rfBy').value.trim()
     };
-    if (!payload.jobNo) return rFormError('ยังไม่ได้กรอกเลข JOB');
     if (!payload.branch) return rFormError('ยังไม่ได้เลือกสาขา');
     localStorage.setItem('bt_by', payload.updatedBy);
 
@@ -1884,7 +1882,8 @@
       $('rSaveBtn').disabled = false;
       $('rSaveBtn').textContent = 'บันทึก';
       if (!res || !res.ok) return rFormError((res && res.error) || 'บันทึกไม่สำเร็จ');
-      var msg = rEditingId ? 'บันทึกการแก้ไขแล้ว' : 'บันทึกรายการ JOB ' + payload.jobNo + ' แล้ว';
+      var msg = rEditingId ? 'บันทึกการแก้ไขแล้ว'
+        : 'บันทึกรายการ' + (payload.jobNo ? ' JOB ' + payload.jobNo : 'ใหม่') + ' แล้ว';
       rCloseForm();
       rSearch(msg);
     }).catch(function (err) {

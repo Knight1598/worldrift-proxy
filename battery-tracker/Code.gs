@@ -108,10 +108,73 @@ function nowStamp_() {
   return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd HH:mm:ss');
 }
 
-function colIndex_(sheetName, field) {
-  var idx = HEADERS[sheetName].indexOf(field);
-  if (idx < 0) throw new Error('ไม่รู้จักคอลัมน์ ' + field + ' ในชีต ' + sheetName);
-  return idx + 1;
+/**
+ * อ่านลำดับคอลัมน์จาก "หัวตารางจริงในชีต" ไม่ใช่เดาจากลำดับใน HEADERS
+ *
+ * ถ้าเดาจากลำดับ พอเพิ่มคอลัมน์ใหม่แล้วยังไม่ได้รัน setupSheets ข้อมูลทุกช่อง
+ * จะเลื่อนไปหนึ่งตำแหน่ง (ชื่อสาขาไปโผล่ช่องรุ่นรถ เขตไปโผล่ช่องสาขา ฯลฯ)
+ * ยึดตามชื่อหัวตารางแทน ต่อให้คอลัมน์สลับที่หรือยังไม่มี ก็ไม่หยิบข้อมูลผิดช่อง
+ *
+ * คอลัมน์ที่หัวตารางยังไม่มี จะได้ -1 = ถือว่าไม่มีข้อมูล ไม่ไปแอบอ่านช่องข้าง ๆ
+ */
+function sheetLayout_(sh, sheetName) {
+  var index = {};
+  var lastCol = sh.getLastColumn();
+  if (lastCol > 0) {
+    var head = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+    for (var c = 0; c < head.length; c++) {
+      var name = String(head[c] == null ? '' : head[c]).trim();
+      if (name && index[name] === undefined) index[name] = c;
+    }
+  }
+  HEADERS[sheetName].forEach(function (f) {
+    if (index[f] === undefined) index[f] = -1;
+  });
+  return { index: index, lastCol: lastCol };
+}
+
+/** เลขคอลัมน์ (เริ่มที่ 1) ของฟิลด์หนึ่งตามหัวตารางจริง */
+function fieldCol_(sh, sheetName, field) {
+  var at = sheetLayout_(sh, sheetName).index[field];
+  if (at < 0) {
+    throw new Error('ชีต ' + sheetName + ' ยังไม่มีคอลัมน์ ' + field + ' — ให้รัน setupSheets() ก่อน');
+  }
+  return at + 1;
+}
+
+/** อ่านทุกแถวของชีตออกมาเป็นออบเจ็กต์ ตามชื่อคอลัมน์ในหัวตาราง */
+function readRows_(sheetName) {
+  var sh = getSheet_(sheetName);
+  var last = sh.getLastRow();
+  if (last < 2) return [];
+
+  var layout = sheetLayout_(sh, sheetName);
+  var width = Math.max(1, sh.getLastColumn());
+  var values = sh.getRange(2, 1, last - 1, width).getValues();
+
+  var out = [];
+  for (var i = 0; i < values.length; i++) {
+    var rec = { _row: i + 2 };
+    HEADERS[sheetName].forEach(function (f) {
+      var c = layout.index[f];
+      rec[f] = c >= 0 ? cellText_(values[i][c]) : '';
+    });
+    out.push(rec);
+  }
+  return out;
+}
+
+/** เรียงค่าลงแถวตามหัวตารางจริงของชีต */
+function toRowValues_(sh, sheetName, rec) {
+  var layout = sheetLayout_(sh, sheetName);
+  var width = Math.max(layout.lastCol, HEADERS[sheetName].length);
+  var row = [];
+  for (var i = 0; i < width; i++) row.push('');
+  HEADERS[sheetName].forEach(function (f) {
+    var c = layout.index[f];
+    if (c >= 0 && c < width) row[c] = rec[f] === undefined ? '' : rec[f];
+  });
+  return row;
 }
 
 /**
@@ -287,25 +350,7 @@ function doGet(e) {
  * ===================================================================== */
 
 function readBatteries_() {
-  var sh = getSheet_(SHEETS.BATTERIES);
-  var last = sh.getLastRow();
-  if (last < 2) return [];
-
-  // อ่านเท่าที่ชีตมีจริง ถ้าชีตแคบกว่าหัวตาราง getRange จะฟ้อง out of bounds
-  var width = Math.min(HEADERS.Batteries.length, Math.max(1, sh.getLastColumn()));
-  var values = sh.getRange(2, 1, last - 1, width).getValues();
-
-  var out = [];
-  for (var i = 0; i < values.length; i++) {
-    var r = values[i];
-    var rec = { _row: i + 2 };
-    for (var c = 0; c < HEADERS.Batteries.length; c++) {
-      rec[HEADERS.Batteries[c]] = cellText_(r[c]);
-    }
-    if (!rec.batteryId) continue;
-    out.push(rec);
-  }
-  return out;
+  return readRows_(SHEETS.BATTERIES).filter(function (r) { return !!r.batteryId; });
 }
 
 function toBatteryDto_(b) {
@@ -420,9 +465,9 @@ function apiUpdateBatteryStatus(payload) {
     var rows = readBatteries_();
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].batteryId === id) {
-        sh.getRange(rows[i]._row, colIndex_('Batteries', 'status')).setValue(status);
-        sh.getRange(rows[i]._row, colIndex_('Batteries', 'updatedAt')).setValue(nowStamp_());
-        sh.getRange(rows[i]._row, colIndex_('Batteries', 'updatedBy'))
+        sh.getRange(rows[i]._row, fieldCol_(sh, 'Batteries', 'status')).setValue(status);
+        sh.getRange(rows[i]._row, fieldCol_(sh, 'Batteries', 'updatedAt')).setValue(nowStamp_());
+        sh.getRange(rows[i]._row, fieldCol_(sh, 'Batteries', 'updatedBy'))
           .setValue(String(payload.updatedBy || '').trim());
         return { ok: true, batteryId: id, status: status };
       }
@@ -548,15 +593,16 @@ function saveBatteries_(base, items) {
           if (existing[i].batteryId === r.batteryId) { target = existing[i]; break; }
         }
         if (!target) throw new Error('ไม่พบรายการ ' + r.batteryId);
-        sh.getRange(target._row, 1, 1, HEADERS.Batteries.length).setValues([toSheetRow_(r)]);
+        var row = toRowValues_(sh, SHEETS.BATTERIES, r);
+        sh.getRange(target._row, 1, 1, row.length).setValues([row]);
       } else {
         r.batteryId = seq.prefix + ('00' + (++seq.max)).slice(-3);
-        appended.push(toSheetRow_(r));
+        appended.push(toRowValues_(sh, SHEETS.BATTERIES, r));
       }
     });
 
     if (appended.length) {
-      sh.getRange(sh.getLastRow() + 1, 1, appended.length, HEADERS.Batteries.length)
+      sh.getRange(sh.getLastRow() + 1, 1, appended.length, appended[0].length)
         .setValues(appended);
     }
   } finally {
@@ -566,9 +612,7 @@ function saveBatteries_(base, items) {
   return rows;
 }
 
-function toSheetRow_(r) {
-  return HEADERS.Batteries.map(function (h) { return r[h] === undefined ? '' : r[h]; });
-}
+
 
 /** เลขที่รายการแบต รูปแบบ BT-YYYYMMDD-NNN (เรียกใต้ lock เท่านั้น) */
 function nextBatterySeq_(existing) {
@@ -676,7 +720,7 @@ function apiSaveDelivery(payload) {
       updatedBy: String(payload.updatedBy || '').trim()
     };
     Object.keys(updates).forEach(function (field) {
-      sh.getRange(target._row, colIndex_('Batteries', field)).setValue(updates[field]);
+      sh.getRange(target._row, fieldCol_(sh, 'Batteries', field)).setValue(updates[field]);
     });
 
     return { ok: true, batteryId: id, delivery: updates, hasPhoto: !!photoId };
@@ -693,23 +737,7 @@ function apiSaveDelivery(payload) {
  * ===================================================================== */
 
 function readRepairs_() {
-  var sh = getSheet_(SHEETS.REPAIRS);
-  var last = sh.getLastRow();
-  if (last < 2) return [];
-
-  var width = Math.min(HEADERS.Repairs.length, Math.max(1, sh.getLastColumn()));
-  var values = sh.getRange(2, 1, last - 1, width).getValues();
-
-  var out = [];
-  for (var i = 0; i < values.length; i++) {
-    var rec = { _row: i + 2 };
-    for (var c = 0; c < HEADERS.Repairs.length; c++) {
-      rec[HEADERS.Repairs[c]] = cellText_(values[i][c]);
-    }
-    if (!rec.repairId) continue;
-    out.push(rec);
-  }
-  return out;
+  return readRows_(SHEETS.REPAIRS).filter(function (r) { return !!r.repairId; });
 }
 
 function toRepairDto_(r) {
@@ -783,9 +811,9 @@ function apiUpdateRepairStatus(payload) {
     var rows = readRepairs_();
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].repairId === id) {
-        sh.getRange(rows[i]._row, colIndex_('Repairs', 'status')).setValue(status);
-        sh.getRange(rows[i]._row, colIndex_('Repairs', 'updatedAt')).setValue(nowStamp_());
-        sh.getRange(rows[i]._row, colIndex_('Repairs', 'updatedBy'))
+        sh.getRange(rows[i]._row, fieldCol_(sh, 'Repairs', 'status')).setValue(status);
+        sh.getRange(rows[i]._row, fieldCol_(sh, 'Repairs', 'updatedAt')).setValue(nowStamp_());
+        sh.getRange(rows[i]._row, fieldCol_(sh, 'Repairs', 'updatedBy'))
           .setValue(String(payload.updatedBy || '').trim());
         return { ok: true, repairId: id, status: status };
       }
@@ -797,8 +825,7 @@ function apiUpdateRepairStatus(payload) {
 }
 
 function saveRepair_(p) {
-  var jobNo = String(p.jobNo || '').trim();
-  if (!jobNo) throw new Error('ยังไม่ได้กรอกเลข JOB');
+  var jobNo = String(p.jobNo || '').trim();   // ไม่บังคับ บางคันยังไม่ได้เปิด JOB ตอนรับเข้า
 
   var branch = String(p.branch || '').trim();
   if (!branch) throw new Error('ยังไม่ได้เลือกสาขา');
@@ -832,9 +859,9 @@ function saveRepair_(p) {
     var sh = getSheet_(SHEETS.REPAIRS);
     var rows = readRepairs_();
 
-    // เลข JOB ต้องไม่ซ้ำ ไม่งั้นตามงานไม่ถูกคัน
+    // เลข JOB ต้องไม่ซ้ำ ไม่งั้นตามงานไม่ถูกคัน — แต่ถ้ายังไม่ได้ใส่ ก็ไม่ต้องตรวจ
     var key = jobNo.toUpperCase();
-    for (var i = 0; i < rows.length; i++) {
+    for (var i = 0; jobNo && i < rows.length; i++) {
       if (rows[i].repairId === originalId) continue;
       if (rows[i].jobNo.toUpperCase() === key) {
         throw new Error('เลข JOB ' + jobNo + ' มีอยู่แล้วในรายการ ' + rows[i].repairId +
@@ -851,10 +878,10 @@ function saveRepair_(p) {
     }
 
     if (!target) row.repairId = nextRepairId_(rows);
-    var values = HEADERS.Repairs.map(function (h) { return row[h] === undefined ? '' : row[h]; });
+    var values = toRowValues_(sh, SHEETS.REPAIRS, row);
 
-    if (target) sh.getRange(target._row, 1, 1, HEADERS.Repairs.length).setValues([values]);
-    else sh.getRange(sh.getLastRow() + 1, 1, 1, HEADERS.Repairs.length).setValues([values]);
+    if (target) sh.getRange(target._row, 1, 1, values.length).setValues([values]);
+    else sh.getRange(sh.getLastRow() + 1, 1, 1, values.length).setValues([values]);
   } finally {
     lock.releaseLock();
   }
@@ -1149,7 +1176,7 @@ function renameOldStatuses_() {
   var last = sh.getLastRow();
   if (last < 2) return 0;
 
-  var range = sh.getRange(2, colIndex_('Batteries', 'status'), last - 1, 1);
+  var range = sh.getRange(2, fieldCol_(sh, 'Batteries', 'status'), last - 1, 1);
   var values = range.getValues();
   var changed = 0;
   for (var i = 0; i < values.length; i++) {
