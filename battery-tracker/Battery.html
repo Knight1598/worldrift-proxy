@@ -201,6 +201,19 @@
   }
   .bat select { margin: 8px 0 0; }
 
+  /* แถวปุ่มจัดการ และแผงแก้ไขที่กางอยู่ในการ์ด */
+  .card-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .card-actions button { margin-top: 0; }
+  button.ghost.danger { color: var(--err-text); border-color: var(--err-text); }
+  .card-edit {
+    margin-top: 10px;
+    padding: 12px 12px 4px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .card-edit .row { gap: 8px; }
+
   /* กล่องใบบันทึกการจัดส่งบนการ์ด */
   .dlv-box {
     margin-top: 8px;
@@ -494,6 +507,9 @@
   var DELIVERED_STATUS = 'จัดส่งแล้ว';
   var dlvBattery = null;         // แบตก้อนที่กำลังกรอกใบจัดส่งให้
   var dlvImage = null;           // { base64, mimeType, dataUrl }
+  var searchSeq = 0, rSearchSeq = 0;   // ลำดับคำขอ ใช้ทิ้งผลลัพธ์ที่ล้าสมัย
+  var cardSeq = 0;                     // เลขรันสำหรับ id ของช่องในการ์ด
+  var BRANCH_OPTIONS = [];             // ตัวเลือกสาขา ใช้ซ้ำในช่องที่สร้างในการ์ด
   var items = [];
 
   function $(id) { return document.getElementById(id); }
@@ -794,6 +810,7 @@
           ? { value: b, label: b }
           : { value: b.name, label: b.name, sub: b.code + (b.zone ? ' • เขต' + b.zone : '') };
       });
+      BRANCH_OPTIONS = branchOptions;
       cbBranch.setOptions(branchOptions);
       cbRBranch.setOptions(branchOptions);
       // ช่องกรอง: ค่าว่าง = ทุกสาขา
@@ -941,18 +958,24 @@
 
   /** doneMsg = ข้อความที่อยากให้ค้างไว้หลังโหลดเสร็จ เช่น "บันทึกแล้ว" */
   function search(doneMsg) {
+    // ล้างรายการตอน "ได้ผลลัพธ์" ไม่ใช่ตอนยิงคำขอ
+    // ถ้าล้างตอนยิง แล้วมีสองคำขอซ้อนกัน (เช่นกดเปลี่ยนสถานะรัว ๆ) ผลของอันแรก
+    // จะมาต่อท้ายหลังอันที่สองล้างไปแล้ว การ์ดเลยขึ้นซ้ำสองชุด
+    var seq = ++searchSeq;
     setStatus('กำลังโหลด…');
-    $('results').innerHTML = '';
     call('apiListBatteries', {
       q: $('q').value.trim(),
       branch: LOCK_BRANCH || cbBranchFilter.getValue(),
       status: $('statusFilter').value
     }).then(function (res) {
+      if (seq !== searchSeq) return;   // มีการค้นหาใหม่แซงไปแล้ว ทิ้งผลเก่า
+      $('results').innerHTML = '';
       if (!res || !res.ok) return setStatus((res && res.error) || 'โหลดไม่สำเร็จ', true);
       renderSummary(res.counts);
       render(res.results, res.total);
       if (doneMsg) setStatus(doneMsg);
     }).catch(function (err) {
+      if (seq !== searchSeq) return;
       setStatus('โหลดไม่สำเร็จ: ' + (err.message || err), true);
     });
   }
@@ -1028,13 +1051,14 @@
         el.appendChild(note);
       }
 
-      if (b.updatedAt) {
-        var upd = document.createElement('div');
-        upd.className = 'meta';
-        upd.style.marginTop = '6px';
-        upd.textContent = 'อัปเดตล่าสุด ' + b.updatedAt + (b.updatedBy ? ' โดย ' + b.updatedBy : '');
-        el.appendChild(upd);
-      }
+      var upd = document.createElement('div');
+      upd.className = 'meta';
+      upd.style.marginTop = '6px';
+      upd.classList.toggle('hidden', !b.updatedAt);
+      upd.textContent = b.updatedAt
+        ? 'อัปเดตล่าสุด ' + b.updatedAt + (b.updatedBy ? ' โดย ' + b.updatedBy : '')
+        : '';
+      el.appendChild(upd);
 
       // ใบบันทึกการจัดส่ง — ทุกคนเห็น รวมถึงสาขา แต่แก้ไม่ได้
       if (b.deliveredAt || b.receiver || b.deliveryPhotoId) el.appendChild(deliveryBlock(b));
@@ -1050,32 +1074,82 @@
             sel.value = b.status;
             return openDelivery(b);
           }
+          // จำสถานะเดิมไว้ตั้งแต่ก่อนยิงคำสั่ง อย่าไปอ่านทีหลัง
+          // ค่าใน b อาจถูกอะไรเปลี่ยนไปแล้วระหว่างรอผล แล้วจะคำนวณแถบสรุปผิด
+          var prev = b.status;
+          var next = sel.value;
+          var by = localStorage.getItem('bt_by') || '';
           sel.disabled = true;
           call('apiUpdateBatteryStatus', {
-            key: ADMIN_KEY, batteryId: b.batteryId, status: sel.value,
-            updatedBy: localStorage.getItem('bt_by') || ''
+            key: ADMIN_KEY, batteryId: b.batteryId, status: next, updatedBy: by
           }).then(function (res) {
             sel.disabled = false;
-            if (!res || !res.ok) return setStatus((res && res.error) || 'อัปเดตไม่สำเร็จ', true);
-            search();
+            if (!res || !res.ok) {
+              sel.value = prev;   // ไม่ผ่าน ต้องดีดกลับ ไม่งั้นช่องโชว์ค่าที่ยังไม่ได้บันทึก
+              return setStatus((res && res.error) || 'อัปเดตไม่สำเร็จ', true);
+            }
+            // อัปเดตเฉพาะการ์ดนี้ ไม่โหลดรายการใหม่ทั้งชุด
+            bumpSummary('summary', STATUSES, prev, next);
+            b.status = next;
+            el.className = 'bat ' + statusClass(next);
+            badge.textContent = next;
+            upd.textContent = 'อัปเดตล่าสุด เมื่อสักครู่' + (by ? ' โดย ' + by : '');
+            upd.classList.remove('hidden');
+            setStatus('อัปเดต ' + b.batteryId + ' เป็น "' + next + '" แล้ว');
           }).catch(function (err) {
             sel.disabled = false;
+            sel.value = prev;
             setStatus('อัปเดตไม่สำเร็จ: ' + (err.message || err), true);
           });
         });
         el.appendChild(sel);
 
         var dlv = document.createElement('button');
+        dlv.type = 'button';
         dlv.className = 'ghost';
         dlv.textContent = b.deliveredAt ? '📦 แก้ใบจัดส่ง' : '📦 บันทึกการจัดส่ง';
         dlv.addEventListener('click', function () { openDelivery(b); });
         el.appendChild(dlv);
 
-        var edit = document.createElement('button');
-        edit.className = 'ghost';
-        edit.textContent = 'แก้ไขรายละเอียด';
-        edit.addEventListener('click', function () { openForm(b); });
-        el.appendChild(edit);
+        // แก้ไข/ลบ ทำในการ์ดนี้เลย
+        var fBranch, fDate, fAl, fSerial, fModel, fQty, fNote;
+        var ed = cardEditor({
+          label: b.batteryId,
+          saveApi: 'apiSaveBattery',
+          deleteApi: 'apiDeleteBattery',
+          deletePayload: function () { return { key: ADMIN_KEY, batteryId: b.batteryId }; },
+          build: function (panel) {
+            fBranch = branchFieldInCard('สาขาเจ้าของแบต', b.branch);
+            fDate = editField('วันที่รับเข้า', b.receivedDate, { type: 'date' });
+            fAl = editField('อล.', b.alNo);
+            fSerial = editField('ซีเรียล/รหัสแบต', b.serial);
+            fModel = editField('รุ่น/ขนาด', b.model);
+            fQty = editField('จำนวน (ลูก)', b.qty || 1, { type: 'number' });
+            fNote = editField('หมายเหตุ', b.note);
+            panel.appendChild(fBranch);
+            panel.appendChild(fieldRow(fDate, fAl));
+            panel.appendChild(fieldRow(fSerial, fModel));
+            panel.appendChild(fieldRow(fQty, fNote));
+            fBranch._mount();
+          },
+          collect: function () {
+            var branch = fBranch._combo.getValue();
+            if (!branch) return 'ยังไม่ได้เลือกสาขา';
+            if (!(Number(fQty._input.value) > 0)) return 'จำนวนต้องมากกว่า 0';
+            return {
+              key: ADMIN_KEY, batteryId: b.batteryId, branch: branch,
+              receivedDate: fDate._input.value, alNo: fAl._input.value.trim(),
+              serial: fSerial._input.value.trim(), model: fModel._input.value.trim(),
+              qty: fQty._input.value, note: fNote._input.value.trim(),
+              status: b.status, updatedBy: localStorage.getItem('bt_by') || ''
+            };
+          },
+          onSaved: function () { search('แก้ไข ' + b.batteryId + ' แล้ว'); },
+          onDeleted: function () { search('ลบ ' + b.batteryId + ' แล้ว'); },
+          onError: function (m) { setStatus(m, true); }
+        });
+        el.appendChild(ed.actions);
+        el.appendChild(ed.panel);
       }
 
       box.appendChild(el);
@@ -1156,6 +1230,168 @@
       var idx = Number(inputs[i].getAttribute('data-idx'));
       if (items[idx]) items[idx][inputs[i].getAttribute('data-name')] = inputs[i].value;
     }
+  }
+
+  /** ขยับตัวเลขในแถบสรุปเอง หลังเปลี่ยนสถานะการ์ดเดียว จะได้ไม่ต้องโหลดรายการใหม่ทั้งชุด */
+  function bumpSummary(boxId, statuses, from, to) {
+    var boxes = $(boxId).children;
+    function nudge(status, delta) {
+      var i = statuses.indexOf(status);
+      if (i < 0 || !boxes[i]) return;
+      var n = boxes[i].querySelector('.n');
+      n.textContent = Math.max(0, (Number(n.textContent) || 0) + delta);
+    }
+    nudge(from, -1);
+    nudge(to, 1);
+  }
+
+  /* ---------- แก้ไข / ลบ ภายในการ์ด ----------
+   *
+   * ทำในการ์ดเลย ไม่เด้งไปฟอร์มบนสุดของหน้า จะได้ไม่หลุดจากรายการที่กำลังดูอยู่
+   * ฟอร์มบนสุดเหลือหน้าที่เดียวคือ "เพิ่มรายการใหม่"
+   */
+
+  /** ช่องกรอกหนึ่งช่องพร้อมป้ายกำกับ ใช้ประกอบแผงแก้ไขในการ์ด */
+  function editField(labelText, value, opts) {
+    opts = opts || {};
+    var wrap = document.createElement('div');
+    var lab = document.createElement('label');
+    lab.textContent = labelText;
+    var inp = document.createElement('input');
+    inp.type = opts.type || 'text';
+    inp.value = value == null ? '' : value;
+    inp.autocomplete = 'off';
+    if (opts.placeholder) inp.placeholder = opts.placeholder;
+    if (opts.type === 'number') { inp.min = '1'; inp.step = '1'; }
+    wrap.appendChild(lab);
+    wrap.appendChild(inp);
+    wrap._input = inp;
+    return wrap;
+  }
+
+  function fieldRow(a, b) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.appendChild(a);
+    row.appendChild(b);
+    return row;
+  }
+
+  /** ช่องเลือกสาขาในการ์ด — พิมพ์รหัสสาขาได้เหมือนช่องอื่น */
+  function branchFieldInCard(labelText, value) {
+    var wrap = document.createElement('div');
+    var lab = document.createElement('label');
+    lab.textContent = labelText;
+    var host = document.createElement('div');
+    host.className = 'combo';
+    host.id = 'cardbranch' + (++cardSeq);
+    wrap.appendChild(lab);
+    wrap.appendChild(host);
+    wrap._mount = function () {
+      var cb = makeCombo(host.id, { placeholder: 'พิมพ์รหัสสาขาหรือชื่อสาขา' });
+      cb.setOptions(BRANCH_OPTIONS);
+      cb.setValue(value || '');
+      wrap._combo = cb;
+    };
+    return wrap;
+  }
+
+  /**
+   * แถวปุ่มจัดการในการ์ด + แผงแก้ไขที่กางอยู่ในการ์ดเอง
+   * buildFields คืนอาร์เรย์ของ element ที่จะใส่ในแผง และ collect คืน payload ตอนกดบันทึก
+   */
+  function cardEditor(cfg) {
+    var panel = document.createElement('div');
+    panel.className = 'card-edit hidden';
+
+    var msg = document.createElement('div');
+    msg.className = 'banner err hidden';
+
+    var actions = document.createElement('div');
+    actions.className = 'card-actions';
+
+    var editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'ghost';
+    editBtn.textContent = '✏️ แก้ไข';
+
+    var delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'ghost danger';
+    delBtn.textContent = '🗑️ ลบ';
+
+    actions.appendChild(editBtn);
+    actions.appendChild(delBtn);
+
+    var mounted = false;
+    editBtn.addEventListener('click', function () {
+      if (!mounted) {
+        cfg.build(panel);
+        var save = document.createElement('button');
+        save.type = 'button';
+        save.className = 'primary';
+        save.textContent = 'บันทึกการแก้ไข';
+        var cancel = document.createElement('button');
+        cancel.type = 'button';
+        cancel.className = 'ghost';
+        cancel.textContent = 'ยกเลิก';
+        panel.appendChild(msg);
+        panel.appendChild(save);
+        panel.appendChild(cancel);
+
+        cancel.addEventListener('click', function () {
+          panel.classList.add('hidden');
+          editBtn.textContent = '✏️ แก้ไข';
+        });
+        save.addEventListener('click', function () {
+          var payload = cfg.collect();
+          if (typeof payload === 'string') {   // คืนเป็นข้อความ = ข้อความแจ้งเตือน
+            msg.textContent = payload;
+            msg.classList.remove('hidden');
+            return;
+          }
+          msg.classList.add('hidden');
+          save.disabled = true;
+          save.textContent = 'กำลังบันทึก…';
+          call(cfg.saveApi, payload).then(function (res) {
+            save.disabled = false;
+            save.textContent = 'บันทึกการแก้ไข';
+            if (!res || !res.ok) {
+              msg.textContent = (res && res.error) || 'บันทึกไม่สำเร็จ';
+              msg.classList.remove('hidden');
+              return;
+            }
+            cfg.onSaved();
+          }).catch(function (err) {
+            save.disabled = false;
+            save.textContent = 'บันทึกการแก้ไข';
+            msg.textContent = 'บันทึกไม่สำเร็จ: ' + (err.message || err);
+            msg.classList.remove('hidden');
+          });
+        });
+        mounted = true;
+      }
+      var open = panel.classList.toggle('hidden');
+      editBtn.textContent = open ? '✏️ แก้ไข' : '✕ ปิดการแก้ไข';
+    });
+
+    delBtn.addEventListener('click', function () {
+      if (!window.confirm('ลบ ' + cfg.label + ' ทิ้งเลยไหม? ลบแล้วเอากลับไม่ได้')) return;
+      delBtn.disabled = true;
+      delBtn.textContent = 'กำลังลบ…';
+      call(cfg.deleteApi, cfg.deletePayload()).then(function (res) {
+        delBtn.disabled = false;
+        delBtn.textContent = '🗑️ ลบ';
+        if (!res || !res.ok) return cfg.onError((res && res.error) || 'ลบไม่สำเร็จ');
+        cfg.onDeleted();
+      }).catch(function (err) {
+        delBtn.disabled = false;
+        delBtn.textContent = '🗑️ ลบ';
+        cfg.onError('ลบไม่สำเร็จ: ' + (err.message || err));
+      });
+    });
+
+    return { actions: actions, panel: panel };
   }
 
   /** กล่องสรุปใบจัดส่งบนการ์ด — อ่านอย่างเดียว ใครเปิดหน้านี้ก็เห็น */
@@ -1420,18 +1656,21 @@
   }
 
   function rSearch(doneMsg) {
+    var seq = ++rSearchSeq;   // เหตุผลเดียวกับฝั่งแบต — กันการ์ดขึ้นซ้ำ
     rSetStatus('กำลังโหลด…');
-    $('rResults').innerHTML = '';
     call('apiListRepairs', {
       q: $('rq').value.trim(),
       branch: LOCK_BRANCH || cbRBranchFilter.getValue(),
       status: $('rStatusFilter').value
     }).then(function (res) {
+      if (seq !== rSearchSeq) return;
+      $('rResults').innerHTML = '';
       if (!res || !res.ok) return rSetStatus((res && res.error) || 'โหลดไม่สำเร็จ', true);
       rRenderSummary(res.counts);
       rRender(res.results, res.total);
       if (doneMsg) rSetStatus(doneMsg);
     }).catch(function (err) {
+      if (seq !== rSearchSeq) return;
       rSetStatus('โหลดไม่สำเร็จ: ' + (err.message || err), true);
     });
   }
@@ -1507,39 +1746,85 @@
         el.appendChild(note);
       }
 
-      if (r.updatedAt) {
-        var upd = document.createElement('div');
-        upd.className = 'meta';
-        upd.style.marginTop = '6px';
-        upd.textContent = 'อัปเดตล่าสุด ' + r.updatedAt + (r.updatedBy ? ' โดย ' + r.updatedBy : '');
-        el.appendChild(upd);
-      }
+      var rUpd = document.createElement('div');
+      rUpd.className = 'meta';
+      rUpd.style.marginTop = '6px';
+      rUpd.classList.toggle('hidden', !r.updatedAt);
+      rUpd.textContent = r.updatedAt
+        ? 'อัปเดตล่าสุด ' + r.updatedAt + (r.updatedBy ? ' โดย ' + r.updatedBy : '')
+        : '';
+      el.appendChild(rUpd);
 
       if (IS_ADMIN) {
         var sel = document.createElement('select');
         R_STATUSES.forEach(function (s) { sel.appendChild(new Option(s, s)); });
         sel.value = r.status;
         sel.addEventListener('change', function () {
+          var prev = r.status;   // เหตุผลเดียวกับฝั่งแบต
+          var next = sel.value;
+          var by = localStorage.getItem('bt_by') || '';
           sel.disabled = true;
           call('apiUpdateRepairStatus', {
-            key: ADMIN_KEY, repairId: r.repairId, status: sel.value,
-            updatedBy: localStorage.getItem('bt_by') || ''
+            key: ADMIN_KEY, repairId: r.repairId, status: next, updatedBy: by
           }).then(function (res) {
             sel.disabled = false;
-            if (!res || !res.ok) return rSetStatus((res && res.error) || 'อัปเดตไม่สำเร็จ', true);
-            rSearch();
+            if (!res || !res.ok) {
+              sel.value = prev;
+              return rSetStatus((res && res.error) || 'อัปเดตไม่สำเร็จ', true);
+            }
+            bumpSummary('rSummary', R_STATUSES, prev, next);
+            r.status = next;
+            el.className = 'bat ' + rStatusClass(next);
+            badge.textContent = next;
+            rUpd.textContent = 'อัปเดตล่าสุด เมื่อสักครู่' + (by ? ' โดย ' + by : '');
+            rUpd.classList.remove('hidden');
+            rSetStatus('อัปเดต ' + r.repairId + ' เป็น "' + next + '" แล้ว');
           }).catch(function (err) {
             sel.disabled = false;
+            sel.value = prev;
             rSetStatus('อัปเดตไม่สำเร็จ: ' + (err.message || err), true);
           });
         });
         el.appendChild(sel);
 
-        var edit = document.createElement('button');
-        edit.className = 'ghost';
-        edit.textContent = 'แก้ไขรายละเอียด';
-        edit.addEventListener('click', function () { rOpenForm(r); });
-        el.appendChild(edit);
+        // แก้ไข/ลบ ทำในการ์ดนี้เลย เหมือนฝั่งแบต
+        var gJob, gContract, gVehicle, gBranch, gDate, gNote;
+        var red = cardEditor({
+          label: r.repairId + ' (JOB ' + r.jobNo + ')',
+          saveApi: 'apiSaveRepair',
+          deleteApi: 'apiDeleteRepair',
+          deletePayload: function () { return { key: ADMIN_KEY, repairId: r.repairId }; },
+          build: function (panel) {
+            gJob = editField('เลข JOB', r.jobNo);
+            gContract = editField('เลขที่สัญญา', r.contractNo);
+            gVehicle = editField('รุ่นรถ', r.vehicleModel);
+            gBranch = branchFieldInCard('สาขาที่ส่งซ่อม', r.branch);
+            gDate = editField('วันที่รับเข้า', r.receivedDate, { type: 'date' });
+            gNote = editField('หมายเหตุ', r.note);
+            panel.appendChild(fieldRow(gJob, gContract));
+            panel.appendChild(gVehicle);
+            panel.appendChild(gBranch);
+            panel.appendChild(fieldRow(gDate, gNote));
+            gBranch._mount();
+          },
+          collect: function () {
+            if (!gJob._input.value.trim()) return 'ยังไม่ได้กรอกเลข JOB';
+            var branch = gBranch._combo.getValue();
+            if (!branch) return 'ยังไม่ได้เลือกสาขา';
+            return {
+              key: ADMIN_KEY, repairId: r.repairId,
+              jobNo: gJob._input.value.trim(), contractNo: gContract._input.value.trim(),
+              vehicleModel: gVehicle._input.value.trim(), branch: branch,
+              receivedDate: gDate._input.value, note: gNote._input.value.trim(),
+              status: r.status, updatedBy: localStorage.getItem('bt_by') || ''
+            };
+          },
+          onSaved: function () { rSearch('แก้ไข ' + r.repairId + ' แล้ว'); },
+          onDeleted: function () { rSearch('ลบ ' + r.repairId + ' แล้ว'); },
+          onError: function (m) { rSetStatus(m, true); }
+        });
+        el.appendChild(red.actions);
+        el.appendChild(red.panel);
       }
 
       box.appendChild(el);

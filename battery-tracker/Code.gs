@@ -438,6 +438,62 @@ function apiUpdateBatteryStatus(payload) {
  * base = ข้อมูลที่ใช้ร่วมกัน (สาขา วันที่ อล. สถานะ ผู้บันทึก)
  * items = แต่ละก้อน ถ้ามี batteryId แปลว่าแก้ของเดิม ไม่งั้นเพิ่มใหม่
  */
+/** ลบรายการแบตทิ้งทั้งแถว — ต้องมี key ของแอดมิน */
+function apiDeleteBattery(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+
+    var id = String(payload.batteryId || '').trim();
+    if (!id) throw new Error('ไม่ได้ระบุรายการ');
+
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) throw new Error('ระบบกำลังทำรายการอื่นอยู่ กรุณาลองใหม่');
+    try {
+      var rows = readBatteries_();
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].batteryId === id) {
+          getSheet_(SHEETS.BATTERIES).deleteRow(rows[i]._row);
+          return { ok: true, batteryId: id };
+        }
+      }
+    } finally {
+      lock.releaseLock();
+    }
+    throw new Error('ไม่พบรายการ ' + id);
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** ลบรายการรถส่งซ่อมทิ้งทั้งแถว — ต้องมี key ของแอดมิน */
+function apiDeleteRepair(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+
+    var id = String(payload.repairId || '').trim();
+    if (!id) throw new Error('ไม่ได้ระบุรายการ');
+
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(30000)) throw new Error('ระบบกำลังทำรายการอื่นอยู่ กรุณาลองใหม่');
+    try {
+      var rows = readRepairs_();
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].repairId === id) {
+          getSheet_(SHEETS.REPAIRS).deleteRow(rows[i]._row);
+          return { ok: true, repairId: id };
+        }
+      }
+    } finally {
+      lock.releaseLock();
+    }
+    throw new Error('ไม่พบรายการ ' + id);
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
 function saveBatteries_(base, items) {
   var branch = String(base.branch || '').trim();
   if (!branch) throw new Error('ยังไม่ได้เลือกสาขา');
