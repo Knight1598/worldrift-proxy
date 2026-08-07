@@ -97,6 +97,19 @@ function padBranchCode_(v) {
   return s;
 }
 
+/**
+ * อ่านค่าจากช่องในชีตให้ออกมาเป็นข้อความเสมอ
+ * Google Sheets ชอบแปลง "2026-08-01" เป็นชนิดวันที่ ถ้าเอา String() ครอบตรง ๆ
+ * จะได้ "Sat Aug 01 2026 00:00:00 GMT+0700" ซึ่งเทียบกับช่วงวันที่ไม่ได้
+ */
+function cellText_(v) {
+  if (v === null || v === undefined) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+  }
+  return String(v).trim();
+}
+
 function colIndex_(sheetName, field) {
   var idx = HEADERS[sheetName].indexOf(field);
   if (idx < 0) throw new Error('ไม่รู้จักคอลัมน์ ' + field + ' ในชีต ' + sheetName);
@@ -173,10 +186,26 @@ function apiSaveShipment(payload) {
   }
 }
 
-/** ค้น/กรองรายงานย้อนหลัง */
+/** ค้น/กรองรายงานย้อนหลัง พร้อมยอดสรุปรายวัน */
 function apiSearch(payload) {
   try {
-    return { ok: true, results: searchShipments_(payload || {}) };
+    var found = searchShipments_(payload || {});
+    return {
+      ok: true,
+      results: found.results,
+      days: found.days,
+      totals: found.totals,
+      truncated: found.truncated
+    };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+/** ลบรอบส่งที่บันทึกไปแล้ว 1 รอบ (ลบรายการอะไหล่ของรอบนั้นตามไปด้วย) */
+function apiDeleteShipment(payload) {
+  try {
+    return deleteShipment_(payload || {});
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
@@ -785,16 +814,79 @@ function updateShipment_(payload) {
 
 /** ลบรายการอะไหล่เดิมของรอบนั้นทิ้ง แล้วเขียนชุดใหม่ลงไป */
 function replaceItems_(shipmentId, items) {
+  deleteItemsOf_(shipmentId);
+  if (items.length) writeItems_(shipmentId, items);
+}
+
+/** ลบทุกแถวในชีต Items ที่เป็นของรอบส่งนี้ คืนจำนวนแถวที่ลบไป */
+function deleteItemsOf_(shipmentId) {
   var sh = getSheet_(SHEETS.ITEMS);
   var last = sh.getLastRow();
-  if (last > 1) {
-    var ids = sh.getRange(2, colIndex_('Items', 'shipmentId'), last - 1, 1).getValues();
-    // ลบจากล่างขึ้นบน ไม่งั้นเลขแถวที่เหลือจะเลื่อนจนลบผิดแถว
-    for (var i = ids.length - 1; i >= 0; i--) {
-      if (String(ids[i][0] == null ? '' : ids[i][0]).trim() === shipmentId) sh.deleteRow(i + 2);
+  if (last < 2) return 0;
+  var ids = sh.getRange(2, colIndex_('Items', 'shipmentId'), last - 1, 1).getValues();
+  var removed = 0;
+  // ลบจากล่างขึ้นบน ไม่งั้นเลขแถวที่เหลือจะเลื่อนจนลบผิดแถว
+  for (var i = ids.length - 1; i >= 0; i--) {
+    if (String(ids[i][0] == null ? '' : ids[i][0]).trim() === shipmentId) {
+      sh.deleteRow(i + 2);
+      removed++;
     }
   }
-  if (items.length) writeItems_(shipmentId, items);
+  return removed;
+}
+
+/**
+ * ลบรอบส่ง 1 รอบออกจากรายงาน
+ * ลบทั้งแถวในชีต Shipments และรายการอะไหล่ของรอบนั้นในชีต Items
+ * รูปหลักฐานจะถูกย้ายไปถังขยะของไดรฟ์ (กู้คืนเองได้ภายใน 30 วัน)
+ * ไม่แตะชีต Parts เพราะอะไหล่ที่เคยเพิ่มเข้าตารางแม่อาจถูกใช้ในรอบอื่นแล้ว
+ */
+function deleteShipment_(payload) {
+  var id = String(payload.shipmentId || '').trim();
+  if (!id) throw new Error('ไม่ได้ระบุรายการที่จะลบ');
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) {
+    throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดลบอีกครั้ง');
+  }
+
+  var before, itemsRemoved = 0;
+  try {
+    var sh = getSheet_(SHEETS.SHIPMENTS);
+    before = findShipmentRow_(sh, id);
+    if (!before) throw new Error('ไม่พบรายการ ' + id + ' — อาจถูกลบไปแล้ว');
+
+    // ลบลูกก่อนแม่ ถ้าลบแถวรอบส่งสำเร็จแล้วลบรายการอะไหล่ไม่ได้ จะเหลือรายการลอย
+    itemsRemoved = deleteItemsOf_(id);
+    sh.deleteRow(before.row);
+  } finally {
+    lock.releaseLock();
+  }
+
+  var slipTrashed = false;
+  var slipFileId = String(before.values.slipFileId || '');
+  if (slipFileId) {
+    try {
+      DriveApp.getFileById(slipFileId).setTrashed(true);
+      slipTrashed = true;
+    } catch (err) {
+      // ลบรูปไม่ได้ก็ไม่ควรทำให้การลบรายการล้มเหลว แถวถูกลบไปแล้ว
+      console.warn('ทิ้งรูปหลักฐานไม่สำเร็จ: ' + err);
+    }
+  }
+
+  return {
+    ok: true,
+    deleted: true,
+    shipmentId: id,
+    itemsRemoved: itemsRemoved,
+    slipTrashed: slipTrashed,
+    summary: {
+      prNo: String(before.values.prNo || ''),
+      destBranch: String(before.values.destBranch || ''),
+      shipDate: cellText_(before.values.shipDate)
+    }
+  };
 }
 
 /** ตรวจและปรับข้อมูลจากฟอร์มให้อยู่ในรูปที่พร้อมเขียนลงชีต */
@@ -1055,67 +1147,138 @@ function setShipmentField_(shipmentId, field, value) {
   }
 }
 
-/** ค้นได้ด้วย เลขที่ใบ PR, รหัส/ชื่ออะไหล่, เลขพัสดุ, ชื่อสาขา, จุดฝากลง, เลขที่รอบส่ง */
+/**
+ * ค้นได้ด้วย เลขที่ใบ PR, รหัส/ชื่ออะไหล่, เลขพัสดุ, ชื่อสาขา, จุดฝากลง, เลขที่รอบส่ง
+ * พิมพ์หลายคำคั่นด้วยเว้นวรรคได้ ต้องเจอครบทุกคำถึงจะนับว่าตรง
+ * เช่น "คง แบตเตอรี่" = ส่งไปสาขาคง และในรอบนั้นมีแบตเตอรี่
+ *
+ * คืนทั้งรายการที่ตรง (จำกัดจำนวนตาม limit) และยอดสรุปรายวัน
+ * ยอดสรุปนับจากรายการที่ตรงทั้งหมด ไม่ได้นับแค่หน้าที่ส่งกลับไป
+ * จะได้ไม่หลอกตาเวลาผลลัพธ์ยาวเกิน limit
+ */
 function searchShipments_(opts) {
-  var q = String(opts.q || '').trim().toLowerCase();
+  var terms = searchTerms_(opts.q);
   var zone = String(opts.zone || '').trim();
   var branch = String(opts.branch || '').trim();
   var from = String(opts.from || '').trim();
   var to = String(opts.to || '').trim();
-  var limit = Math.min(Number(opts.limit) || 50, 200);
+  var limit = Math.min(Number(opts.limit) || 50, 500);
   var transferOnly = !!opts.transferOnly;
 
   var shipments = readSheetObjects_(SHEETS.SHIPMENTS).slice(-3000);
   var itemsById = groupItems_();
 
   var results = [];
-  for (var i = shipments.length - 1; i >= 0 && results.length < limit; i--) {
+  var byDate = {};
+  var dates = [];
+  var totals = { shipments: 0, qty: 0, items: 0, days: 0 };
+
+  for (var i = shipments.length - 1; i >= 0; i--) {
     var s = shipments[i];
-    var id = String(s.shipmentId || '');
+    var id = cellText_(s.shipmentId);
     if (!id) continue;
 
-    var shipDate = String(s.shipDate || '');
+    var shipDate = cellText_(s.shipDate);
     if (from && shipDate < from) continue;
     if (to && shipDate > to) continue;
-    if (zone && String(s.zone || '') !== zone) continue;
-    if (branch && String(s.destBranch || '') !== branch) continue;
+    if (zone && cellText_(s.zone) !== zone) continue;
+    if (branch && cellText_(s.destBranch) !== branch) continue;
 
     var isTransfer = String(s.isTransfer).toUpperCase() === 'TRUE';
     if (transferOnly && !isTransfer) continue;
 
     var items = itemsById[id] || [];
-    if (q) {
-      var haystack = [
-        id, s.prNo, s.destBranch, s.zone, s.dropPoint, s.carrier,
-        s.trackingNo, s.sender, s.receiverName, s.note, s.itemsSummary
-      ].join(' ').toLowerCase();
-      var itemText = items.map(function (it) {
-        return it.partCode + ' ' + it.partName + ' ' + it.note;
-      }).join(' ').toLowerCase();
-      if (haystack.indexOf(q) < 0 && itemText.indexOf(q) < 0) continue;
+    if (terms.length && !matchesTerms_(terms, s, id, items)) continue;
+
+    var qty = sumItemQty_(items);
+
+    // ยอดรวมรายวันนับทุกแถวที่ตรงเงื่อนไข แม้จะเกิน limit จนไม่ได้ส่งรายละเอียดกลับไป
+    var day = byDate[shipDate];
+    if (!day) {
+      day = byDate[shipDate] = { date: shipDate, shipments: 0, qty: 0, items: 0 };
+      dates.push(shipDate);
     }
+    day.shipments++;
+    day.qty += qty;
+    day.items += items.length;
+
+    totals.shipments++;
+    totals.qty += qty;
+    totals.items += items.length;
+
+    if (results.length >= limit) continue;
 
     results.push({
       shipmentId: id,
       shipDate: shipDate,
-      prNo: String(s.prNo || ''),
-      destBranch: String(s.destBranch || ''),
-      zone: String(s.zone || ''),
-      dropPoint: String(s.dropPoint || ''),
+      prNo: cellText_(s.prNo),
+      destBranch: cellText_(s.destBranch),
+      zone: cellText_(s.zone),
+      dropPoint: cellText_(s.dropPoint),
       isTransfer: isTransfer,
-      carrier: String(s.carrier || ''),
-      trackingNo: String(s.trackingNo || ''),
+      carrier: cellText_(s.carrier),
+      trackingNo: cellText_(s.trackingNo),
       boxCount: s.boxCount === '' ? '' : String(s.boxCount),
-      sender: String(s.sender || ''),
-      receiverName: String(s.receiverName || ''),
-      note: String(s.note || ''),
-      slipFileId: String(s.slipFileId || ''),
-      updatedAt: String(s.updatedAt || ''),
-      updatedBy: String(s.updatedBy || ''),
+      sender: cellText_(s.sender),
+      receiverName: cellText_(s.receiverName),
+      note: cellText_(s.note),
+      slipFileId: cellText_(s.slipFileId),
+      updatedAt: cellText_(s.updatedAt),
+      updatedBy: cellText_(s.updatedBy),
+      totalQty: qty,
       items: items
     });
   }
-  return results;
+
+  totals.days = dates.length;
+  dates.sort();
+  dates.reverse();          // วันล่าสุดอยู่บนสุด ตรงกับลำดับการ์ดในรายงาน
+
+  return {
+    results: results,
+    days: dates.map(function (d) { return byDate[d]; }),
+    totals: totals,
+    truncated: totals.shipments > results.length
+  };
+}
+
+/** แยกคำค้นด้วยเว้นวรรค ตัดคำซ้ำทิ้ง */
+function searchTerms_(q) {
+  var seen = {};
+  return String(q || '').trim().toLowerCase().split(/\s+/)
+    .filter(function (t) {
+      if (!t || seen[t]) return false;
+      seen[t] = true;
+      return true;
+    });
+}
+
+/** ต้องเจอครบทุกคำ (จะอยู่คนละช่องก็ได้) ถึงจะนับว่าตรง */
+function matchesTerms_(terms, s, id, items) {
+  var hay = [
+    id, s.prNo, s.destBranch, s.zone, s.dropPoint, s.carrier,
+    s.trackingNo, s.sender, s.receiverName, s.note, s.itemsSummary, cellText_(s.shipDate)
+  ].map(cellText_).join(' ') + ' ' + items.map(function (it) {
+    return it.partCode + ' ' + it.partName + ' ' + it.note;
+  }).join(' ');
+
+  hay = hay.toLowerCase();
+  // เทียบแบบตัดช่องว่างออกด้วย เผื่อรหัสในชีตมีเว้นวรรคคั่นแต่คนค้นพิมพ์ติดกัน
+  var tight = hay.replace(/\s+/g, '');
+
+  return terms.every(function (t) {
+    return hay.indexOf(t) >= 0 || tight.indexOf(t) >= 0;
+  });
+}
+
+/** รวมจำนวนชิ้นของรอบส่งหนึ่ง (ช่องที่ว่างหรือกรอกเป็นตัวหนังสือ นับเป็น 0) */
+function sumItemQty_(items) {
+  var total = 0;
+  (items || []).forEach(function (it) {
+    var n = Number(String(it.qty == null ? '' : it.qty).replace(/,/g, ''));
+    if (!isNaN(n) && isFinite(n)) total += n;
+  });
+  return total;
 }
 
 function groupItems_() {
@@ -1148,7 +1311,9 @@ var SLIP_FOLDER_NAME = 'หลักฐานการส่งอะไหล�
  */
 function parseSlipText_(text) {
   var raw = String(text || '');
-  var lines = raw.split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l; });
+  var lines = raw.split('\n')
+    .map(normalizeSlipLine_)
+    .filter(function (l) { return l; });
 
   var out = { prNo: '', shipDate: '', originCode: '', destCode: '', destName: '', items: [] };
 
@@ -1183,28 +1348,7 @@ function parseSlipText_(text) {
     out.shipDate = year + '-' + pad2_(mDate[2]) + '-' + pad2_(mDate[1]);
   }
 
-  // แถวรายการสินค้า: ลำดับ รหัส [ซีเรียล] ชื่อสินค้า [สี] จำนวน ราคาขาย รวมขาย
-  var rowRe = /^(\d{1,3})\s+(\S+)\s+(.+?)\s+(\d[\d,]*)\s+([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/;
-  lines.forEach(function (line) {
-    var m = line.match(rowRe);
-    if (m) {
-      out.items.push({
-        partCode: m[2],
-        partName: String(m[3]).trim(),
-        qty: Number(String(m[4]).replace(/,/g, ''))
-      });
-      return;
-    }
-    // สำรอง: บรรทัดที่มีรหัสสินค้า (ตัวอักษร 1-4 ตัว ตามด้วยเลข 6-10 หลัก) แล้วมีราคาแบบ .00
-    var m2 = line.match(/([ก-๙A-Za-z]{1,4}\d{6,10})\s+(.+?)\s+(\d[\d,]*)\s+[\d,]+\.\d{2}/);
-    if (m2) {
-      out.items.push({
-        partCode: m2[1],
-        partName: String(m2[2]).trim(),
-        qty: Number(String(m2[3]).replace(/,/g, ''))
-      });
-    }
-  });
+  out.items = parseSlipItems_(lines);
 
   return out;
 }
@@ -1212,6 +1356,119 @@ function parseSlipText_(text) {
 function pad2_(v) {
   var s = String(v);
   return s.length < 2 ? '0' + s : s;
+}
+
+/* ----- อ่านรายการอะไหล่จากใบโอนย้าย: เอาแค่ รหัสสินค้า / ชื่อสินค้า / จำนวน -----
+ *
+ * ในใบจริงหนึ่งแถวมีทั้งลำดับ ซีเรียล สี ราคาขาย และยอดรวม
+ * ระบบสนใจแค่สามช่อง ที่เหลือตัดทิ้งให้หมดตั้งแต่ตอนอ่าน
+ * จะได้ไม่มีราคาหรือซีเรียลหลุดไปปนอยู่ในชื่ออะไหล่ตอนบันทึก
+ */
+
+var THAI_DIGITS = '๐๑๒๓๔๕๖๗๘๙';
+
+/** ตัวเลขไทย → อารบิก, ขีดแปลก ๆ และเส้นตาราง → เว้นวรรค, บีบช่องว่างซ้ำ */
+function normalizeSlipLine_(line) {
+  return String(line == null ? '' : line)
+    .replace(/[๐-๙]/g, function (d) { return String(THAI_DIGITS.indexOf(d)); })
+    .replace(/[|¦│]/g, ' ')
+    .replace(/[‐-―]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// บรรทัดหัวตาราง/ท้ายใบ ไม่ใช่รายการสินค้า
+var SLIP_SKIP_RE = /(รวมทั้งสิ้น|รวมเงิน|ยอดรวม|จำนวนเงิน|ภาษี|ลายเซ็น|ลงชื่อ|ผู้รับของ|ผู้ส่งของ|ผู้อนุมัติ|ผู้จัดของ|หน้าที่|เลขที่ใบ|สาขาต้นทาง|สาขาปลายทาง|รหัสสินค้า)/;
+
+// รหัสสินค้า เช่น aa67001106, AA67001106, กก67001106 — ตัวอักษร 1-4 ตัวแล้วตามด้วยเลข
+var SLIP_CODE_RE = /^([A-Za-z฀-๿]{1,4}\d{5,12}[A-Za-z0-9]{0,3})\s+(.+)$/;
+
+// ราคา/ยอดเงิน มีทศนิยมสองตำแหน่งเสมอ ใช้เป็นเส้นแบ่งว่าจบชื่อสินค้าตรงไหน
+var SLIP_MONEY_RE = /\d{1,3}(?:,\d{3})*\.\d{2}\b/;
+
+function parseSlipItems_(lines) {
+  var out = [];
+  var seen = {};
+
+  for (var i = 0; i < lines.length; i++) {
+    var item = extractSlipItem_(lines[i]);
+    if (!item) continue;
+
+    // OCR ตัดบรรทัดกลางรายการบ่อย ถ้าอ่านจำนวนไม่ได้ ลองดูบรรทัดถัดไปที่มีแต่ตัวเลข
+    if (item.qty === '' && i + 1 < lines.length && /^[\d.,\s]+$/.test(lines[i + 1])) {
+      var nums = lines[i + 1].match(/\d[\d,]*(?:\.\d+)?/g) || [];
+      if (nums.length) {
+        item.qty = toQty_(nums[0]);
+        i++;
+      }
+    }
+
+    // OCR อ่านบรรทัดเดิมซ้ำได้ ถ้าเหมือนกันทั้งรหัส ชื่อ และจำนวน ถือว่าเป็นแถวเดียวกัน
+    var key = (item.partCode + '|' + item.partName + '|' + item.qty).toLowerCase();
+    if (seen[key]) continue;
+    seen[key] = true;
+
+    out.push({
+      partCode: item.partCode,
+      partName: item.partName,
+      qty: item.qty,
+      needsCheck: item.qty === '' || !item.partName
+    });
+  }
+  return out;
+}
+
+/** ดึงสามช่องที่ต้องการออกจากบรรทัดเดียว คืน null ถ้าบรรทัดนี้ไม่ใช่รายการสินค้า */
+function extractSlipItem_(line) {
+  if (!line || SLIP_SKIP_RE.test(line)) return null;
+
+  // ตัดเลขลำดับหน้าบรรทัดทิ้งก่อน เช่น "1 aa67001106 ..." หรือ "1. aa67001106 ..."
+  var body = line.replace(/^\d{1,3}[.)]?\s+/, '');
+
+  var m = body.match(SLIP_CODE_RE);
+  if (!m) return null;
+
+  var code = m[1];
+  var rest = m[2];
+
+  // ทุกอย่างหลังราคาช่องแรกคือช่องเงิน ไม่เกี่ยวกับชื่อหรือจำนวน ตัดทิ้ง
+  var money = rest.match(SLIP_MONEY_RE);
+  var head = money ? rest.slice(0, money.index) : rest;
+
+  // จำนวนคือตัวเลขตัวสุดท้ายก่อนช่องเงิน (ในใบเขียนได้ทั้ง "2" และ "2.00")
+  // บางใบพิมพ์หน่วยต่อท้ายจำนวนด้วย เช่น "2 ชิ้น" หรือ "2 EA" ก็ยอมให้มีได้
+  var qty = '';
+  var name = head;
+  var mQty = head.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:ชิ้น|อัน|ตัว|ชุด|เส้น|ใบ|กล่อง|คู่|PCS|PC|EA|SET|UNIT)?\s*$/i);
+  if (mQty) {
+    qty = toQty_(mQty[1]);
+    name = head.slice(0, mQty.index);
+  } else if (money && (rest.match(new RegExp(SLIP_MONEY_RE.source, 'g')) || []).length >= 3) {
+    // บางใบพิมพ์จำนวนเป็นทศนิยมด้วย เช่น "2.00 950.00 1,900.00"
+    // มีเลขทศนิยมสามช่องติดกันเมื่อไหร่ ช่องแรกคือจำนวน ไม่ใช่ราคา
+    qty = toQty_(money[0]);
+    name = head;
+  }
+
+  return { partCode: code, partName: cleanPartName_(name), qty: qty };
+}
+
+/** เอาซีเรียล เลขลอย และเครื่องหมายคั่นออกจากชื่อสินค้า ให้เหลือแต่ชื่อจริง */
+function cleanPartName_(name) {
+  return String(name || '')
+    .replace(/\b[A-Za-z0-9]*\d[A-Za-z0-9]{9,}\b/g, ' ')   // ซีเรียลยาว ๆ ที่พิมพ์ปนมากับชื่อ
+    .replace(/\s\d{5,}\s/g, ' ')                          // เลขล้วนยาว ๆ กลางชื่อ
+    .replace(/[\-–—:;,\/]+\s*$/, '')
+    .replace(/^\s*[\-–—:;,\/]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** "1,200.00" → 1200 ; จำนวนติดลบหรืออ่านไม่ออก คืนค่าว่างให้ผู้ใช้กรอกเอง */
+function toQty_(v) {
+  var n = Number(String(v == null ? '' : v).replace(/,/g, ''));
+  if (isNaN(n) || !isFinite(n) || n < 0) return '';
+  return n;
 }
 
 /** หาสาขาจากรหัสสาขา (เทียบแบบเติม 0 ให้ครบ 4 หลักทั้งสองฝั่ง) */
@@ -1258,11 +1515,14 @@ function resolveSlip_(parsed) {
     var hit = byCode[code.toLowerCase()];
     // OCR มักอ่านช่องว่างเกินมา ลองตัดช่องว่างในรหัสแล้วหาอีกครั้ง
     if (!hit) hit = byCode[code.replace(/\s+/g, '').toLowerCase()];
+    var partName = hit ? hit.name : String(it.partName || '').trim();
     result.items.push({
       partCode: hit ? hit.code : code,
-      partName: hit ? hit.name : String(it.partName || '').trim(),
+      partName: partName,
       qty: it.qty,
       matched: !!hit,
+      // ช่องไหนอ่านมาไม่ครบ ให้หน้าเว็บทำเครื่องหมายไว้ว่าต้องตรวจก่อนบันทึก
+      needsCheck: !!it.needsCheck || !partName || it.qty === '' || !code,
       status: hit ? hit.status : '',
       replacedBy: hit ? hit.replacedBy : ''
     });

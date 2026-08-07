@@ -248,6 +248,98 @@
 
   .result-id { font-size: 20px; font-weight: 700; margin-bottom: 6px; }
 
+  /* ปุ่มรอง สีอ่อน ใช้คู่กับปุ่มหลัก */
+  button.ghost {
+    width: 100%;
+    padding: 14px;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  /* ปุ่มช่วงวันที่ด่วน */
+  .quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .quick button {
+    flex: 1 1 auto;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--muted);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .quick button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+  /* ตัวกรองที่เลือกไว้ตอนนี้ กดกากบาทเพื่อเอาออกทีละอัน */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .chips .f {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 6px 4px 12px; font-size: 14px;
+  }
+  .chips .f button {
+    border: none; background: none; color: var(--muted);
+    font-size: 16px; line-height: 1; cursor: pointer; padding: 0 4px;
+  }
+
+  /* หัวข้อวัน คั่นรายงานเป็นวัน ๆ พร้อมยอดรวมของวันนั้น */
+  .day {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--primary);
+    border-radius: 10px;
+    padding: 9px 12px;
+    margin: 14px 0 8px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+  }
+  .day .d { font-size: 16px; font-weight: 600; }
+  .day .n { font-size: 14px; color: var(--muted); }
+  .day .n strong { color: var(--text); }
+
+  .ship .foot { display: flex; gap: 8px; margin-top: 10px; }
+  .ship .foot button {
+    flex: 1;
+    background: none;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    padding: 9px;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--primary);
+  }
+  .ship .foot button.danger { color: var(--err-text); }
+  .ship .confirm {
+    background: var(--err-bg);
+    color: var(--err-text);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    margin-top: 10px;
+  }
+  .ship .confirm .foot button { border-style: solid; border-color: var(--err-text); }
+
+  /* กล่องยืนยันว่าตรวจรายการที่อ่านจากรูปแล้ว */
+  .verify {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    color: var(--warn-text);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .verify .switch { margin: 0; }
+  .verify .switch label { color: var(--warn-text); }
+  .verify .why { font-size: 13px; margin-top: 4px; }
+  .item-wrap.check .item-row input.name,
+  .item-wrap.check .item-row input.qty { border-color: var(--warn-border); }
+
   .ship {
     border: 1px solid var(--line);
     border-radius: var(--radius);
@@ -352,6 +444,7 @@
       <div class="card">
         <div id="batchError" class="banner err hidden"></div>
         <div id="batchDone" class="banner ok hidden"></div>
+        <button type="button" class="add-item hidden" id="bVerifyAll">✔ ตรวจครบแล้วทุกใบ</button>
         <button type="button" class="primary" id="batchSaveBtn">บันทึกทั้งหมด</button>
         <button type="button" class="add-item" id="batchAddBtn">+ แนบรูปเพิ่ม</button>
         <button type="button" class="add-item" id="batchCancelBtn">ยกเลิก กลับไปบันทึกทีละใบ</button>
@@ -478,6 +571,15 @@
 
       <div class="card">
         <h2>รายการอะไหล่ *</h2>
+
+        <div class="verify hidden" id="verifyWrap">
+          <div class="switch">
+            <input type="checkbox" id="verifyItems">
+            <label for="verifyItems">ตรวจรายการที่อ่านจากรูปแล้ว ถูกต้องครบทุกช่อง</label>
+          </div>
+          <div class="why" id="verifyWhy"></div>
+        </div>
+
         <div id="items"></div>
         <button type="button" class="add-item" id="addItem">+ เพิ่มรายการ</button>
       </div>
@@ -539,12 +641,24 @@
         </div>
       </div>
 
+      <div class="quick" id="quickRange">
+        <button type="button" data-range="today">วันนี้</button>
+        <button type="button" data-range="7">7 วันล่าสุด</button>
+        <button type="button" data-range="month">เดือนนี้</button>
+        <button type="button" data-range="all">ทุกวัน</button>
+      </div>
+
       <div class="switch">
         <input type="checkbox" id="transferOnly">
         <label for="transferOnly">ดูเฉพาะรายการที่ฝากลงที่อื่น</label>
       </div>
 
-      <button class="primary" id="searchBtn">ค้นหา</button>
+      <div class="chips hidden" id="activeFilters"></div>
+
+      <div class="row">
+        <button class="primary" id="searchBtn">ค้นหา</button>
+        <button type="button" class="ghost" id="clearSearchBtn">ล้างการค้นหา</button>
+      </div>
     </div>
 
     <div id="searchStatus" class="card hidden"></div>
@@ -1054,8 +1168,27 @@
       }
     });
 
-    comboZoneFilter = makeCombo('zoneFilter');
-    comboBranchFilter = makeCombo('branchFilter');
+    // ตัวกรองในรายงาน: เลือกเขตแล้วเหลือเฉพาะสาขาในเขตนั้น และค้นให้ทันทีที่เลือก
+    comboZoneFilter = makeCombo('zoneFilter', {
+      onChange: function (zone) {
+        applyFilterZoneScope(zone);
+        var current = findBranch(comboBranchFilter.getValue());
+        if (current && zone && current.zone !== zone) comboBranchFilter.clear();
+        if (historyLoaded) search();
+      }
+    });
+
+    comboBranchFilter = makeCombo('branchFilter', {
+      onChange: function (name) {
+        var b = findBranch(name);
+        // เลือกสาขาก่อนก็ได้ ระบบเติมเขตให้เองเหมือนฝั่งฟอร์ม
+        if (b && b.zone && b.zone !== comboZoneFilter.getValue()) {
+          comboZoneFilter.setValue(b.zone);
+          applyFilterZoneScope(b.zone);
+        }
+        if (historyLoaded) search();
+      }
+    });
 
     // ช่อง "ใช้รหัสนี้แทน" ในหน้าจัดการอะไหล่ — ค้นจากตารางอะไหล่เหมือนกัน
     comboReplacedBy = makeCombo('pfReplacedBy', {
@@ -1091,6 +1224,18 @@
     var count = MASTERS.branches.filter(function (b) { return b.zone === zone; }).length;
     comboBranch.setScope(function (o) { return o.zone === zone; });
     comboBranch.setPlaceholder('เลือกสาขา (' + count + ' สาขาในเขตนี้)');
+  }
+
+  /** อย่างเดียวกันแต่เป็นช่องกรองในหน้ารายงาน */
+  function applyFilterZoneScope(zone) {
+    if (!zone) {
+      comboBranchFilter.setScope(null);
+      comboBranchFilter.setPlaceholder('ทุกสาขา');
+      return;
+    }
+    var count = MASTERS.branches.filter(function (b) { return b.zone === zone; }).length;
+    comboBranchFilter.setScope(function (o) { return o.zone === zone; });
+    comboBranchFilter.setPlaceholder('ทุกสาขาในเขตนี้ (' + count + ' สาขา)');
   }
 
   function findBranch(name) {
@@ -1208,6 +1353,49 @@
 
   $('addItem').addEventListener('click', function () { addItemRow(true); });
 
+  /* ---------- ด่านตรวจรายการที่อ่านมาจากรูป ----------
+   *
+   * OCR อ่านผิดได้เสมอ โดยเฉพาะจำนวนกับตัวเลขในรหัส
+   * รายการที่คีย์เองไม่ต้องผ่านด่านนี้ เฉพาะชุดที่ระบบเติมให้จากรูปเท่านั้น
+   */
+
+  function showVerify(itemCount, checkCount) {
+    $('verifyItems').checked = false;
+    $('verifyWhy').textContent = checkCount
+      ? 'ระบบอ่านมา ' + itemCount + ' รายการ และมี ' + checkCount +
+        ' รายการที่อ่านได้ไม่ครบ (ช่องกรอบส้ม) กรุณาเติมให้ครบ'
+      : 'ระบบอ่านมา ' + itemCount + ' รายการ กรุณาเทียบกับใบจริงอีกครั้ง';
+    $('verifyWrap').classList.remove('hidden');
+  }
+
+  function hideVerify() {
+    $('verifyWrap').classList.add('hidden');
+    $('verifyItems').checked = false;
+  }
+
+  function needsVerify() {
+    return !$('verifyWrap').classList.contains('hidden') && !$('verifyItems').checked;
+  }
+
+  /** ทำเครื่องหมายช่องที่ OCR อ่านมาไม่ครบ ให้เห็นว่าต้องเติมตรงไหน */
+  function flagRow(wrap, needsCheck) {
+    wrap.classList.toggle('check', !!needsCheck);
+  }
+
+  /**
+   * คืนชื่อ/รหัสของรายการแรกที่ยังไม่ได้ใส่จำนวน (ไม่มีก็คืนค่าว่าง)
+   * ปล่อยผ่านไม่ได้ เพราะฝั่งเซิร์ฟเวอร์จะเติมให้เป็น 1 เอง แล้วยอดรวมรายวันจะเพี้ยน
+   */
+  function missingQty(items) {
+    for (var i = 0; i < items.length; i++) {
+      var n = Number(items[i].qty);
+      if (items[i].qty === '' || isNaN(n) || n <= 0) {
+        return items[i].partCode || items[i].partName || 'รายการที่ ' + (i + 1);
+      }
+    }
+    return '';
+  }
+
   /* ---------- บันทึก ---------- */
 
   // ผู้ใช้ยืนยันแล้วว่าเป็นคนละรอบ — ส่งใหม่โดยข้ามการตรวจซ้ำ
@@ -1251,6 +1439,13 @@
     if (!payload.destBranch) return showFormError('ยังไม่ได้เลือกสาขาปลายทาง');
     if (!payload.items.length) return showFormError('ยังไม่ได้ใส่รายการอะไหล่');
     if (payload.isTransfer && !payload.dropPoint) return showFormError('เลือกฝากลงที่อื่นแล้ว ต้องระบุจุดฝากลงด้วย');
+    var noQty = missingQty(payload.items);
+    if (noQty) return showFormError('ยังไม่ได้ใส่จำนวนของ ' + noQty);
+    if (needsVerify()) {
+      $('verifyWrap').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return showFormError('รายการอะไหล่ชุดนี้อ่านมาจากรูป — ตรวจ รหัสสินค้า / ชื่อสินค้า / จำนวน ' +
+        'ให้ครบก่อน แล้วติ๊กยืนยันด้านบนรายการ');
+    }
 
     localStorage.setItem('pd_sender', payload.sender);
     localStorage.setItem('pd_carrier', payload.carrier);
@@ -1348,6 +1543,7 @@
     $('note').value = '';
     $('items').innerHTML = '';
     addItemRow();
+    hideVerify();
     slipImage = null;
     allowDuplicateOnce = false;
     $('dupWarn').classList.add('hidden');
@@ -1439,8 +1635,16 @@
 
   /* ---------- รายงาน ---------- */
 
-  $('searchBtn').addEventListener('click', search);
+  $('searchBtn').addEventListener('click', function () { search(); });
   $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
+  $('clearSearchBtn').addEventListener('click', clearSearch);
+  $('transferOnly').addEventListener('change', function () { search(); });
+  $('from').addEventListener('change', function () { renderActiveFilters(); });
+  $('to').addEventListener('change', function () { renderActiveFilters(); });
+
+  Array.prototype.forEach.call($('quickRange').querySelectorAll('button'), function (btn) {
+    btn.addEventListener('click', function () { applyQuickRange(btn.getAttribute('data-range')); });
+  });
 
   function setSearchStatus(msg, isError) {
     var box = $('searchStatus');
@@ -1448,13 +1652,95 @@
     box.innerHTML = '';
     var div = document.createElement('div');
     div.className = isError ? 'banner err' : 'muted';
+    div.style.whiteSpace = 'pre-line';
     div.textContent = msg;
     box.appendChild(div);
   }
 
+  /** ตั้งช่วงวันที่ด่วน แล้วค้นให้เลย */
+  function applyQuickRange(range) {
+    var today = new Date();
+    function iso(d) {
+      return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0');
+    }
+
+    if (range === 'all') {
+      $('from').value = '';
+      $('to').value = '';
+    } else if (range === 'today') {
+      $('from').value = iso(today);
+      $('to').value = iso(today);
+    } else if (range === 'month') {
+      $('from').value = iso(new Date(today.getFullYear(), today.getMonth(), 1));
+      $('to').value = iso(today);
+    } else {
+      var days = Number(range) || 7;
+      var back = new Date(today.getTime());
+      back.setDate(back.getDate() - (days - 1));
+      $('from').value = iso(back);
+      $('to').value = iso(today);
+    }
+    markQuickRange(range);
+    search();
+  }
+
+  function markQuickRange(range) {
+    Array.prototype.forEach.call($('quickRange').querySelectorAll('button'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-range') === range);
+    });
+  }
+
+  /** ล้างทุกเงื่อนไขที่เลือกไว้ แล้วค้นใหม่เป็นรายการล่าสุดทั้งหมด */
+  function clearSearch() {
+    $('q').value = '';
+    comboZoneFilter.clear();
+    comboBranchFilter.clear();
+    applyFilterZoneScope('');
+    $('from').value = '';
+    $('to').value = '';
+    $('transferOnly').checked = false;
+    markQuickRange('');
+    search();
+  }
+
+  /** แสดงเงื่อนไขที่ใช้อยู่เป็นชิป กดกากบาทเอาออกทีละอันได้ */
+  function renderActiveFilters() {
+    var box = $('activeFilters');
+    box.innerHTML = '';
+
+    var active = [];
+    if ($('q').value.trim()) active.push({ text: 'คำค้น: ' + $('q').value.trim(), off: function () { $('q').value = ''; } });
+    if (comboZoneFilter.getValue()) active.push({ text: 'เขต ' + comboZoneFilter.getValue(), off: function () { comboZoneFilter.clear(); } });
+    if (comboBranchFilter.getValue()) active.push({ text: 'สาขา' + comboBranchFilter.getValue(), off: function () { comboBranchFilter.clear(); } });
+    if ($('from').value) active.push({ text: 'ตั้งแต่ ' + thaiDate($('from').value), off: function () { $('from').value = ''; markQuickRange(''); } });
+    if ($('to').value) active.push({ text: 'ถึง ' + thaiDate($('to').value), off: function () { $('to').value = ''; markQuickRange(''); } });
+    if ($('transferOnly').checked) active.push({ text: 'เฉพาะที่ฝากลงที่อื่น', off: function () { $('transferOnly').checked = false; } });
+
+    box.classList.toggle('hidden', !active.length);
+    active.forEach(function (f) {
+      var chip = document.createElement('span');
+      chip.className = 'f';
+      chip.appendChild(document.createTextNode(f.text));
+      var x = document.createElement('button');
+      x.type = 'button';
+      x.title = 'เอาเงื่อนไขนี้ออก';
+      x.textContent = '×';
+      x.addEventListener('click', function () { f.off(); search(); });
+      chip.appendChild(x);
+      box.appendChild(chip);
+    });
+  }
+
+  // กันผลค้นหาเก่ามาแทรกทีหลังจนการ์ดซ้ำ — นับรอบไว้ แล้วรับเฉพาะรอบล่าสุด
+  var searchSeq = 0;
+
   function search() {
+    var seq = ++searchSeq;
+    renderActiveFilters();
     setSearchStatus('กำลังค้นหา…');
-    $('results').innerHTML = '';
+
     call('apiSearch', {
       q: $('q').value.trim(),
       zone: comboZoneFilter.getValue(),
@@ -1462,28 +1748,67 @@
       from: $('from').value,
       to: $('to').value,
       transferOnly: $('transferOnly').checked,
-      limit: 50
+      limit: 200
     }).then(function (res) {
+      if (seq !== searchSeq) return;              // มีการค้นใหม่แซงไปแล้ว ทิ้งผลเก่า
+      $('results').innerHTML = '';
       if (!res || !res.ok) return setSearchStatus((res && res.error) || 'ค้นหาไม่สำเร็จ', true);
-      renderResults(res.results);
+      renderResults(res.results || [], res);
     }).catch(function (err) {
+      if (seq !== searchSeq) return;
+      $('results').innerHTML = '';
       setSearchStatus('ค้นหาไม่สำเร็จ: ' + (err.message || err), true);
     });
   }
 
-  function renderResults(rows) {
-    if (!rows.length) return setSearchStatus('ไม่พบรายการที่ตรงกับเงื่อนไข');
-    setSearchStatus('พบ ' + rows.length + ' รายการ (แสดงล่าสุดก่อน)');
+  /**
+   * รายงานแบ่งเป็นวัน ๆ ตามวันจัดส่ง แต่ละวันมีหัวข้อบอกยอดของวันนั้น
+   * ยอดรวมด้านบนมาจากเซิร์ฟเวอร์ จึงนับครบทุกแถวที่ตรงเงื่อนไข
+   * ต่อให้รายละเอียดที่ส่งกลับมาถูกตัดเหลือแค่ 200 รายการแรกก็ตาม
+   */
+  function renderResults(rows, res) {
+    var totals = (res && res.totals) || null;
+    var days = (res && res.days) || [];
+
+    if (!rows.length) {
+      return setSearchStatus(totals && totals.shipments
+        ? 'ไม่พบรายการที่ตรงกับเงื่อนไข'
+        : 'ไม่พบรายการที่ตรงกับเงื่อนไข — ลองกด "ล้างการค้นหา" แล้วค้นใหม่');
+    }
+
+    var lines = [];
+    if (totals) {
+      lines.push('พบ ' + totals.shipments + ' รอบส่ง • รวม ' + fmtNum(totals.qty) + ' ชิ้น • ' +
+        totals.days + ' วัน');
+      if (res.truncated) {
+        lines.push('แสดงรายละเอียด ' + rows.length + ' รอบล่าสุด (ยอดรวมด้านบนนับครบทุกรอบ) — ' +
+          'ระบุช่วงวันที่เพื่อดูให้ครบ');
+      }
+    } else {
+      lines.push('พบ ' + rows.length + ' รายการ (แสดงล่าสุดก่อน)');
+    }
+    setSearchStatus(lines.join('\n'));
+
+    var dayInfo = {};
+    days.forEach(function (d) { dayInfo[d.date] = d; });
 
     var box = $('results');
+    var lastDate = null;
+
     rows.forEach(function (s) {
+      if (s.shipDate !== lastDate) {
+        lastDate = s.shipDate;
+        box.appendChild(dayHeader(s.shipDate, dayInfo[s.shipDate], rows));
+      }
+
       var el = document.createElement('div');
       el.className = 'ship' + (s.isTransfer ? ' transfer' : '');
 
       var head = document.createElement('div');
       head.className = 'head';
       var left = document.createElement('span');
-      left.textContent = thaiDate(s.shipDate) + (s.prNo ? ' • PR ' + s.prNo : '');
+      // วันที่อยู่บนหัวข้อวันแล้ว ในการ์ดจึงเอาเลขที่ใบขึ้นก่อน
+      left.textContent = s.prNo ? 'PR ' + s.prNo : thaiDate(s.shipDate);
       var right = document.createElement('span');
       right.textContent = s.shipmentId;
       head.appendChild(left);
@@ -1551,15 +1876,131 @@
         el.appendChild(upd);
       }
 
+      var foot = document.createElement('div');
+      foot.className = 'foot';
+
       var editBtn = document.createElement('button');
       editBtn.type = 'button';
-      editBtn.className = 'add-item';
-      editBtn.textContent = 'แก้ไขรายการนี้';
+      editBtn.textContent = '✏️ แก้ไข';
       editBtn.addEventListener('click', function () { startEdit(s); });
-      el.appendChild(editBtn);
+      foot.appendChild(editBtn);
 
+      var delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'danger';
+      delBtn.textContent = '🗑 ลบ';
+      delBtn.addEventListener('click', function () { askDelete(el, s); });
+      foot.appendChild(delBtn);
+
+      el.appendChild(foot);
       box.appendChild(el);
     });
+  }
+
+  /** หัวข้อของวัน: วันที่ + จำนวนรอบส่ง + จำนวนชิ้นรวมของวันนั้น */
+  function dayHeader(date, info, rows) {
+    if (!info) {
+      // เผื่อเซิร์ฟเวอร์รุ่นเก่าที่ยังไม่ส่งยอดสรุปมา ก็นับเองจากการ์ดที่มี
+      info = { shipments: 0, qty: 0 };
+      rows.forEach(function (r) {
+        if (r.shipDate !== date) return;
+        info.shipments++;
+        info.qty += sumQty(r.items);
+      });
+    }
+
+    var el = document.createElement('div');
+    el.className = 'day';
+
+    var d = document.createElement('span');
+    d.className = 'd';
+    d.textContent = '📅 ' + thaiDate(date || '') + (date ? '' : ' (ไม่ระบุวันจัดส่ง)');
+
+    var n = document.createElement('span');
+    n.className = 'n';
+    n.innerHTML = '';
+    n.appendChild(document.createTextNode(info.shipments + ' รอบ • '));
+    var strong = document.createElement('strong');
+    strong.textContent = fmtNum(info.qty) + ' ชิ้น';
+    n.appendChild(strong);
+
+    el.appendChild(d);
+    el.appendChild(n);
+    return el;
+  }
+
+  function sumQty(items) {
+    var total = 0;
+    (items || []).forEach(function (it) {
+      var v = Number(String(it.qty == null ? '' : it.qty).replace(/,/g, ''));
+      if (!isNaN(v) && isFinite(v)) total += v;
+    });
+    return total;
+  }
+
+  function fmtNum(n) {
+    return String(Number(n) || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  /* ---------- ลบรายการในรายงาน ----------
+   *
+   * ถามยืนยันในการ์ดเลย ไม่ใช้กล่อง confirm ของเบราว์เซอร์
+   * เพราะในหน้าเว็บของ Apps Script ที่รันในกรอบ iframe บนมือถือ กล่องนั้นบางเครื่องไม่ขึ้น
+   */
+  function askDelete(card, s) {
+    if (card.querySelector('.confirm')) return;      // กดซ้ำ ก็ยังเป็นกล่องเดิม
+
+    var box = document.createElement('div');
+    box.className = 'confirm';
+
+    var msg = document.createElement('div');
+    msg.textContent = 'ลบรอบ ' + s.shipmentId +
+      (s.prNo ? ' (ใบ ' + s.prNo + ')' : '') + ' → ' + s.destBranch + ' ออกจากรายงาน?' +
+      (s.items && s.items.length ? ' รายการอะไหล่ ' + s.items.length + ' รายการจะถูกลบไปด้วย' : '') +
+      (s.slipFileId ? ' และรูปหลักฐานจะถูกย้ายไปถังขยะของไดรฟ์' : '');
+    box.appendChild(msg);
+
+    var foot = document.createElement('div');
+    foot.className = 'foot';
+
+    var yes = document.createElement('button');
+    yes.type = 'button';
+    yes.className = 'danger';
+    yes.textContent = 'ยืนยันลบ';
+
+    var no = document.createElement('button');
+    no.type = 'button';
+    no.textContent = 'ยกเลิก';
+    no.addEventListener('click', function () { box.remove(); });
+
+    yes.addEventListener('click', function () {
+      yes.disabled = true;
+      no.disabled = true;
+      yes.textContent = 'กำลังลบ…';
+      call('apiDeleteShipment', { shipmentId: s.shipmentId }).then(function (res) {
+        if (!res || !res.ok) {
+          yes.disabled = false;
+          no.disabled = false;
+          yes.textContent = 'ยืนยันลบ';
+          msg.textContent = 'ลบไม่สำเร็จ: ' + ((res && res.error) || '');
+          return;
+        }
+        // ถ้ากำลังแก้ไขรอบที่เพิ่งลบอยู่พอดี ต้องเลิกแก้ ไม่งั้นกดบันทึกแล้วจะเจอ "ไม่พบรายการ"
+        if (editingShipmentId === s.shipmentId) resetForm();
+        setSearchStatus('ลบรอบ ' + s.shipmentId + ' แล้ว');
+        search();
+      }).catch(function (err) {
+        yes.disabled = false;
+        no.disabled = false;
+        yes.textContent = 'ยืนยันลบ';
+        msg.textContent = 'ลบไม่สำเร็จ: ' + (err.message || err);
+      });
+    });
+
+    foot.appendChild(yes);
+    foot.appendChild(no);
+    box.appendChild(foot);
+    card.appendChild(box);
   }
 
   function thaiDate(iso) {
@@ -1703,17 +2144,21 @@
     if (res.items && res.items.length) {
       $('items').innerHTML = '';
       res.items.forEach(function (it) {
-        addItemRow();
-        var wrap = $('items').lastChild;
+        var wrap = addItemRow(false, $('items'));
         wrap._codeCombo.setFreeValue(it.partCode);
         wrap.querySelector('.name').value = it.partName || '';
-        wrap.querySelector('.qty').value = it.qty || 1;
+        wrap.querySelector('.qty').value = it.qty === '' || it.qty === undefined ? '' : it.qty;
+        flagRow(wrap, it.needsCheck);
       });
       var unmatched = res.items.filter(function (i) { return !i.matched; });
+      var toCheck = res.items.filter(function (i) { return i.needsCheck; });
       notes.push('รายการอะไหล่: ' + res.items.length + ' รายการ' +
         (unmatched.length ? ' (⚠️ ' + unmatched.length + ' รายการยังไม่มีในตารางแม่)' : ''));
+      if (toCheck.length) notes.push('⚠️ ' + toCheck.length + ' รายการอ่านได้ไม่ครบ ต้องเติมเอง');
+      showVerify(res.items.length, toCheck.length);
     } else {
       notes.push('⚠️ อ่านรายการอะไหล่ไม่ออก ใส่เอง');
+      hideVerify();
     }
 
     if (res.slipDuplicate) notes.push(dupText('slip', res.slipDuplicate));
@@ -1868,6 +2313,13 @@
       '<label for="bcar' + d.n + '">ขนส่ง / ผู้มารับของ *</label>' +
       '<select class="d-carrier" id="bcar' + d.n + '"><option value="">— เลือกขนส่ง —</option></select>' +
       '<div class="sec">รายการอะไหล่ *</div>' +
+      '<div class="verify d-verify hidden">' +
+      '  <div class="switch">' +
+      '    <input type="checkbox" class="d-verifyok" id="bver' + d.n + '">' +
+      '    <label for="bver' + d.n + '">ตรวจรายการที่อ่านจากรูปใบนี้แล้ว ถูกต้องครบทุกช่อง</label>' +
+      '  </div>' +
+      '  <div class="why d-verifywhy"></div>' +
+      '</div>' +
       '<div class="d-items"></div>' +
       '<button type="button" class="add-item d-additem">+ เพิ่มรายการ</button>' +
       '<div class="sec">หมายเหตุ</div>' +
@@ -1885,6 +2337,10 @@
     d.dropWrap = body.querySelector('.d-dropwrap');
     d.dropOther = body.querySelector('.d-dropother');
     d.carrierEl = body.querySelector('.d-carrier');
+    d.verifyWrap = body.querySelector('.d-verify');
+    d.verifyOk = body.querySelector('.d-verifyok');
+    d.verifyWhy = body.querySelector('.d-verifywhy');
+    d.verifyOk.addEventListener('change', renderBatchCount);
 
     // แต่ละใบเลือกขนส่งของตัวเองได้ เริ่มจากค่าที่ตั้งไว้ให้ทุกใบก่อน
     fillCarrierOptions(d.carrierEl);
@@ -2001,14 +2457,20 @@
     if (!drafts.length) exitBatch();
   }
 
-  /** ใบที่จะถูกบันทึกจริง — ใบที่ระบบทักว่าซ้ำจะถูกข้าม จนกว่าจะติ๊กยืนยัน */
+  /**
+   * ใบที่จะถูกบันทึกจริง
+   * ใบที่ระบบทักว่าซ้ำ และใบที่ยังไม่ได้ติ๊กว่าตรวจรายการที่อ่านจากรูปแล้ว จะถูกข้ามไว้ก่อน
+   */
   function savableDrafts() {
-    return drafts.filter(function (d) { return !d.saved && (!d.dup || d.dupOk.checked); });
+    return drafts.filter(function (d) {
+      return !d.saved && (!d.dup || d.dupOk.checked) && !draftNeedsVerify(d);
+    });
   }
 
   function renderBatchCount() {
     var left = savableDrafts().length;
     var held = drafts.filter(function (d) { return !d.saved && d.dup && !d.dupOk.checked; }).length;
+    var unchecked = drafts.filter(draftNeedsVerify).length;
     $('batchCount').textContent = '(' + drafts.length + ' ใบ)';
     drafts.forEach(function (d, i) {
       d.titleEl.textContent = 'ใบที่ ' + (i + 1) + (d.saved ? ' — บันทึกแล้ว' : '');
@@ -2016,9 +2478,12 @@
     $('batchSaveBtn').textContent = batchSaving ? 'กำลังบันทึก…'
       : batchReading ? 'รออ่านรูปให้ครบก่อน…'
       : left ? 'บันทึกทั้งหมด (' + left + ' ใบ)'
+      : unchecked ? 'รอติ๊กยืนยันรายการ (' + unchecked + ' ใบ)'
       : held ? 'เหลือแต่ใบที่ซ้ำ (' + held + ' ใบ)'
       : 'บันทึกครบทุกใบแล้ว';
     $('batchSaveBtn').disabled = !left || batchSaving || batchReading;
+    $('bVerifyAll').classList.toggle('hidden', !unchecked);
+    $('bVerifyAll').textContent = '✔ ตรวจครบแล้วทุกใบ (' + unchecked + ' ใบ)';
   }
 
   var batchNotice = '';       // เรื่องที่ต้องค้างให้เห็น เช่น ข้ามรูปซ้ำไปกี่ใบ
@@ -2103,13 +2568,18 @@
         var wrap = addItemRow(false, d.itemsBox);
         wrap._codeCombo.setFreeValue(it.partCode);
         wrap.querySelector('.name').value = it.partName || '';
-        wrap.querySelector('.qty').value = it.qty || 1;
+        wrap.querySelector('.qty').value = it.qty === '' || it.qty === undefined ? '' : it.qty;
+        flagRow(wrap, it.needsCheck);
       });
       var unmatched = res.items.filter(function (i) { return !i.matched; });
+      var toCheck = res.items.filter(function (i) { return i.needsCheck; });
       notes.push('รายการอะไหล่: ' + res.items.length + ' รายการ' +
         (unmatched.length ? ' (⚠️ ' + unmatched.length + ' รายการยังไม่มีในตารางแม่)' : ''));
+      if (toCheck.length) notes.push('⚠️ ' + toCheck.length + ' รายการอ่านได้ไม่ครบ ต้องเติมเอง');
+      showDraftVerify(d, res.items.length, toCheck.length);
     } else {
       notes.push('⚠️ อ่านรายการอะไหล่ไม่ออก ใส่เอง');
+      hideDraftVerify(d);
     }
 
     // ซ้ำกับรอบที่บันทึกไปแล้ว — เซิร์ฟเวอร์ตรวจให้ตอนอ่านรูป
@@ -2121,6 +2591,26 @@
 
     var hasWarning = notes.some(function (n) { return n.indexOf('⚠️') === 0; });
     setDraftState(d, notes.join('\n'), hasWarning ? 'err' : '');
+  }
+
+  function showDraftVerify(d, itemCount, checkCount) {
+    d.verifyOk.checked = false;
+    d.verifyWhy.textContent = checkCount
+      ? 'อ่านมา ' + itemCount + ' รายการ มี ' + checkCount + ' รายการที่อ่านได้ไม่ครบ (ช่องกรอบส้ม)'
+      : 'อ่านมา ' + itemCount + ' รายการ กรุณาเทียบกับใบจริง';
+    d.verifyWrap.classList.remove('hidden');
+    renderBatchCount();
+  }
+
+  function hideDraftVerify(d) {
+    d.verifyOk.checked = false;
+    d.verifyWrap.classList.add('hidden');
+    renderBatchCount();
+  }
+
+  /** ใบที่อ่านมาจากรูปแล้วยังไม่ได้ติ๊กว่าตรวจแล้ว ยังบันทึกไม่ได้ */
+  function draftNeedsVerify(d) {
+    return !d.saved && !d.verifyWrap.classList.contains('hidden') && !d.verifyOk.checked;
   }
 
   function markDraftDup(d, kind, rec) {
@@ -2169,6 +2659,14 @@
     $('slipFile').click();
   });
 
+  // ตรวจทีละใบแล้วค่อยกดทีเดียว สำหรับคนที่ไล่ดูครบแล้ว จะได้ไม่ต้องติ๊กทีละใบ
+  $('bVerifyAll').addEventListener('click', function () {
+    drafts.forEach(function (d) {
+      if (draftNeedsVerify(d)) d.verifyOk.checked = true;
+    });
+    renderBatchCount();
+  });
+
   function exitBatch() {
     drafts = [];
     batchNotice = '';
@@ -2192,6 +2690,11 @@
     var pending = savableDrafts();
     if (!pending.length) {
       var held = drafts.filter(function (d) { return !d.saved && d.dup; }).length;
+      var unchecked = drafts.filter(draftNeedsVerify).length;
+      if (unchecked) {
+        return showBatchError('ยังมี ' + unchecked + ' ใบที่ยังไม่ได้ตรวจรายการที่อ่านจากรูป — ' +
+          'ดู รหัสสินค้า / ชื่อสินค้า / จำนวน ในใบนั้นแล้วติ๊กยืนยันก่อน');
+      }
       return showBatchError(held
         ? 'ใบที่เหลือทั้งหมดซ้ำกับที่บันทึกไปแล้ว — ถ้าเป็นคนละรอบจริง ๆ ให้ติ๊กยืนยันในใบนั้นก่อน'
         : 'บันทึกครบทุกใบแล้ว');
@@ -2223,7 +2726,10 @@
     if (!d.prEl.value.trim()) return 'ยังไม่ได้กรอกเลขที่ใบ PR';
     if (!d.comboBranch.getValue()) return 'ยังไม่ได้เลือกสาขาปลายทาง';
     if (!d.carrierEl.value) return 'ยังไม่ได้เลือกขนส่งของใบนี้';
-    if (!collectItems(d.itemsBox).length) return 'ยังไม่ได้ใส่รายการอะไหล่';
+    var items = collectItems(d.itemsBox);
+    if (!items.length) return 'ยังไม่ได้ใส่รายการอะไหล่';
+    var noQty = missingQty(items);
+    if (noQty) return 'ยังไม่ได้ใส่จำนวนของ ' + noQty;
     if (d.transferEl.checked && !draftDropPoint(d)) return 'เลือกฝากลงที่อื่นแล้ว ต้องระบุจุดฝากลงด้วย';
     return '';
   }
