@@ -1380,8 +1380,40 @@ function normalizeSlipLine_(line) {
 // บรรทัดหัวตาราง/ท้ายใบ ไม่ใช่รายการสินค้า
 var SLIP_SKIP_RE = /(รวมทั้งสิ้น|รวมเงิน|ยอดรวม|จำนวนเงิน|ภาษี|ลายเซ็น|ลงชื่อ|ผู้รับของ|ผู้ส่งของ|ผู้อนุมัติ|ผู้จัดของ|หน้าที่|เลขที่ใบ|สาขาต้นทาง|สาขาปลายทาง|รหัสสินค้า)/;
 
-// รหัสสินค้า เช่น aa67001106, AA67001106, กก67001106 — ตัวอักษร 1-4 ตัวแล้วตามด้วยเลข
-var SLIP_CODE_RE = /^([A-Za-z฀-๿]{1,4}\d{5,12}[A-Za-z0-9]{0,3})\s+(.+)$/;
+/**
+ * รหัสสินค้า เช่น aa67001106, AA67001106, กก67001106
+ * = ตัวอักษร 1-4 ตัว (เว้นวรรคคั่นได้ OCR ชอบแทรกช่องว่างเข้ามา) แล้วตามด้วยเลข 5-12 หลัก
+ * ช่วงตัวเลขยอมให้มีตัวอักษรที่ OCR มักอ่านสลับกับเลขปนมาด้วย แล้วค่อยแปลงกลับทีหลัง
+ */
+var SLIP_CODE_RE = /^([A-Za-z฀-๿]{1,4})\s?([0-9OoQIlSsBZzG]{5,12})([A-Za-z0-9]{0,3})\s+(.+)$/;
+
+// ตัวอักษรที่ OCR มักอ่านสลับกับตัวเลข ใช้ทั้งตอนแยกรหัสและตอนเทียบกับตารางแม่
+var OCR_DIGIT_FIX = {
+  O: '0', o: '0', Q: '0',
+  I: '1', l: '1',
+  S: '5', s: '5',
+  B: '8', Z: '2', z: '2', G: '6'
+};
+
+function fixOcrDigits_(v) {
+  return String(v == null ? '' : v).replace(/[OoQIlSsBZzG]/g, function (c) {
+    return OCR_DIGIT_FIX[c] || c;
+  });
+}
+
+/**
+ * ทำรหัสสินค้าให้อยู่ในรูปที่เอาไปเทียบกันได้ แม้ OCR จะอ่านเพี้ยน
+ * ตัดช่องว่าง/ขีดออก แล้วแปลงตัวอักษรที่มักอ่านสลับกับเลขให้เป็นเลขทั้งสองฝั่ง
+ * เช่น "aa6700ll06" กับ "aa67001106" จะได้คีย์เดียวกัน
+ */
+function codeKey_(v) {
+  return fixOcrDigits_(String(v == null ? '' : v).replace(/[\s\-_.]/g, '')).toLowerCase();
+}
+
+/** ชื่อสินค้าแบบตัดช่องว่าง ใช้กู้รหัสคืนตอน OCR อ่านรหัสไม่ได้เรื่องแต่ชื่ออ่านออก */
+function nameKey_(v) {
+  return String(v == null ? '' : v).replace(/\s+/g, '').toLowerCase();
+}
 
 // ราคา/ยอดเงิน มีทศนิยมสองตำแหน่งเสมอ ใช้เป็นเส้นแบ่งว่าจบชื่อสินค้าตรงไหน
 var SLIP_MONEY_RE = /\d{1,3}(?:,\d{3})*\.\d{2}\b/;
@@ -1410,6 +1442,7 @@ function parseSlipItems_(lines) {
 
     out.push({
       partCode: item.partCode,
+      rawCode: item.rawCode,
       partName: item.partName,
       qty: item.qty,
       needsCheck: item.qty === '' || !item.partName
@@ -1428,8 +1461,12 @@ function extractSlipItem_(line) {
   var m = body.match(SLIP_CODE_RE);
   if (!m) return null;
 
-  var code = m[1];
-  var rest = m[2];
+  var digits = fixOcrDigits_(m[2]);
+  if (!/^\d{5,12}$/.test(digits)) return null;   // แปลงแล้วยังไม่ใช่ตัวเลขล้วน ไม่ใช่รหัสสินค้า
+
+  var code = m[1] + digits + m[3];
+  var rawCode = m[1] + m[2] + m[3];              // ตามที่ OCR อ่านมาจริง ๆ ก่อนแก้ตัวเลข
+  var rest = m[4];
 
   // ทุกอย่างหลังราคาช่องแรกคือช่องเงิน ไม่เกี่ยวกับชื่อหรือจำนวน ตัดทิ้ง
   var money = rest.match(SLIP_MONEY_RE);
@@ -1450,7 +1487,7 @@ function extractSlipItem_(line) {
     name = head;
   }
 
-  return { partCode: code, partName: cleanPartName_(name), qty: qty };
+  return { partCode: code, rawCode: rawCode, partName: cleanPartName_(name), qty: qty };
 }
 
 /** เอาซีเรียล เลขลอย และเครื่องหมายคั่นออกจากชื่อสินค้า ให้เหลือแต่ชื่อจริง */
@@ -1507,22 +1544,43 @@ function resolveSlip_(parsed) {
   };
 
   var parts = readParts_();
-  var byCode = {};
-  parts.forEach(function (p) { byCode[p.code.toLowerCase()] = p; });
+  var byCode = {};        // รหัสตรงตัว
+  var byFuzzy = {};       // รหัสแบบเผื่อ OCR อ่านตัวอักษรสลับกับตัวเลข
+  var byName = {};        // ชื่อสินค้าแบบตัดช่องว่าง
+  parts.forEach(function (p) {
+    byCode[p.code.toLowerCase()] = p;
+    var fk = codeKey_(p.code);
+    if (fk && byFuzzy[fk] === undefined) byFuzzy[fk] = p;
+    var nk = nameKey_(p.name);
+    // ชื่อซ้ำกันหลายรหัสก็เดาไม่ได้ว่าอันไหน ทำเครื่องหมายไว้ว่าห้ามใช้กู้รหัส
+    if (nk) byName[nk] = (byName[nk] === undefined) ? p : null;
+  });
 
   parsed.items.forEach(function (it) {
     var code = String(it.partCode || '').trim();
+    var raw = String(it.rawCode || it.partCode || '').trim();
+    var name = String(it.partName || '').trim();
+
     var hit = byCode[code.toLowerCase()];
     // OCR มักอ่านช่องว่างเกินมา ลองตัดช่องว่างในรหัสแล้วหาอีกครั้ง
     if (!hit) hit = byCode[code.replace(/\s+/g, '').toLowerCase()];
-    var partName = hit ? hit.name : String(it.partName || '').trim();
+    // ยังไม่เจอ ลองแบบเผื่ออ่าน 0 เป็น O / 1 เป็น l / 5 เป็น S
+    if (!hit && code) hit = byFuzzy[codeKey_(code)];
+    // รหัสอ่านไม่ได้เรื่องเลย แต่ชื่อตรงกับในตารางแม่พอดี ก็กู้รหัสจากชื่อได้
+    if (!hit && name) hit = byName[nameKey_(name)] || null;
+
+    var partCode = hit ? hit.code : code;
+    var partName = hit ? hit.name : name;
     result.items.push({
-      partCode: hit ? hit.code : code,
+      partCode: partCode,
       partName: partName,
       qty: it.qty,
       matched: !!hit,
+      // ระบบแก้รหัสที่อ่านเพี้ยนให้ — ควรให้คนมองยืนยันอีกที
+      // เทียบกับสิ่งที่ OCR อ่านมาดิบ ๆ เพราะบางตัวถูกแก้ไปแล้วตั้งแต่ตอนแยกบรรทัด
+      corrected: !!hit && !!raw && partCode.toLowerCase() !== raw.toLowerCase(),
       // ช่องไหนอ่านมาไม่ครบ ให้หน้าเว็บทำเครื่องหมายไว้ว่าต้องตรวจก่อนบันทึก
-      needsCheck: !!it.needsCheck || !partName || it.qty === '' || !code,
+      needsCheck: !!it.needsCheck || !partName || it.qty === '' || !partCode,
       status: hit ? hit.status : '',
       replacedBy: hit ? hit.replacedBy : ''
     });
@@ -1546,12 +1604,130 @@ function getSlipFolder_() {
   return folder;
 }
 
+/* =======================================================================
+ * OCR — แปลงรูปเป็นข้อความ
+ *
+ * มีสองเครื่องยนต์ ระบบเลือกให้เองตามที่ตั้งค่าไว้
+ *   1) Cloud Vision  ใช้เมื่อใส่ VISION_API_KEY ไว้ใน Script Properties
+ *                    อ่านตารางภาษาไทยแม่นกว่ามาก และคืนตำแหน่งของทุกคำมาให้
+ *                    จึงประกอบบรรทัดใหม่ตามพิกัดจริงได้ คอลัมน์ไม่สลับกัน
+ *   2) Drive OCR     ของเดิม ใช้เมื่อยังไม่ได้ตั้งคีย์ หรือ Vision เรียกไม่ผ่าน
+ * ===================================================================== */
+
+/** เลือกเครื่องยนต์แล้วคืน { text, engine, note } */
+function ocrImage_(blob) {
+  var key = prop_('VISION_API_KEY');
+  if (key) {
+    try {
+      return { text: visionOcr_(blob, key), engine: 'vision', note: '' };
+    } catch (err) {
+      // Vision ล่ม/คีย์หมดโควตา ก็ยังต้องอ่านให้ได้ ถอยไปใช้ของเดิม
+      console.warn('Vision OCR ล้มเหลว ใช้ Drive OCR แทน: ' + err);
+      return {
+        text: driveOcr_(blob),
+        engine: 'drive',
+        note: 'เรียก Cloud Vision ไม่สำเร็จ (' + String(err.message || err).substring(0, 120) +
+          ') ใช้ตัวอ่านสำรองแทน'
+      };
+    }
+  }
+  return { text: driveOcr_(blob), engine: 'drive', note: '' };
+}
+
 /**
- * แปลงรูปเป็นข้อความด้วย OCR ของ Google Drive
+ * อ่านด้วย Cloud Vision (DOCUMENT_TEXT_DETECTION)
+ * แล้วประกอบข้อความใหม่จากพิกัดของแต่ละคำ แทนที่จะใช้ข้อความก้อนเดียวที่ API คืนมา
+ * เพราะใบโอนย้ายเป็นตาราง ถ้าเรียงตามลำดับที่ API ให้มา คอลัมน์จะสลับกันจนแยกรายการไม่ออก
+ */
+function visionOcr_(blob, apiKey) {
+  var payload = {
+    requests: [{
+      image: { content: Utilities.base64Encode(blob.getBytes()) },
+      features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+      imageContext: { languageHints: ['th', 'en'] }
+    }]
+  };
+
+  var res = UrlFetchApp.fetch(
+    'https://vision.googleapis.com/v1/images:annotate?key=' + encodeURIComponent(apiKey),
+    {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    }
+  );
+
+  if (res.getResponseCode() !== 200) {
+    throw new Error('HTTP ' + res.getResponseCode() + ' ' + res.getContentText().substring(0, 200));
+  }
+
+  var body = JSON.parse(res.getContentText());
+  var first = (body.responses || [])[0] || {};
+  if (first.error) throw new Error(first.error.message || 'Vision ตอบกลับมาเป็นข้อผิดพลาด');
+
+  var words = first.textAnnotations || [];
+  if (words.length > 1) return visionLines_(words.slice(1)).join('\n');
+
+  // ไม่มีพิกัดรายคำ (รูปแทบไม่มีตัวหนังสือ) ก็ใช้ข้อความก้อนเดียวเท่าที่ได้
+  return String((first.fullTextAnnotation && first.fullTextAnnotation.text) || '');
+}
+
+/**
+ * จัดคำที่ Vision อ่านได้ให้กลับเป็นบรรทัดตามที่ตาเห็น
+ * คำที่อยู่ระดับความสูงใกล้กันถือเป็นบรรทัดเดียวกัน แล้วเรียงจากซ้ายไปขวา
+ */
+function visionLines_(words) {
+  var boxes = words.map(function (w) {
+    var v = (w.boundingPoly && w.boundingPoly.vertices) || [];
+    if (!v.length) return null;
+    var xs = v.map(function (p) { return p.x || 0; });
+    var ys = v.map(function (p) { return p.y || 0; });
+    var top = Math.min.apply(null, ys);
+    var bottom = Math.max.apply(null, ys);
+    return {
+      text: String(w.description || ''),
+      x: Math.min.apply(null, xs),
+      y: (top + bottom) / 2,
+      h: Math.max(bottom - top, 1)
+    };
+  }).filter(function (b) { return b && b.text; });
+
+  if (!boxes.length) return [];
+
+  // ระยะที่ถือว่ายังเป็นบรรทัดเดียวกัน คิดจากความสูงตัวอักษรกลาง ๆ ของทั้งใบ
+  var heights = boxes.map(function (b) { return b.h; }).sort(function (a, b) { return a - b; });
+  var tol = Math.max(heights[Math.floor(heights.length / 2)] * 0.6, 4);
+
+  boxes.sort(function (a, b) { return a.y - b.y || a.x - b.x; });
+
+  var lines = [];
+  var current = null;
+  boxes.forEach(function (b) {
+    if (!current || Math.abs(b.y - current.y) > tol) {
+      current = { y: b.y, items: [b] };
+      lines.push(current);
+    } else {
+      current.items.push(b);
+      // ค่ากลางของบรรทัดขยับตามคำที่เพิ่มเข้ามา กันบรรทัดเอียงทีละนิดจนหลุดกลุ่ม
+      current.y = (current.y * (current.items.length - 1) + b.y) / current.items.length;
+    }
+  });
+
+  return lines.map(function (line) {
+    return line.items
+      .sort(function (a, b) { return a.x - b.x; })
+      .map(function (b) { return b.text; })
+      .join(' ');
+  });
+}
+
+/**
+ * ตัวอ่านสำรอง: OCR ของ Google Drive
  * ทำโดยอัปโหลดรูปแล้วสั่งแปลงเป็น Google Docs พร้อม ocrLanguage=th
  * อ่านข้อความออกมาแล้วลบไฟล์ชั่วคราวทิ้ง
  */
-function ocrImage_(blob) {
+function driveOcr_(blob) {
   var token = ScriptApp.getOAuthToken();
   var boundary = 'slipBoundary' + Date.now();
   var metadata = { name: 'ocr-temp-' + Date.now(), mimeType: 'application/vnd.google-apps.document' };
@@ -1610,16 +1786,23 @@ function apiReadSlip(payload) {
     var mimeType = String(payload.mimeType || 'image/jpeg');
     var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, 'slip-temp');
 
-    var text = ocrImage_(blob);
+    var ocr = ocrImage_(blob);
+    var text = ocr.text;
     var resolved = resolveSlip_(parseSlipText_(text));
     resolved.ok = true;
+    resolved.engine = ocr.engine;
+    resolved.engineNote = ocr.note || '';
     // ส่งข้อความที่อ่านได้กลับไปด้วย เผื่อบางใบอ่านรายการไม่ออกจะได้ดูว่า OCR เห็นอะไร
     resolved.rawText = String(text || '').substring(0, 4000);
+
+    // หน้าเว็บส่งรูปคนละไฟล์มาให้อ่าน (คมกว่า) กับที่จะเก็บเป็นหลักฐาน
+    // การกันใบซ้ำต้องคิดจากรูปที่เก็บจริง ไม่งั้นลายนิ้วมือจะไม่ตรงกับตอนบันทึก
+    var dupBase64 = String(payload.dupBase64 || base64);
 
     // บอกตั้งแต่ตอนอ่านเลยว่าใบนี้เคยบันทึกไปแล้วหรือยัง จะได้ไม่เสียเวลาคีย์ทั้งใบ
     try {
       var sh = getSheet_(SHEETS.SHIPMENTS);
-      resolved.slipDuplicate = findBySlipHash_(sh, slipHash_(base64));
+      resolved.slipDuplicate = findBySlipHash_(sh, slipHash_(dupBase64));
       resolved.prDuplicate = resolved.prNo ? findByPrNo_(sh, resolved.prNo) : null;
     } catch (err) {
       // ตรวจซ้ำไม่ได้ก็ไม่ควรทำให้การอ่านรูปล้มไปด้วย ตอนกดบันทึกยังมีด่านตรวจอีกชั้น
@@ -1920,9 +2103,38 @@ function checkSetup() {
     var sh = getSpreadsheet_().getSheetByName(name);
     lines.push((sh ? '✅' : '❌') + ' ชีต ' + name + (sh ? ' (' + Math.max(0, sh.getLastRow() - 1) + ' แถว)' : ''));
   });
+  lines.push(prop_('VISION_API_KEY')
+    ? '✅ ตัวอ่านเอกสาร: Cloud Vision (แม่นกว่า)'
+    : '➖ ตัวอ่านเอกสาร: Drive OCR — ใส่ VISION_API_KEY ใน Script Properties เพื่อใช้ Cloud Vision');
   var out = lines.join('\n');
   Logger.log(out);
   return out;
+}
+
+/**
+ * ทดสอบว่าคีย์ Cloud Vision ใช้ได้จริงไหม (รันเองจากหน้า Apps Script)
+ * ส่งรูปสี่เหลี่ยมเล็ก ๆ ไปหนึ่งใบ ถ้าตอบกลับมาโดยไม่ error แปลว่าคีย์ผ่าน
+ */
+function checkVisionKey() {
+  var key = prop_('VISION_API_KEY');
+  if (!key) {
+    var msg = '❌ ยังไม่ได้ตั้ง VISION_API_KEY ใน Script Properties — ตอนนี้ระบบใช้ Drive OCR อยู่';
+    Logger.log(msg);
+    return msg;
+  }
+  var pixel = Utilities.base64Decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
+  try {
+    visionOcr_(Utilities.newBlob(pixel, 'image/png', 'ping.png'), key);
+    var ok = '✅ คีย์ Cloud Vision ใช้ได้ ระบบจะใช้ตัวนี้อ่านใบให้';
+    Logger.log(ok);
+    return ok;
+  } catch (err) {
+    var bad = '❌ คีย์ใช้ไม่ได้: ' + (err.message || err) +
+      '\nตรวจว่าเปิดใช้ Cloud Vision API ในโปรเจกต์ และเปิดการเรียกเก็บเงินไว้แล้ว';
+    Logger.log(bad);
+    return bad;
+  }
 }
 
 /** เมนูลัดบนชีต (ใช้ได้เมื่อสคริปต์ผูกกับไฟล์ชีต) */
