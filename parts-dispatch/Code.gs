@@ -139,9 +139,17 @@ function doGet(e) {
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
-/** เว็บแอปส่งไฟล์ไบนารีตรง ๆ ไม่ได้ จึงฝังรูปเป็น data URI ในหน้า HTML แทน */
+/**
+ * เว็บแอปส่งไฟล์ไบนารีตรง ๆ ไม่ได้ จึงฝังรูปเป็น data URI ในหน้า HTML แทน
+ * เสิร์ฟเฉพาะ id ที่มีอยู่จริงในชีต Shipments เท่านั้น
+ * เพราะเว็บแอปรันด้วยสิทธิ์เจ้าของ ถ้าไม่กันไว้ ใครมีลิงก์ก็เดา id
+ * แล้วดึงไฟล์อื่นในไดรฟ์ของเจ้าของออกไปดูได้
+ */
 function serveSlipImage_(fileId) {
   try {
+    if (!isKnownSlipFile_(fileId)) {
+      return HtmlService.createHtmlOutput('<p>ไม่พบรูปนี้ในระบบ</p>');
+    }
     var file = DriveApp.getFileById(fileId);
     var blob = file.getBlob();
     var dataUri = 'data:' + blob.getContentType() + ';base64,' +
@@ -155,6 +163,24 @@ function serveSlipImage_(fileId) {
   } catch (err) {
     return HtmlService.createHtmlOutput('<p>เปิดรูปไม่ได้: ' + String(err.message || err) + '</p>');
   }
+}
+
+/** ไฟล์นี้ถูกอ้างถึงเป็นรูปหลักฐานของรอบส่งไหนสักรอบไหม */
+function isKnownSlipFile_(fileId) {
+  var id = String(fileId || '').trim();
+  if (!id) return false;
+  try {
+    var sh = getSheet_(SHEETS.SHIPMENTS);
+    var last = sh.getLastRow();
+    if (last < 2) return false;
+    var col = sh.getRange(2, colIndex_('Shipments', 'slipFileId'), last - 1, 1).getValues();
+    for (var i = 0; i < col.length; i++) {
+      if (String(col[i][0] == null ? '' : col[i][0]).trim() === id) return true;
+    }
+  } catch (err) {
+    console.warn('ตรวจ id รูปไม่สำเร็จ: ' + err);
+  }
+  return false;
 }
 
 /** ข้อมูลตั้งต้นของฟอร์ม: รายชื่อเขต/สาขา/ขนส่ง/จุดฝากลง */
@@ -1814,6 +1840,210 @@ function apiReadSlip(payload) {
   }
 }
 
+/* =======================================================================
+ * ส่วนที่ 5.5 — เลือกรูปใบโอนย้ายจาก Google Drive
+ *
+ * เว็บแอปรันด้วยสิทธิ์ของเจ้าของสคริปต์ ไม่ใช่สิทธิ์ของคนที่เปิดลิงก์
+ * ถ้าเปิดให้เลือกไฟล์ได้ทั้งไดรฟ์ ใครมีลิงก์ก็เท่ากับเปิดดูไดรฟ์ของเจ้าของได้ทั้งใบ
+ * จึงจำกัดให้เลือกได้เฉพาะในโฟลเดอร์ที่กำหนดไว้โฟลเดอร์เดียว (รวมโฟลเดอร์ย่อยข้างใน)
+ * ตั้งโฟลเดอร์เองได้ที่ Script Property ชื่อ PICK_FOLDER_ID
+ * ===================================================================== */
+
+var PICK_FOLDER_NAME = 'รูปใบโอนย้ายรอบันทึก';
+var PICK_MAX_BYTES = 15 * 1024 * 1024;
+var PICK_PAGE_SIZE = 24;
+var PICK_MAX_DEPTH = 8;       // กันไล่หาโฟลเดอร์แม่วนไม่รู้จบ
+
+/** โฟลเดอร์ที่อนุญาตให้เลือก (สร้างให้ครั้งแรกถ้ายังไม่มี) */
+function pickRootId_() {
+  var id = prop_('PICK_FOLDER_ID');
+  if (id) {
+    try {
+      DriveApp.getFolderById(id);
+      return id;
+    } catch (err) {
+      // โฟลเดอร์ถูกลบหรือ id ผิด สร้าง/หาใหม่ให้
+    }
+  }
+  var it = DriveApp.getFoldersByName(PICK_FOLDER_NAME);
+  var folder = it.hasNext() ? it.next() : DriveApp.createFolder(PICK_FOLDER_NAME);
+  props_().setProperty('PICK_FOLDER_ID', folder.getId());
+  return folder.getId();
+}
+
+/** เรียก Drive REST v3 ด้วยสิทธิ์ของสคริปต์ (ไม่ต้องใช้ API key) */
+function driveApiGet_(path, params) {
+  var parts = [];
+  Object.keys(params || {}).forEach(function (k) {
+    var v = params[k];
+    if (v === '' || v === null || v === undefined) return;
+    parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+  });
+  var url = 'https://www.googleapis.com/drive/v3/' + path + (parts.length ? '?' + parts.join('&') : '');
+  var res = UrlFetchApp.fetch(url, {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('เรียกข้อมูลจากไดรฟ์ไม่สำเร็จ (HTTP ' + res.getResponseCode() + ')');
+  }
+  return JSON.parse(res.getContentText());
+}
+
+/** เครื่องหมาย ' กับ \ ในคำค้นต้อง escape ไม่งั้น query ของ Drive พัง */
+function driveEscape_(v) {
+  return String(v == null ? '' : v).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/** ไฟล์/โฟลเดอร์นี้อยู่ในโฟลเดอร์ที่อนุญาตหรือเปล่า (ไล่ดูโฟลเดอร์แม่ขึ้นไป) */
+function isUnderPickRoot_(id, rootId) {
+  var current = String(id || '').trim();
+  if (!current) return false;
+  for (var i = 0; i < PICK_MAX_DEPTH && current; i++) {
+    if (current === rootId) return true;
+    var meta = driveApiGet_('files/' + encodeURIComponent(current),
+      { fields: 'id,parents', supportsAllDrives: true });
+    var parents = meta.parents || [];
+    if (!parents.length) return false;
+    current = parents[0];
+  }
+  return current === rootId;
+}
+
+/** รายชื่อโฟลเดอร์ย่อยและรูปในโฟลเดอร์ที่เปิดอยู่ (ใหม่สุดก่อน) */
+function apiListDriveImages(payload) {
+  try {
+    payload = payload || {};
+    var root = pickRootId_();
+    var folderId = String(payload.folderId || '').trim() || root;
+    if (folderId !== root && !isUnderPickRoot_(folderId, root)) {
+      throw new Error('โฟลเดอร์นี้อยู่นอกโฟลเดอร์ที่อนุญาตให้เลือก');
+    }
+
+    var q = String(payload.q || '').trim();
+    var pageToken = String(payload.pageToken || '');
+
+    // หน้าถัดไปเอาเฉพาะไฟล์ ไม่ต้องส่งรายชื่อโฟลเดอร์ซ้ำ
+    var folders = pageToken ? { files: [] } : driveApiGet_('files', {
+      q: "'" + driveEscape_(folderId) + "' in parents and " +
+         "mimeType='application/vnd.google-apps.folder' and trashed=false",
+      orderBy: 'name',
+      pageSize: 50,
+      fields: 'files(id,name)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+
+    var fq = "'" + driveEscape_(folderId) + "' in parents and mimeType contains 'image/' and trashed=false";
+    if (q) fq += " and name contains '" + driveEscape_(q) + "'";
+
+    var found = driveApiGet_('files', {
+      q: fq,
+      orderBy: 'modifiedTime desc',
+      pageSize: PICK_PAGE_SIZE,
+      pageToken: pageToken,
+      fields: 'nextPageToken, files(id,name,size,modifiedTime,mimeType,thumbnailLink)',
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true
+    });
+
+    var raw = found.files || [];
+    var files = raw.map(function (f) {
+      return {
+        id: f.id,
+        name: String(f.name || ''),
+        size: Number(f.size || 0),
+        modified: String(f.modifiedTime || '').substring(0, 10),
+        mimeType: String(f.mimeType || ''),
+        thumb: ''
+      };
+    });
+    fetchThumbs_(raw, files);
+
+    return {
+      ok: true,
+      root: root,
+      folderId: folderId,
+      folderName: driveName_(folderId),
+      isRoot: folderId === root,
+      folders: (folders.files || []).map(function (f) { return { id: f.id, name: String(f.name || '') }; }),
+      files: files,
+      nextPageToken: found.nextPageToken || ''
+    };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+function driveName_(id) {
+  try {
+    return String(driveApiGet_('files/' + encodeURIComponent(id),
+      { fields: 'name', supportsAllDrives: true }).name || '');
+  } catch (err) {
+    return '';
+  }
+}
+
+/**
+ * ดึงรูปย่อของทุกไฟล์ในหน้าเดียวกันทีเดียว
+ * ใช้ fetchAll เพราะยิงทีละใบ 24 ใบจะรอนานมาก
+ * ลิงก์รูปย่อของไดรฟ์ต้องแนบ token ไปด้วย หน้าเว็บจึงโหลดเองไม่ได้
+ */
+function fetchThumbs_(raw, files) {
+  var token = ScriptApp.getOAuthToken();
+  var reqs = [], slot = [];
+  raw.forEach(function (f, i) {
+    if (!f.thumbnailLink) return;
+    reqs.push({
+      url: String(f.thumbnailLink).replace(/=s\d+(-c)?$/, '=s320'),
+      headers: { Authorization: 'Bearer ' + token },
+      muteHttpExceptions: true
+    });
+    slot.push(i);
+  });
+  if (!reqs.length) return;
+
+  try {
+    UrlFetchApp.fetchAll(reqs).forEach(function (res, k) {
+      if (res.getResponseCode() !== 200) return;
+      var blob = res.getBlob();
+      files[slot[k]].thumb = 'data:' + (blob.getContentType() || 'image/jpeg') + ';base64,' +
+        Utilities.base64Encode(blob.getBytes());
+    });
+  } catch (err) {
+    // ไม่มีรูปย่อก็ยังเลือกไฟล์จากชื่อได้ ไม่ต้องทำให้ทั้งหน้าล้ม
+    console.warn('โหลดรูปย่อไม่สำเร็จ: ' + err);
+  }
+}
+
+/** ส่งไฟล์รูปจากไดรฟ์กลับไปให้หน้าเว็บ (ต้องอยู่ในโฟลเดอร์ที่อนุญาตเท่านั้น) */
+function apiGetDriveImage(payload) {
+  try {
+    var id = String((payload || {}).fileId || '').trim();
+    if (!id) throw new Error('ไม่ได้ระบุไฟล์');
+
+    var root = pickRootId_();
+    if (!isUnderPickRoot_(id, root)) throw new Error('ไฟล์นี้อยู่นอกโฟลเดอร์ที่อนุญาตให้เลือก');
+
+    var meta = driveApiGet_('files/' + encodeURIComponent(id),
+      { fields: 'id,name,size,mimeType', supportsAllDrives: true });
+    if (String(meta.mimeType || '').indexOf('image/') !== 0) throw new Error('ไฟล์นี้ไม่ใช่รูปภาพ');
+    if (Number(meta.size || 0) > PICK_MAX_BYTES) {
+      throw new Error('ไฟล์ใหญ่เกิน ' + Math.round(PICK_MAX_BYTES / 1048576) + ' MB — ย่อรูปก่อนแล้วลองใหม่');
+    }
+
+    var blob = DriveApp.getFileById(id).getBlob();
+    return {
+      ok: true,
+      name: String(meta.name || 'slip.jpg'),
+      mimeType: blob.getContentType() || meta.mimeType,
+      base64: Utilities.base64Encode(blob.getBytes())
+    };
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
 /**
  * เก็บรูปหลักฐานลง Drive ตอนบันทึกการขนส่ง
  * ตั้งชื่อเป็น วันที่_รหัสสาขา_เลขที่ใบPR เพื่อให้ค้นในไดรฟ์ได้ง่าย
@@ -2106,6 +2336,12 @@ function checkSetup() {
   lines.push(prop_('VISION_API_KEY')
     ? '✅ ตัวอ่านเอกสาร: Cloud Vision (แม่นกว่า)'
     : '➖ ตัวอ่านเอกสาร: Drive OCR — ใส่ VISION_API_KEY ใน Script Properties เพื่อใช้ Cloud Vision');
+  try {
+    var pickId = pickRootId_();
+    lines.push('✅ โฟลเดอร์ที่เลือกรูปจากไดรฟ์ได้: ' + driveName_(pickId) + ' (' + pickId + ')');
+  } catch (err) {
+    lines.push('❌ เตรียมโฟลเดอร์สำหรับเลือกรูปจากไดรฟ์ไม่สำเร็จ: ' + (err.message || err));
+  }
   var out = lines.join('\n');
   Logger.log(out);
   return out;

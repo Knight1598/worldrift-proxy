@@ -325,6 +325,68 @@
   }
   .ship .confirm .foot button { border-style: solid; border-color: var(--err-text); }
 
+  /* ---------- หน้าต่างเลือกรูปจากไดรฟ์ ---------- */
+  .sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0,0,0,.45);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .sheet .panel {
+    background: var(--card);
+    width: 100%;
+    max-width: 640px;
+    max-height: 92vh;
+    border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .sheet .top {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 12px 14px; border-bottom: 1px solid var(--line);
+  }
+  .sheet .top h2 { margin: 0; font-size: 16px; }
+  .sheet .top button {
+    background: none; border: none; color: var(--muted);
+    font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px;
+  }
+  .sheet .body { overflow-y: auto; padding: 12px 14px; -webkit-overflow-scrolling: touch; }
+  .sheet .bottom { border-top: 1px solid var(--line); padding: 12px 14px; }
+  .sheet .bottom button { margin: 0; }
+
+  .crumbs { font-size: 14px; color: var(--muted); margin-bottom: 10px; word-break: break-all; }
+  .crumbs button {
+    background: none; border: none; color: var(--primary);
+    font-size: 14px; cursor: pointer; padding: 0;
+  }
+
+  .dfolder {
+    display: block; width: 100%; text-align: left;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 6px; font-size: 15px; cursor: pointer;
+    color: var(--text);
+  }
+
+  .dgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 10px; }
+  @media (min-width: 520px) { .dgrid { grid-template-columns: repeat(3, 1fr); } }
+  .dfile {
+    border: 2px solid var(--line); border-radius: 10px; padding: 6px;
+    background: var(--bg); cursor: pointer; text-align: left; color: var(--text);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .dfile.on { border-color: var(--primary); background: var(--card); }
+  .dfile .ph {
+    width: 100%; height: 96px; border-radius: 6px; object-fit: cover;
+    background: var(--line); display: block;
+  }
+  .dfile .nm { font-size: 12px; line-height: 1.35; word-break: break-all; }
+  .dfile .dt { font-size: 11px; color: var(--muted); }
+  .dfile .tick { font-size: 12px; color: var(--primary); font-weight: 600; }
+
   /* กล่องยืนยันว่าตรวจรายการที่อ่านจากรูปแล้ว */
   .verify {
     background: var(--warn-bg);
@@ -448,6 +510,7 @@
         <button type="button" class="add-item hidden" id="bVerifyAll">✔ ตรวจครบแล้วทุกใบ</button>
         <button type="button" class="primary" id="batchSaveBtn">บันทึกทั้งหมด</button>
         <button type="button" class="add-item" id="batchAddBtn">+ แนบรูปเพิ่ม</button>
+        <button type="button" class="add-item" id="bDriveBtn">☁️ แนบเพิ่มจาก Google Drive</button>
         <button type="button" class="add-item" id="batchCancelBtn">ยกเลิก กลับไปบันทึกทีละใบ</button>
       </div>
     </div>
@@ -483,6 +546,10 @@
             🖼️ เลือกรูป
           </button>
         </div>
+        <button type="button" class="primary" id="slipDriveBtn" style="margin-top:8px;
+                background:var(--card);color:var(--primary);border:1px solid var(--primary);">
+          ☁️ เลือกจาก Google Drive
+        </button>
         <div class="muted" style="margin-top:8px;font-size:13px;">
           เลือกได้ทีละหลายใบ — ถ้าเลือกตั้งแต่ 2 ใบขึ้นไป ระบบจะเปิดหน้าตรวจทีละใบให้ แล้วบันทึกพร้อมกัน
         </div>
@@ -751,6 +818,38 @@
 
     <div id="carrierStatus" class="card hidden"></div>
     <div id="carrierResults"></div>
+  </div>
+</div>
+
+<!-- ================= เลือกรูปจาก Google Drive ================= -->
+<div id="drivePicker" class="sheet hidden">
+  <div class="panel">
+    <div class="top">
+      <h2>☁️ เลือกรูปใบโอนย้ายจากไดรฟ์</h2>
+      <button type="button" id="dpClose" title="ปิด">×</button>
+    </div>
+
+    <div class="body">
+      <div class="crumbs" id="dpCrumbs"></div>
+
+      <div class="row">
+        <input type="search" id="dpQuery" placeholder="ค้นชื่อไฟล์ในโฟลเดอร์นี้" style="margin-bottom:0;">
+        <button type="button" class="ghost" id="dpSearchBtn" style="flex:none;width:auto;padding:10px 16px;">
+          ค้นหา
+        </button>
+      </div>
+
+      <div id="dpMsg" class="muted" style="margin-top:10px;"></div>
+      <div id="dpFolders" style="margin-top:10px;"></div>
+      <div id="dpFiles" class="dgrid"></div>
+      <button type="button" class="add-item hidden" id="dpMoreBtn" style="margin-top:10px;">
+        โหลดรูปเพิ่ม
+      </button>
+    </div>
+
+    <div class="bottom">
+      <button type="button" class="primary" id="dpUseBtn" disabled>เลือกรูปก่อน</button>
+    </div>
   </div>
 </div>
 
@@ -2033,6 +2132,269 @@
   $('slipRawBtn').addEventListener('click', function () {
     $('slipRaw').classList.toggle('hidden');
   });
+
+  /* ---------- เลือกรูปจาก Google Drive ----------
+   *
+   * เว็บแอปรันด้วยสิทธิ์เจ้าของสคริปต์ ฝั่งเซิร์ฟเวอร์จึงจำกัดให้เห็นเฉพาะโฟลเดอร์ที่กำหนดไว้
+   * หน้านี้แค่เดินดูโฟลเดอร์กับเลือกไฟล์ ตัวไฟล์จริงถูกดึงมาตอนกด "ใช้รูปนี้" เท่านั้น
+   * พอได้ไฟล์มาก็แปลงเป็น File แล้วส่งเข้าเส้นทางเดิม (ย่อรูป/อ่าน/กันซ้ำ) ทุกอย่างเหมือนเลือกจากเครื่อง
+   */
+
+  var dpStack = [];          // เส้นทางโฟลเดอร์ที่เดินเข้ามา [{id, name}]
+  var dpSelected = [];       // ไฟล์ที่ติ๊กไว้ [{id, name}]
+  var dpNextToken = '';
+  var dpBusy = false;
+
+  $('slipDriveBtn').addEventListener('click', openDrivePicker);
+  $('bDriveBtn').addEventListener('click', function () {
+    if (batchSaving || batchReading) return;   // กันสั่งอ่านซ้อนกันสองรอบ
+    openDrivePicker();
+  });
+  $('dpClose').addEventListener('click', closeDrivePicker);
+  $('dpUseBtn').addEventListener('click', useDriveSelection);
+  $('dpSearchBtn').addEventListener('click', function () { loadDriveFolder(currentDriveFolder(), false); });
+  $('dpQuery').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); loadDriveFolder(currentDriveFolder(), false); }
+  });
+  $('dpMoreBtn').addEventListener('click', function () { loadDriveFolder(currentDriveFolder(), true); });
+  $('drivePicker').addEventListener('click', function (e) {
+    if (e.target === $('drivePicker')) closeDrivePicker();   // แตะพื้นที่มืดรอบ ๆ = ปิด
+  });
+
+  function currentDriveFolder() {
+    return dpStack.length ? dpStack[dpStack.length - 1].id : '';
+  }
+
+  function openDrivePicker() {
+    dpStack = [];
+    dpSelected = [];
+    $('dpQuery').value = '';
+    $('drivePicker').classList.remove('hidden');
+    loadDriveFolder('', false);
+  }
+
+  function closeDrivePicker() {
+    if (dpBusy) return;
+    $('drivePicker').classList.add('hidden');
+  }
+
+  function setDpMsg(text, isError) {
+    var box = $('dpMsg');
+    box.className = isError ? 'banner err' : 'muted';
+    box.style.whiteSpace = 'pre-line';
+    box.textContent = text || '';
+  }
+
+  function loadDriveFolder(folderId, append) {
+    if (dpBusy) return;
+    dpBusy = true;
+    if (!append) {
+      $('dpFolders').innerHTML = '';
+      $('dpFiles').innerHTML = '';
+      $('dpMoreBtn').classList.add('hidden');
+    }
+    setDpMsg('กำลังโหลดรายการจากไดรฟ์…');
+
+    call('apiListDriveImages', {
+      folderId: folderId,
+      q: $('dpQuery').value.trim(),
+      pageToken: append ? dpNextToken : ''
+    }).then(function (res) {
+      dpBusy = false;
+      if (!res || !res.ok) return setDpMsg('เปิดไดรฟ์ไม่สำเร็จ: ' + ((res && res.error) || ''), true);
+
+      // ครั้งแรกที่เปิด ยังไม่รู้ id ของโฟลเดอร์ตั้งต้น ต้องรับมาจากเซิร์ฟเวอร์
+      if (!dpStack.length) dpStack = [{ id: res.folderId, name: res.folderName || 'โฟลเดอร์รูปใบโอนย้าย' }];
+
+      renderDriveCrumbs();
+      if (!append) renderDriveFolders(res.folders || []);
+      renderDriveFiles(res.files || [], append);
+
+      dpNextToken = res.nextPageToken || '';
+      $('dpMoreBtn').classList.toggle('hidden', !dpNextToken);
+
+      var count = $('dpFiles').children.length;
+      if (!count && !(res.folders || []).length) {
+        setDpMsg($('dpQuery').value.trim()
+          ? 'ไม่พบไฟล์ที่ชื่อตรงกับที่ค้นในโฟลเดอร์นี้'
+          : 'โฟลเดอร์นี้ยังไม่มีรูป — เอารูปใบโอนย้ายไปวางในโฟลเดอร์ "' +
+            dpStack[0].name + '" ในไดรฟ์ก่อน');
+      } else {
+        setDpMsg('เห็น ' + count + ' รูปในโฟลเดอร์นี้' + (dpNextToken ? ' (ยังมีอีก)' : ''));
+      }
+      renderDpUse();
+    }).catch(function (err) {
+      dpBusy = false;
+      setDpMsg('เปิดไดรฟ์ไม่สำเร็จ: ' + (err.message || err), true);
+    });
+  }
+
+  function renderDriveCrumbs() {
+    var box = $('dpCrumbs');
+    box.innerHTML = '';
+    dpStack.forEach(function (node, i) {
+      if (i) box.appendChild(document.createTextNode(' / '));
+      if (i === dpStack.length - 1) {
+        var here = document.createElement('span');
+        here.textContent = '📂 ' + node.name;
+        box.appendChild(here);
+        return;
+      }
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = node.name;
+      btn.addEventListener('click', function () {
+        dpStack = dpStack.slice(0, i + 1);
+        $('dpQuery').value = '';
+        loadDriveFolder(node.id, false);
+      });
+      box.appendChild(btn);
+    });
+  }
+
+  function renderDriveFolders(folders) {
+    var box = $('dpFolders');
+    box.innerHTML = '';
+    folders.forEach(function (f) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'dfolder';
+      btn.textContent = '📁 ' + f.name;
+      btn.addEventListener('click', function () {
+        dpStack.push({ id: f.id, name: f.name });
+        $('dpQuery').value = '';
+        loadDriveFolder(f.id, false);
+      });
+      box.appendChild(btn);
+    });
+  }
+
+  function renderDriveFiles(files, append) {
+    var box = $('dpFiles');
+    if (!append) box.innerHTML = '';
+
+    files.forEach(function (f) {
+      var card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'dfile';
+
+      var img = document.createElement('img');
+      img.className = 'ph';
+      img.alt = '';
+      if (f.thumb) img.src = f.thumb;
+      card.appendChild(img);
+
+      var nm = document.createElement('div');
+      nm.className = 'nm';
+      nm.textContent = f.name;
+      card.appendChild(nm);
+
+      var dt = document.createElement('div');
+      dt.className = 'dt';
+      dt.textContent = [thaiDate(f.modified), fileSizeText(f.size)].filter(Boolean).join(' • ');
+      card.appendChild(dt);
+
+      var tick = document.createElement('div');
+      tick.className = 'tick';
+      card.appendChild(tick);
+
+      function paint() {
+        var on = dpSelected.some(function (s) { return s.id === f.id; });
+        card.classList.toggle('on', on);
+        tick.textContent = on ? '✓ เลือกแล้ว' : '';
+      }
+
+      card.addEventListener('click', function () {
+        var at = -1;
+        dpSelected.forEach(function (s, i) { if (s.id === f.id) at = i; });
+        if (at >= 0) dpSelected.splice(at, 1);
+        else dpSelected.push({ id: f.id, name: f.name });
+        paint();
+        renderDpUse();
+      });
+
+      paint();
+      box.appendChild(card);
+    });
+  }
+
+  function fileSizeText(bytes) {
+    var n = Number(bytes || 0);
+    if (!n) return '';
+    if (n < 1024 * 1024) return Math.max(1, Math.round(n / 1024)) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+
+  function renderDpUse() {
+    var btn = $('dpUseBtn');
+    btn.disabled = !dpSelected.length || dpBusy;
+    btn.textContent = dpSelected.length
+      ? 'ใช้ ' + dpSelected.length + ' รูปนี้'
+      : 'เลือกรูปก่อน';
+  }
+
+  /** ดึงไฟล์ที่เลือกทีละใบ แปลงเป็น File แล้วส่งเข้าเส้นทางเดิม */
+  function useDriveSelection() {
+    if (!dpSelected.length || dpBusy) return;
+    dpBusy = true;
+    renderDpUse();
+
+    var picked = dpSelected.slice();
+    var files = [];
+    var lastError = '';
+
+    (function next(i) {
+      if (i >= picked.length) {
+        dpBusy = false;
+        renderDpUse();
+        // ล้มทั้งหมด — ต้องคงเหตุผลของใบสุดท้ายไว้ ไม่งั้นผู้ใช้ไม่รู้ว่าติดตรงไหน
+        if (!files.length) {
+          return setDpMsg('ดึงรูปจากไดรฟ์ไม่ได้สักใบ' + (lastError ? '\n' + lastError : ''), true);
+        }
+
+        $('drivePicker').classList.add('hidden');
+        if (drafts.length || files.length > 1) enterBatch(files);
+        else pickSlip(files[0]);
+        return;
+      }
+
+      setDpMsg('กำลังดึงรูปจากไดรฟ์ ' + (i + 1) + ' / ' + picked.length + '…');
+      call('apiGetDriveImage', { fileId: picked[i].id }).then(function (res) {
+        if (res && res.ok) {
+          var file = base64ToFile(res.base64, res.mimeType, res.name || picked[i].name);
+          if (file) files.push(file);
+        } else {
+          lastError = 'ดึง ' + picked[i].name + ' ไม่ได้: ' + ((res && res.error) || '');
+          setDpMsg(lastError, true);
+        }
+        next(i + 1);
+      }).catch(function (err) {
+        lastError = 'ดึง ' + picked[i].name + ' ไม่ได้: ' + (err.message || err);
+        setDpMsg(lastError, true);
+        next(i + 1);
+      });
+    })(0);
+  }
+
+  /** base64 จากเซิร์ฟเวอร์ → File เพื่อให้ใช้เส้นทางเดียวกับรูปที่เลือกจากเครื่อง */
+  function base64ToFile(base64, mimeType, name) {
+    try {
+      var bin = atob(String(base64 || ''));
+      var bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var type = mimeType || 'image/jpeg';
+      try {
+        return new File([bytes], name || 'slip.jpg', { type: type });
+      } catch (err) {
+        // เบราว์เซอร์เก่าที่ยังสร้าง File เองไม่ได้ ใช้ Blob แทน (โค้ดที่เหลือใช้ได้เหมือนกัน)
+        var blob = new Blob([bytes], { type: type });
+        blob.name = name || 'slip.jpg';
+        return blob;
+      }
+    } catch (err) {
+      return null;
+    }
+  }
 
   /** เลือก/ถ่ายรูปเสร็จ → ย่อรูป เก็บไว้ในหน่วยความจำ แล้วโชว์ตัวอย่าง */
   function pickSlip(file) {
