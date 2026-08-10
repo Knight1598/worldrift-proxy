@@ -1375,6 +1375,8 @@ function parseSlipText_(text) {
   }
 
   out.items = parseSlipItems_(lines);
+  // เก็บบรรทัดไว้ให้ resolveSlip_ กวาดหารหัสอะไหล่ซ้ำอีกรอบ (ไม่ได้ส่งกลับไปหน้าเว็บ)
+  out.lines = lines;
 
   return out;
 }
@@ -1404,7 +1406,7 @@ function normalizeSlipLine_(line) {
 }
 
 // บรรทัดหัวตาราง/ท้ายใบ ไม่ใช่รายการสินค้า
-var SLIP_SKIP_RE = /(รวมทั้งสิ้น|รวมเงิน|ยอดรวม|จำนวนเงิน|ภาษี|ลายเซ็น|ลงชื่อ|ผู้รับของ|ผู้ส่งของ|ผู้อนุมัติ|ผู้จัดของ|หน้าที่|เลขที่ใบ|สาขาต้นทาง|สาขาปลายทาง|รหัสสินค้า)/;
+var SLIP_SKIP_RE = /(รวมทั้งสิ้น|รวมเงิน|ยอดรวม|จำนวนเงิน|ภาษี|ลายเซ็น|ลงชื่อ|ผู้รับของ|ผู้ส่งของ|ผู้รับสินค้า|ผู้จัดส่งสินค้า|ผู้อนุมัติ|ผู้จัดของ|หน้าที่|เลขที่ใบ|เล่มที่|สาขาต้นทาง|สาขาปลายทาง|คลังต้นทาง|คลังปลายทาง|รหัสสินค้า|คำอธิบาย|IP=|Time=)/;
 
 /**
  * รหัสสินค้า เช่น aa67001106, AA67001106, กก67001106
@@ -1492,7 +1494,21 @@ function extractSlipItem_(line) {
 
   var code = m[1] + digits + m[3];
   var rawCode = m[1] + m[2] + m[3];              // ตามที่ OCR อ่านมาจริง ๆ ก่อนแก้ตัวเลข
-  var rest = m[4];
+  var got = qtyFromTail_(m[4]);
+  return {
+    partCode: code,
+    rawCode: rawCode,
+    partName: cleanPartName_(got.name),
+    qty: got.qty
+  };
+}
+
+/**
+ * แยก "จำนวน" กับ "ชื่อสินค้า" ออกจากข้อความที่อยู่หลังรหัสสินค้าในบรรทัดเดียวกัน
+ * ใช้ร่วมกันทั้งตอนอ่านทั้งแถว และตอนกวาดหารหัสแล้วย้อนกลับมาหาจำนวนในบรรทัดนั้น
+ */
+function qtyFromTail_(rest) {
+  rest = String(rest || '');
 
   // ทุกอย่างหลังราคาช่องแรกคือช่องเงิน ไม่เกี่ยวกับชื่อหรือจำนวน ตัดทิ้ง
   var money = rest.match(SLIP_MONEY_RE);
@@ -1500,20 +1516,42 @@ function extractSlipItem_(line) {
 
   // จำนวนคือตัวเลขตัวสุดท้ายก่อนช่องเงิน (ในใบเขียนได้ทั้ง "2" และ "2.00")
   // บางใบพิมพ์หน่วยต่อท้ายจำนวนด้วย เช่น "2 ชิ้น" หรือ "2 EA" ก็ยอมให้มีได้
-  var qty = '';
-  var name = head;
   var mQty = head.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:ชิ้น|อัน|ตัว|ชุด|เส้น|ใบ|กล่อง|คู่|PCS|PC|EA|SET|UNIT)?\s*$/i);
-  if (mQty) {
-    qty = toQty_(mQty[1]);
-    name = head.slice(0, mQty.index);
-  } else if (money && (rest.match(new RegExp(SLIP_MONEY_RE.source, 'g')) || []).length >= 3) {
-    // บางใบพิมพ์จำนวนเป็นทศนิยมด้วย เช่น "2.00 950.00 1,900.00"
-    // มีเลขทศนิยมสามช่องติดกันเมื่อไหร่ ช่องแรกคือจำนวน ไม่ใช่ราคา
-    qty = toQty_(money[0]);
-    name = head;
+  if (mQty) return { qty: toQty_(mQty[1]), name: head.slice(0, mQty.index) };
+
+  // บางใบพิมพ์จำนวนเป็นทศนิยมด้วย เช่น "2.00 950.00 1,900.00"
+  // มีเลขทศนิยมสามช่องติดกันเมื่อไหร่ ช่องแรกคือจำนวน ไม่ใช่ราคา
+  if (money && (rest.match(new RegExp(SLIP_MONEY_RE.source, 'g')) || []).length >= 3) {
+    return { qty: toQty_(money[0]), name: head };
   }
 
-  return { partCode: code, rawCode: rawCode, partName: cleanPartName_(name), qty: qty };
+  return { qty: '', name: head };
+}
+
+/**
+ * กวาดหา "รหัสอะไหล่" ทุกตัวในใบ ไม่สนว่าบรรทัดนั้นจะอยู่ในรูปตารางหรือไม่
+ * ใช้คู่กับการเทียบตารางแม่ — ตัวที่ไม่มีในตารางแม่จะถูกทิ้ง
+ * เลขที่ใบ ซีเรียล เบอร์โทร ฯลฯ จึงไม่หลุดเข้ามาเป็นรายการ
+ */
+function scanPartCodes_(lines) {
+  var out = [];
+  (lines || []).forEach(function (line, i) {
+    if (!line || SLIP_SKIP_RE.test(line)) return;
+    var re = /([A-Za-z฀-๿]{1,4})\s?([0-9OoQIlSsBZzG]{5,12})([A-Za-z0-9]{0,3})/g;
+    var m;
+    while ((m = re.exec(line))) {
+      var digits = fixOcrDigits_(m[2]);
+      if (!/^\d{5,12}$/.test(digits)) continue;
+      out.push({
+        code: m[1] + digits + m[3],
+        rawCode: m[1] + m[2] + m[3],
+        line: line,
+        lineIndex: i,
+        after: line.slice(m.index + m[0].length)
+      });
+    }
+  });
+  return out;
 }
 
 /** เอาซีเรียล เลขลอย และเครื่องหมายคั่นออกจากชื่อสินค้า ให้เหลือแต่ชื่อจริง */
@@ -1582,21 +1620,30 @@ function resolveSlip_(parsed) {
     if (nk) byName[nk] = (byName[nk] === undefined) ? p : null;
   });
 
+  /** หาสินค้าในตารางแม่จากรหัสที่ OCR อ่านมา (ไล่จากตรงตัวไปหาแบบเผื่ออ่านเพี้ยน) */
+  function findPart(code, name) {
+    var hit = byCode[String(code || '').toLowerCase()];
+    // OCR มักอ่านช่องว่างเกินมา ลองตัดช่องว่างในรหัสแล้วหาอีกครั้ง
+    if (!hit) hit = byCode[String(code || '').replace(/\s+/g, '').toLowerCase()];
+    // ยังไม่เจอ ลองแบบเผื่ออ่าน 0 เป็น O / 1 เป็น l / 5 เป็น S
+    if (!hit && code) hit = byFuzzy[codeKey_(code)];
+    // รหัสอ่านไม่ได้เรื่องเลย แต่ชื่อตรงกับในตารางแม่พอดี ก็กู้รหัสจากชื่อได้
+    if (!hit && name) hit = byName[nameKey_(name)] || null;
+    return hit || null;
+  }
+
+  var taken = {};   // รหัสที่หยิบเข้ารายการไปแล้ว กันเพิ่มซ้ำตอนกวาดรอบสอง
+
   parsed.items.forEach(function (it) {
     var code = String(it.partCode || '').trim();
     var raw = String(it.rawCode || it.partCode || '').trim();
     var name = String(it.partName || '').trim();
 
-    var hit = byCode[code.toLowerCase()];
-    // OCR มักอ่านช่องว่างเกินมา ลองตัดช่องว่างในรหัสแล้วหาอีกครั้ง
-    if (!hit) hit = byCode[code.replace(/\s+/g, '').toLowerCase()];
-    // ยังไม่เจอ ลองแบบเผื่ออ่าน 0 เป็น O / 1 เป็น l / 5 เป็น S
-    if (!hit && code) hit = byFuzzy[codeKey_(code)];
-    // รหัสอ่านไม่ได้เรื่องเลย แต่ชื่อตรงกับในตารางแม่พอดี ก็กู้รหัสจากชื่อได้
-    if (!hit && name) hit = byName[nameKey_(name)] || null;
-
+    var hit = findPart(code, name);
     var partCode = hit ? hit.code : code;
     var partName = hit ? hit.name : name;
+    taken[codeKey_(partCode)] = true;
+
     result.items.push({
       partCode: partCode,
       partName: partName,
@@ -1608,7 +1655,37 @@ function resolveSlip_(parsed) {
       // ช่องไหนอ่านมาไม่ครบ ให้หน้าเว็บทำเครื่องหมายไว้ว่าต้องตรวจก่อนบันทึก
       needsCheck: !!it.needsCheck || !partName || it.qty === '' || !partCode,
       status: hit ? hit.status : '',
-      replacedBy: hit ? hit.replacedBy : ''
+      replacedBy: hit ? hit.replacedBy : '',
+      fromCode: false
+    });
+  });
+
+  /* รอบสอง — กวาดหารหัสอะไหล่ทั้งใบแล้วเทียบกับตารางแม่
+   *
+   * รอบแรกอ่านทั้งแถว ซึ่งพังง่ายเวลา OCR ทำคอลัมน์เพี้ยนหรือตัดบรรทัด
+   * แต่ "รหัส" เป็นตัวอักษรกับตัวเลขล้วน OCR อ่านแม่นกว่าชื่อไทยมาก
+   * รอบนี้จึงเอารหัสเป็นตัวตั้ง แล้วดึงชื่อจากตารางแม่มาใส่แทนการอ่านชื่อจากกระดาษ
+   * รับเฉพาะรหัสที่มีอยู่จริงในตารางแม่ เลขที่ใบ/ซีเรียล/เบอร์โทรจึงไม่หลุดเข้ามา
+   */
+  scanPartCodes_(parsed.lines).forEach(function (hit) {
+    var key = codeKey_(hit.code);
+    if (taken[key]) return;
+
+    var part = byCode[hit.code.toLowerCase()] || byFuzzy[key];
+    if (!part) return;          // ไม่มีในตารางแม่ = ไม่ใช่รหัสอะไหล่
+
+    taken[key] = true;
+    var qty = qtyFromTail_(hit.after).qty;
+    result.items.push({
+      partCode: part.code,
+      partName: part.name,
+      qty: qty,
+      matched: true,
+      corrected: part.code.toLowerCase() !== hit.rawCode.toLowerCase(),
+      needsCheck: qty === '',
+      status: part.status,
+      replacedBy: part.replacedBy,
+      fromCode: true            // ได้มาจากการเทียบรหัสกับตารางแม่ ไม่ได้อ่านทั้งแถว
     });
   });
 

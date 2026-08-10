@@ -2713,8 +2713,12 @@
       var unmatched = res.items.filter(function (i) { return !i.matched; });
       var toCheck = res.items.filter(function (i) { return i.needsCheck; });
       var fixed = res.items.filter(function (i) { return i.corrected; });
+      var byCode = res.items.filter(function (i) { return i.fromCode; });
       notes.push('รายการอะไหล่: ' + res.items.length + ' รายการ' +
         (unmatched.length ? ' (⚠️ ' + unmatched.length + ' รายการยังไม่มีในตารางแม่)' : ''));
+      if (byCode.length) {
+        notes.push('อ่านรหัสได้แล้วดึงชื่อจากตารางอะไหล่ให้ ' + byCode.length + ' รายการ');
+      }
       if (fixed.length) notes.push('แก้รหัสที่อ่านเพี้ยนให้ ' + fixed.length + ' รายการ — ช่วยดูอีกที');
       if (toCheck.length) notes.push('⚠️ ' + toCheck.length + ' รายการอ่านได้ไม่ครบ ต้องเติมเอง');
       showVerify(res.items.length, toCheck.length);
@@ -3157,8 +3161,12 @@
       var unmatched = res.items.filter(function (i) { return !i.matched; });
       var toCheck = res.items.filter(function (i) { return i.needsCheck; });
       var fixed = res.items.filter(function (i) { return i.corrected; });
+      var byCode = res.items.filter(function (i) { return i.fromCode; });
       notes.push('รายการอะไหล่: ' + res.items.length + ' รายการ' +
         (unmatched.length ? ' (⚠️ ' + unmatched.length + ' รายการยังไม่มีในตารางแม่)' : ''));
+      if (byCode.length) {
+        notes.push('อ่านรหัสได้แล้วดึงชื่อจากตารางอะไหล่ให้ ' + byCode.length + ' รายการ');
+      }
       if (fixed.length) notes.push('แก้รหัสที่อ่านเพี้ยนให้ ' + fixed.length + ' รายการ — ช่วยดูอีกที');
       if (toCheck.length) notes.push('⚠️ ' + toCheck.length + ' รายการอ่านได้ไม่ครบ ต้องเติมเอง');
       showDraftVerify(d, res.items.length, toCheck.length);
