@@ -2016,18 +2016,76 @@ function fetchThumbs_(raw, files) {
   }
 }
 
+/**
+ * ชนิดรูปที่เบราว์เซอร์ทั่วไปเปิดได้เอง
+ * .HEIC ของไอโฟนไม่อยู่ในนี้ — Chrome/Android เปิดไม่ได้ ต้องแปลงเป็น JPG ให้ก่อนส่งไป
+ */
+var BROWSER_SAFE_IMAGE = /^image\/(jpeg|jpg|png|gif|webp|bmp)$/i;
+var JPEG_COPY_SIZE = 2400;
+
+/**
+ * ขอสำเนา JPG ของไฟล์จากไดรฟ์
+ * ไดรฟ์สร้างภาพตัวอย่างเป็น JPG ให้ทุกไฟล์รูปอยู่แล้ว รวมถึง .HEIC
+ * จึงยืมทางนั้นมาใช้แปลงไฟล์ แทนที่จะต้องมีตัวแปลงรูปเอง
+ */
+function driveJpegCopy_(meta) {
+  if (!meta || !meta.thumbnailLink) return '';
+  try {
+    var url = String(meta.thumbnailLink).replace(/=s\d+(-c)?$/, '=s' + JPEG_COPY_SIZE);
+    var res = UrlFetchApp.fetch(url, {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    });
+    if (res.getResponseCode() !== 200) return '';
+    return Utilities.base64Encode(res.getBlob().getBytes());
+  } catch (err) {
+    console.warn('แปลงรูปเป็น JPG ไม่สำเร็จ: ' + err);
+    return '';
+  }
+}
+
+/** เปลี่ยนนามสกุลชื่อไฟล์เป็น .jpg ให้ตรงกับของที่ส่งไปจริง */
+function asJpgName_(name) {
+  var s = String(name || 'slip');
+  return s.replace(/\.[A-Za-z0-9]+$/, '') + '.jpg';
+}
+
 /** ส่งไฟล์รูปจากไดรฟ์กลับไปให้หน้าเว็บ (ต้องอยู่ในโฟลเดอร์ที่อนุญาตเท่านั้น) */
 function apiGetDriveImage(payload) {
   try {
-    var id = String((payload || {}).fileId || '').trim();
+    var p = payload || {};
+    var id = String(p.fileId || '').trim();
     if (!id) throw new Error('ไม่ได้ระบุไฟล์');
 
     var root = pickRootId_();
     if (!isUnderPickRoot_(id, root)) throw new Error('ไฟล์นี้อยู่นอกโฟลเดอร์ที่อนุญาตให้เลือก');
 
     var meta = driveApiGet_('files/' + encodeURIComponent(id),
-      { fields: 'id,name,size,mimeType', supportsAllDrives: true });
-    if (String(meta.mimeType || '').indexOf('image/') !== 0) throw new Error('ไฟล์นี้ไม่ใช่รูปภาพ');
+      { fields: 'id,name,size,mimeType,thumbnailLink', supportsAllDrives: true });
+    var type = String(meta.mimeType || '');
+    if (type.indexOf('image/') !== 0) throw new Error('ไฟล์นี้ไม่ใช่รูปภาพ');
+
+    // แปลงให้เมื่อเป็นชนิดที่เบราว์เซอร์เปิดไม่ได้ หรือเมื่อหน้าเว็บลองเปิดแล้วไม่ผ่านจึงขอมาใหม่
+    var safe = BROWSER_SAFE_IMAGE.test(type);
+    if (!safe || p.asJpeg) {
+      var jpeg = driveJpegCopy_(meta);
+      if (jpeg) {
+        return {
+          ok: true,
+          name: asJpgName_(meta.name),
+          mimeType: 'image/jpeg',
+          base64: jpeg,
+          converted: true,
+          fromType: type
+        };
+      }
+      if (!safe) {
+        throw new Error('ไฟล์ชนิด ' + type + ' แปลงเป็น JPG ไม่สำเร็จ — ' +
+          'ลองเปิดไฟล์ในไดรฟ์สักครั้งให้ไดรฟ์สร้างภาพตัวอย่างก่อน แล้วเลือกใหม่');
+      }
+      // ขอเป็น JPG มาแต่แปลงไม่ได้ และไฟล์เดิมเบราว์เซอร์เปิดได้อยู่แล้ว ก็ส่งไฟล์เดิมไป
+    }
+
     if (Number(meta.size || 0) > PICK_MAX_BYTES) {
       throw new Error('ไฟล์ใหญ่เกิน ' + Math.round(PICK_MAX_BYTES / 1048576) + ' MB — ย่อรูปก่อนแล้วลองใหม่');
     }
@@ -2036,8 +2094,9 @@ function apiGetDriveImage(payload) {
     return {
       ok: true,
       name: String(meta.name || 'slip.jpg'),
-      mimeType: blob.getContentType() || meta.mimeType,
-      base64: Utilities.base64Encode(blob.getBytes())
+      mimeType: blob.getContentType() || type,
+      base64: Utilities.base64Encode(blob.getBytes()),
+      converted: false
     };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };

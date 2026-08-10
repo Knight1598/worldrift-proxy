@@ -2342,6 +2342,7 @@
     var picked = dpSelected.slice();
     var files = [];
     var lastError = '';
+    var converted = 0;
 
     (function next(i) {
       if (i >= picked.length) {
@@ -2353,27 +2354,52 @@
         }
 
         $('drivePicker').classList.add('hidden');
+        // ฝากข้อความไว้ให้ขั้นตอนถัดไปแสดง เพราะ pickSlip/enterBatch จะเขียนทับกล่องข้อความทันที
+        pendingImageNote = converted
+          ? 'แปลงรูป ' + converted + ' ใบเป็น JPG ให้แล้ว (ไฟล์ .HEIC ของไอโฟนเบราว์เซอร์เปิดตรง ๆ ไม่ได้)'
+          : '';
         if (drafts.length || files.length > 1) enterBatch(files);
         else pickSlip(files[0]);
         return;
       }
 
       setDpMsg('กำลังดึงรูปจากไดรฟ์ ' + (i + 1) + ' / ' + picked.length + '…');
-      call('apiGetDriveImage', { fileId: picked[i].id }).then(function (res) {
-        if (res && res.ok) {
-          var file = base64ToFile(res.base64, res.mimeType, res.name || picked[i].name);
-          if (file) files.push(file);
+      grabDriveFile(picked[i], false, function (file, wasConverted, errText) {
+        if (file) {
+          files.push(file);
+          if (wasConverted) converted++;
         } else {
-          lastError = 'ดึง ' + picked[i].name + ' ไม่ได้: ' + ((res && res.error) || '');
+          lastError = 'ดึง ' + picked[i].name + ' ไม่ได้: ' + errText;
           setDpMsg(lastError, true);
         }
         next(i + 1);
-      }).catch(function (err) {
-        lastError = 'ดึง ' + picked[i].name + ' ไม่ได้: ' + (err.message || err);
-        setDpMsg(lastError, true);
-        next(i + 1);
       });
     })(0);
+  }
+
+  /**
+   * ดึงไฟล์หนึ่งใบจากไดรฟ์แล้วพิสูจน์ว่าเบราว์เซอร์เปิดได้จริง
+   * เปิดไม่ได้ (เช่น .HEIC จากไอโฟน) ก็ขอให้เซิร์ฟเวอร์แปลงเป็น JPG แล้วลองใหม่อีกครั้ง
+   */
+  function grabDriveFile(entry, asJpeg, done) {
+    call('apiGetDriveImage', { fileId: entry.id, asJpeg: asJpeg }).then(function (res) {
+      if (!res || !res.ok) return done(null, false, (res && res.error) || 'ไม่ทราบสาเหตุ');
+
+      var file = base64ToFile(res.base64, res.mimeType, res.name || entry.name);
+      if (!file) return done(null, false, 'แปลงข้อมูลไฟล์ไม่สำเร็จ');
+
+      // ลองถอดรหัสดูก่อนส่งเข้าเส้นทางปกติ จะได้รู้ตั้งแต่ตอนนี้ว่าเปิดได้ไหม
+      loadImage(file, function (img) {
+        if (img) return done(file, !!res.converted, '');
+        if (!asJpeg) {
+          setDpMsg('ไฟล์ ' + entry.name + ' เปิดตรง ๆ ไม่ได้ กำลังให้ระบบแปลงเป็น JPG…');
+          return grabDriveFile(entry, true, done);
+        }
+        done(null, false, 'เบราว์เซอร์เปิดไฟล์ชนิดนี้ไม่ได้ แม้แปลงเป็น JPG แล้ว');
+      });
+    }).catch(function (err) {
+      done(null, false, String(err.message || err));
+    });
   }
 
   /** base64 จากเซิร์ฟเวอร์ → File เพื่อให้ใช้เส้นทางเดียวกับรูปที่เลือกจากเครื่อง */
@@ -2405,13 +2431,14 @@
     setSlipMsg('กำลังเตรียมรูป…');
 
     shrinkImage(file, function (img) {
-      if (!img) return setSlipMsg('เปิดไฟล์รูปไม่ได้ ลองเลือกรูปใหม่', true);
+      if (!img) return setSlipMsg(cannotOpenText(file), true);
       slipImage = img;
       $('slipPreview').src = img.dataUrl;
       $('slipPreview').classList.remove('hidden');
       $('slipReadBtn').disabled = false;
       $('dupWarn').classList.add('hidden');
-      setSlipMsg('แนบรูปแล้ว — กด "อ่านข้อมูลจากรูป" เพื่อให้ระบบเติมข้อมูลให้ ' +
+      setSlipMsg(takeImageNote() +
+        'แนบรูปแล้ว — กด "อ่านข้อมูลจากรูป" เพื่อให้ระบบเติมข้อมูลให้ ' +
         'หรือกรอกเองแล้วกดบันทึกเลยก็ได้\nรูปจะถูกเก็บลงไดรฟ์ตอนกดบันทึกการขนส่ง');
 
       // ถามเซิร์ฟเวอร์เลยว่าเคยแนบรูปนี้ไปแล้วหรือยัง จะได้รู้ก่อนคีย์ทั้งใบ
@@ -2551,6 +2578,33 @@
         done(null);
       }
     });
+  }
+
+  /**
+   * ข้อความตอนเปิดไฟล์ไม่ได้ — บอกทางออกให้ด้วยถ้าเป็นไฟล์ .HEIC ของไอโฟน
+   * ไฟล์ในเครื่องแปลงให้ไม่ได้ (เบราว์เซอร์ถอดรหัสไม่ออกตั้งแต่แรก)
+   * แต่ถ้าเอาไปวางในโฟลเดอร์ไดรฟ์แล้วเลือกผ่านปุ่ม ☁️ ระบบจะแปลงให้เอง
+   */
+  // ข้อความที่ต้องรอไปแสดงในขั้นตอนถัดไป (เช่น "แปลงรูปให้แล้ว" ตอนเลือกมาจากไดรฟ์)
+  var pendingImageNote = '';
+
+  function takeImageNote() {
+    var note = pendingImageNote;
+    pendingImageNote = '';
+    return note ? note + '\n' : '';
+  }
+
+  function cannotOpenText(file) {
+    var name = String((file && file.name) || '');
+    var type = String((file && file.type) || '');
+    var heic = /heic|heif/i.test(type) || /\.hei[cf]$/i.test(name);
+    if (heic) {
+      return 'ไฟล์ .HEIC ของไอโฟน เบราว์เซอร์เปิดตรง ๆ ไม่ได้\n' +
+        'ทางแก้: เอารูปไปไว้ในโฟลเดอร์รูปใบโอนย้ายในไดรฟ์ แล้วกด "☁️ เลือกจาก Google Drive" ' +
+        'ระบบจะแปลงเป็น JPG ให้เอง\n' +
+        'หรือตั้งกล้องไอโฟนเป็น "ประสิทธิภาพสูงสุด → เข้ากันได้มากที่สุด" เพื่อให้ถ่ายออกมาเป็น JPG';
+    }
+    return 'เปิดไฟล์รูปไม่ได้ ลองเลือกรูปใหม่' + (name ? ' (' + name + ')' : '');
   }
 
   /** ข้อมูลรูปที่จะส่งไปให้เซิร์ฟเวอร์อ่าน (พร้อมรูปที่จะเก็บจริงไว้เทียบใบซ้ำ) */
@@ -2700,7 +2754,7 @@
     shrinkAll(files, function (images) {
       var usable = images.filter(function (i) { return i; });
       if (!usable.length) {
-        var noneMsg = 'เปิดไฟล์รูปไม่ได้เลยสักใบ ลองเลือกใหม่';
+        var noneMsg = 'เปิดไฟล์รูปไม่ได้เลยสักใบ\n' + cannotOpenText(files[0]);
         return first ? setSlipMsg(noneMsg, true) : setBatchProgress(noneMsg, true);
       }
 
@@ -2737,7 +2791,9 @@
       var msgs = [];
       if (skipped) msgs.push('เปิดไม่ได้ ' + skipped + ' ใบ');
       if (dupInBatch) msgs.push('ข้ามรูปที่ซ้ำกับที่แนบไว้แล้ว ' + dupInBatch + ' ใบ');
-      setBatchNotice(msgs.length ? '⚠️ ' + msgs.join(' • ') : '');
+      var note = takeImageNote();
+      setBatchNotice((msgs.length ? '⚠️ ' + msgs.join(' • ') : '') +
+        (note ? (msgs.length ? '\n' : '') + note.trim() : ''));
       if (!fresh.length) { batchReading = false; return renderBatchCount(); }
 
       batchReading = true;
