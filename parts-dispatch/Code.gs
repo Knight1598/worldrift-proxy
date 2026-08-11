@@ -1382,9 +1382,8 @@ function exportReportPdf_(p) {
   var sheet = ss.insertSheet('__รายงาน__' + Date.now());
 
   try {
-    // ซ่อนไว้ก่อน ไม่ให้แท็บชั่วคราวโผล่ให้คนที่เปิดชีตอยู่เห็น
-    try { sheet.hideSheet(); } catch (err) { /* ซ่อนไม่ได้ก็ไม่เป็นไร เดี๋ยวลบทิ้งอยู่ดี */ }
-
+    // ห้ามซ่อนแท็บนี้ — ตัว export ของ Google เรนเดอร์แท็บที่ซ่อนไว้ไม่ได้ จะตอบ HTTP 500 กลับมา
+    // แท็บอยู่แค่ไม่กี่วินาทีแล้วถูกลบใน finally จึงไม่เป็นไรที่จะโผล่ให้เห็นชั่วครู่
     buildReportSheet_(sheet, p, found, detail);
     SpreadsheetApp.flush();          // ต้องเขียนลงชีตให้เสร็จก่อน ตัว export อ่านผ่าน HTTP
 
@@ -1411,29 +1410,56 @@ function exportReportPdf_(p) {
  * สั่งให้ Google แปลงแท็บนั้นเป็น PDF ให้
  * ใช้ที่อยู่ export ของสเปรดชีตตรง ๆ พร้อม token ของสคริปต์
  * ไม่ต้องขอสิทธิ์เพิ่มเลย เพราะเป็นชีตของเราเองที่มีสิทธิ์อยู่แล้ว
+ *
+ * ตัวเลือกการจัดหน้าบางตัวทำให้บริการนี้ตอบ error ได้ตามอารมณ์
+ * จึงไล่ลองจากชุดที่จัดหน้าสวยที่สุดไปหาชุดเปล่า ๆ ให้ได้ไฟล์ออกมาก่อนเป็นสำคัญ
  */
 function exportSheetAsPdf_(ssId, gid, name) {
-  var url = 'https://docs.google.com/spreadsheets/d/' + ssId + '/export?' + [
-    'format=pdf',
-    'gid=' + gid,
-    'portrait=false',          // แนวนอน ตารางรายละเอียดมี 6 คอลัมน์
-    'size=A4',
-    'fitw=true',               // ย่อให้พอดีความกว้างกระดาษ
-    'gridlines=false',
-    'printtitle=false',
-    'sheetnames=false',
-    'pagenumbers=true',
-    'top_margin=0.40', 'bottom_margin=0.40', 'left_margin=0.40', 'right_margin=0.40'
-  ].join('&');
+  var attempts = [
+    // จัดหน้าเต็มรูปแบบ
+    ['portrait=false', 'size=A4', 'fitw=true', 'gridlines=false',
+     'printtitle=false', 'sheetnames=false',
+     'top_margin=0.40', 'bottom_margin=0.40', 'left_margin=0.40', 'right_margin=0.40'],
+    // ตัดเรื่องขอบกระดาษออก
+    ['portrait=false', 'size=A4', 'fitw=true', 'gridlines=false'],
+    // เอาแค่แนวกระดาษ
+    ['portrait=false'],
+    // ล้วน ๆ ไม่ตั้งอะไรเลย
+    []
+  ];
 
-  var res = UrlFetchApp.fetch(url, {
-    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
-    muteHttpExceptions: true
-  });
-  if (res.getResponseCode() !== 200) {
-    throw new Error('แปลงรายงานเป็น PDF ไม่สำเร็จ (HTTP ' + res.getResponseCode() + ')');
+  var lastError = '';
+  for (var i = 0; i < attempts.length; i++) {
+    var url = 'https://docs.google.com/spreadsheets/d/' + encodeURIComponent(ssId) + '/export?' +
+      ['format=pdf', 'gid=' + gid].concat(attempts[i]).join('&');
+
+    var res;
+    try {
+      res = UrlFetchApp.fetch(url, {
+        headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+        muteHttpExceptions: true,
+        followRedirects: true
+      });
+    } catch (err) {
+      lastError = String(err.message || err);
+      continue;
+    }
+
+    var code = res.getResponseCode();
+    if (code === 200) {
+      var blob = res.getBlob();
+      var type = String(blob.getContentType() || '');
+      // บางครั้งตอบ 200 แต่เนื้อในเป็นหน้าเว็บแจ้ง error ไม่ใช่ไฟล์ PDF
+      if (type.indexOf('pdf') >= 0) return blob.setName(name + '.pdf');
+      lastError = 'ได้ไฟล์ชนิด ' + type + ' กลับมาแทน PDF';
+      continue;
+    }
+
+    lastError = 'HTTP ' + code + ' ' + String(res.getContentText() || '')
+      .replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 150);
   }
-  return res.getBlob().setName(name + '.pdf');
+
+  throw new Error('แปลงรายงานเป็น PDF ไม่สำเร็จ — ' + lastError);
 }
 
 function getPdfFolder_() {
@@ -1597,6 +1623,20 @@ function writeReportGrid_(sheet, rows, style) {
   all.setFontSize(9).setWrap(true).setVerticalAlignment('top');
 
   PDF_COL_WIDTHS.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  /* ตัดคอลัมน์และแถวที่ไม่ได้ใช้ทิ้ง
+   * สำคัญกว่าที่คิด เพราะ fitw=true ย่อ "ความกว้างทั้งแท็บ" ให้พอดีหน้ากระดาษ
+   * ถ้าเหลือคอลัมน์เปล่าไว้ 26 คอลัมน์ ตารางจริงจะถูกย่อจนเล็กจนอ่านไม่ออก
+   * และแถวเปล่าก็จะกลายเป็นหน้าว่างต่อท้ายไฟล์
+   */
+  try {
+    var maxCols = sheet.getMaxColumns();
+    if (maxCols > PDF_SHEET_COLS) sheet.deleteColumns(PDF_SHEET_COLS + 1, maxCols - PDF_SHEET_COLS);
+    var maxRows = sheet.getMaxRows();
+    if (maxRows > height) sheet.deleteRows(height + 1, maxRows - height);
+  } catch (err) {
+    console.warn('ตัดแถว/คอลัมน์ที่ไม่ใช้ไม่สำเร็จ: ' + err);
+  }
 
   function ranges(list) {
     return (list || []).map(function (n) { return 'A' + n + ':' + 'F' + n; });
