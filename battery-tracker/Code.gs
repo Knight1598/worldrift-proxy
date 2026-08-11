@@ -164,6 +164,35 @@ function readRows_(sheetName) {
   return out;
 }
 
+/**
+ * เติมคอลัมน์ที่หัวตารางยังไม่มีให้ครบ โดย "ต่อท้ายด้านขวา" ไม่ขยับข้อมูลเดิมแม้แต่ช่องเดียว
+ *
+ * จำเป็นเพราะเวลาเพิ่มฟิลด์ใหม่ในระบบ (เช่น รุ่นรถ) แต่ชีตของจริงยังไม่มีคอลัมน์นั้น
+ * ตัวเขียนข้อมูลจะข้ามฟิลด์นั้นไปเงียบ ๆ — บันทึกผ่าน แต่ค่าหายไปเลย
+ * คืนรายชื่อคอลัมน์ที่เพิ่งเติม (ไม่มีอะไรต้องเติมก็คืนอาร์เรย์ว่าง)
+ */
+function ensureColumns_(sh, sheetName) {
+  var layout = sheetLayout_(sh, sheetName);
+  var missing = HEADERS[sheetName].filter(function (f) { return layout.index[f] < 0; });
+  if (!missing.length) return [];
+
+  var start = Math.max(layout.lastCol, 0) + 1;
+  var need = start + missing.length - 1;
+  var maxCols = sh.getMaxColumns();
+  if (maxCols < need) sh.insertColumnsAfter(Math.max(maxCols, 1), need - maxCols);
+
+  sh.getRange(1, start, 1, missing.length).setValues([missing]).setFontWeight('bold');
+  console.warn('เติมคอลัมน์ที่ขาดในชีต ' + sheetName + ': ' + missing.join(', '));
+  return missing;
+}
+
+/** ชีตที่พร้อมเขียน — เติมคอลัมน์ที่ขาดให้ก่อน ค่าที่กรอกมาจะได้ไม่หายกลางทาง */
+function getWritableSheet_(name) {
+  var sh = getSheet_(name);
+  ensureColumns_(sh, name);
+  return sh;
+}
+
 /** เรียงค่าลงแถวตามหัวตารางจริงของชีต */
 function toRowValues_(sh, sheetName, rec) {
   var layout = sheetLayout_(sh, sheetName);
@@ -461,7 +490,7 @@ function apiUpdateBatteryStatus(payload) {
     if (!id) throw new Error('ไม่ได้ระบุรายการ');
     if (BATTERY_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
 
-    var sh = getSheet_(SHEETS.BATTERIES);
+    var sh = getWritableSheet_(SHEETS.BATTERIES);
     var rows = readBatteries_();
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].batteryId === id) {
@@ -581,7 +610,7 @@ function saveBatteries_(base, items) {
   if (!lock.tryLock(30000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่');
 
   try {
-    var sh = getSheet_(SHEETS.BATTERIES);
+    var sh = getWritableSheet_(SHEETS.BATTERIES);
     var existing = readBatteries_();
     var seq = nextBatterySeq_(existing);
     var appended = [];
@@ -708,7 +737,7 @@ function apiSaveDelivery(payload) {
       photoId = saveDeliveryImage_(payload.base64, payload.mimeType, id, target.branch);
     }
 
-    var sh = getSheet_(SHEETS.BATTERIES);
+    var sh = getWritableSheet_(SHEETS.BATTERIES);
     var stamp = nowStamp_();
     var updates = {
       status: DELIVERED_STATUS,
@@ -807,7 +836,7 @@ function apiUpdateRepairStatus(payload) {
     if (!id) throw new Error('ไม่ได้ระบุรายการ');
     if (REPAIR_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
 
-    var sh = getSheet_(SHEETS.REPAIRS);
+    var sh = getWritableSheet_(SHEETS.REPAIRS);
     var rows = readRepairs_();
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].repairId === id) {
@@ -856,7 +885,7 @@ function saveRepair_(p) {
   if (!lock.tryLock(30000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณาลองใหม่');
 
   try {
-    var sh = getSheet_(SHEETS.REPAIRS);
+    var sh = getWritableSheet_(SHEETS.REPAIRS);
     var rows = readRepairs_();
 
     // เลข JOB ต้องไม่ซ้ำ ไม่งั้นตามงานไม่ถูกคัน — แต่ถ้ายังไม่ได้ใส่ ก็ไม่ต้องตรวจ
@@ -1243,6 +1272,138 @@ function showBatteryLinks() {
   return out;
 }
 
+/* =======================================================================
+ * กู้แถวที่ข้อมูลเลื่อนคอลัมน์
+ *
+ * เกิดกับแถวที่บันทึกไว้ตอนที่โค้ดมีฟิลด์ใหม่แล้ว (รุ่นรถ / อล.)
+ * แต่หัวตารางในชีตยังไม่มีคอลัมน์นั้น ค่าจึงถูกเขียนเลื่อนไปทางขวาหนึ่งช่อง
+ * อาการที่เห็นคือ "ชื่อรุ่นรถไปโผล่ในช่องสาขา" และ "ชื่อสาขาไปโผล่ในช่องเขต"
+ *
+ * ตัวจับคือรายชื่อสาขา — แถวที่ช่องสาขาไม่ใช่ชื่อสาขาจริง แต่ช่องเขตเป็นชื่อสาขาจริง
+ * คือแถวที่เลื่อน แถวที่ปกติจะไม่เข้าเงื่อนไขนี้เลย จึงไม่ถูกแตะ
+ * ต้องสั่งรันเอง ไม่ทำอัตโนมัติ เพราะเป็นการเขียนทับข้อมูลเดิม
+ * ===================================================================== */
+
+function fixShiftedRows() {
+  var lines = ['ผลการกู้แถวที่ข้อมูลเลื่อนคอลัมน์', ''];
+
+  try {
+    var rp = fixShiftedRepairs_();
+    lines.push('รถส่งซ่อม: ' + (rp.length ? 'แก้ ' + rp.length + ' แถว' : 'ไม่พบแถวที่เลื่อน'));
+    rp.forEach(function (t) { lines.push('  • ' + t); });
+  } catch (err) {
+    lines.push('รถส่งซ่อม: ❌ ' + (err.message || err));
+  }
+
+  lines.push('');
+  try {
+    var bt = fixShiftedBatteries_();
+    lines.push('แบตเตอรี่: ' + (bt.length ? 'แก้ ' + bt.length + ' แถว' : 'ไม่พบแถวที่เลื่อน'));
+    bt.forEach(function (t) { lines.push('  • ' + t); });
+  } catch (err) {
+    lines.push('แบตเตอรี่: ❌ ' + (err.message || err));
+  }
+
+  var out = lines.join('\n');
+  Logger.log(out);
+  return out;
+}
+
+/** ชื่อสาขา → ข้อมูลสาขา ใช้เป็นตัวชี้ว่าแถวไหนเลื่อน */
+function branchesByName_() {
+  var map = {};
+  getBranches_().forEach(function (b) { map[b.name] = b; });
+  return map;
+}
+
+function fixShiftedRepairs_() {
+  var sh = getWritableSheet_(SHEETS.REPAIRS);
+  var byName = branchesByName_();
+  var fixed = [];
+
+  readRows_(SHEETS.REPAIRS).forEach(function (r) {
+    // ช่องสาขาไม่ใช่สาขาจริง แต่ช่องเขตเป็นสาขาจริง = เลื่อนไปหนึ่งช่อง
+    if (!r.branch || byName[r.branch] || !byName[r.zone]) return;
+
+    var rec = {
+      repairId: r.repairId,
+      receivedDate: r.receivedDate,
+      jobNo: r.jobNo,
+      contractNo: r.contractNo,
+      vehicleModel: r.vehicleModel || r.branch,   // ค่าที่เลื่อนมาอยู่ในช่องสาขา
+      branch: r.zone,
+      zone: byName[r.zone].zone,
+      status: r.status,
+      note: r.note,
+      updatedAt: r.updatedAt,
+      updatedBy: r.updatedBy
+    };
+
+    // สถานะกับหมายเหตุเลื่อนตามกันมาด้วย ในแถวที่ยังไม่เคยกดเปลี่ยนสถานะ
+    if (REPAIR_STATUSES.indexOf(rec.status) < 0 && REPAIR_STATUSES.indexOf(rec.note) >= 0) {
+      rec.status = rec.note;
+      rec.note = '';
+    } else if (REPAIR_STATUSES.indexOf(rec.note) >= 0) {
+      rec.note = '';                              // สถานะเก่าที่ค้างอยู่ในช่องหมายเหตุ
+    }
+    if (REPAIR_STATUSES.indexOf(rec.status) < 0) rec.status = REPAIR_STATUSES[0];
+
+    var values = toRowValues_(sh, SHEETS.REPAIRS, rec);
+    sh.getRange(r._row, 1, 1, values.length).setValues([values]);
+    fixed.push(rec.repairId + ' → รุ่น "' + rec.vehicleModel + '" สาขา "' + rec.branch +
+      '" เขต "' + rec.zone + '" สถานะ "' + rec.status + '"');
+  });
+
+  return fixed;
+}
+
+function fixShiftedBatteries_() {
+  var sh = getWritableSheet_(SHEETS.BATTERIES);
+  var byName = branchesByName_();
+  var fixed = [];
+
+  readRows_(SHEETS.BATTERIES).forEach(function (b) {
+    if (!b.branch || byName[b.branch] || !byName[b.zone]) return;
+
+    var rec = {
+      batteryId: b.batteryId,
+      receivedDate: b.receivedDate,
+      alNo: b.alNo || b.branch,        // อล. ที่เลื่อนไปอยู่ในช่องสาขา
+      branch: b.zone,
+      zone: byName[b.zone].zone,
+      serial: b.model,
+      model: b.qty,
+      qty: b.status,
+      status: b.note,
+      note: b.updatedAt,
+      updatedAt: b.updatedBy,
+      updatedBy: '',
+      deliveredAt: b.deliveredAt,
+      receiver: b.receiver,
+      deliveryNote: b.deliveryNote,
+      deliveryPhotoId: b.deliveryPhotoId
+    };
+
+    // ถ้าเคยกดเปลี่ยนสถานะไปแล้ว ช่องสถานะจะถูกเขียนทับด้วยสถานะจริง (จำนวนหายไปด้วย)
+    if (BATTERY_STATUSES.indexOf(b.status) >= 0) {
+      rec.status = b.status;
+      rec.qty = '';
+      rec.note = b.note;
+      rec.updatedAt = b.updatedAt;
+      rec.updatedBy = b.updatedBy;
+    }
+    if (BATTERY_STATUSES.indexOf(rec.status) < 0) rec.status = BATTERY_STATUSES[0];
+    if (!(Number(rec.qty) > 0)) rec.qty = 1;       // จำนวนกู้ไม่ได้ ตั้งเป็น 1 ไว้ให้มาแก้เอง
+
+    var values = toRowValues_(sh, SHEETS.BATTERIES, rec);
+    sh.getRange(b._row, 1, 1, values.length).setValues([values]);
+    fixed.push(rec.batteryId + ' → อล. "' + rec.alNo + '" สาขา "' + rec.branch +
+      '" รุ่น "' + rec.model + '" จำนวน ' + rec.qty + ' สถานะ "' + rec.status + '"');
+  });
+
+  return fixed;
+}
+
 /**
  * ตรวจว่าเซิร์ฟเวอร์อ่านอะไรได้จากชีตบ้าง — ใช้ตอนข้อมูลอยู่ในชีตแต่หน้าเว็บไม่ขึ้น
  * รันแล้วดูที่ "บันทึกการดำเนินการ"
@@ -1250,7 +1411,7 @@ function showBatteryLinks() {
 function debugBatteries() {
   var lines = [];
   try {
-    var sh = getSheet_(SHEETS.BATTERIES);
+    var sh = getWritableSheet_(SHEETS.BATTERIES);
     lines.push('ชีต Batteries: ' + sh.getLastRow() + ' แถว × ' + sh.getLastColumn() + ' คอลัมน์');
     lines.push('หัวตารางที่โค้ดคาดไว้ : ' + HEADERS.Batteries.join(' | '));
     if (sh.getLastColumn() > 0) {
@@ -1270,7 +1431,7 @@ function debugBatteries() {
       (listed.ok ? listed.results.length + ' รายการ (ทั้งหมด ' + listed.total + ')'
                  : 'ผิดพลาด: ' + listed.error));
 
-    var rp = getSheet_(SHEETS.REPAIRS);
+    var rp = getWritableSheet_(SHEETS.REPAIRS);
     lines.push('');
     lines.push('ชีต Repairs: ' + rp.getLastRow() + ' แถว × ' + rp.getLastColumn() + ' คอลัมน์');
     var repairs = readRepairs_();
@@ -1296,9 +1457,38 @@ function checkSetup() {
   var lines = [];
   Object.keys(HEADERS).forEach(function (name) {
     var sh = getSpreadsheet_().getSheetByName(name);
-    lines.push((sh ? '✅' : '❌') + ' ชีต ' + name +
-      (sh ? ' (' + Math.max(0, sh.getLastRow() - 1) + ' แถว)' : ''));
+    if (!sh) {
+      lines.push('❌ ชีต ' + name);
+      return;
+    }
+    // คอลัมน์ที่หัวตารางยังไม่มี = ค่าที่กรอกในช่องนั้นจะหายไปตอนบันทึก
+    var index = sheetLayout_(sh, name).index;
+    var missing = HEADERS[name].filter(function (f) { return index[f] < 0; });
+    lines.push((missing.length ? '⚠️' : '✅') + ' ชีต ' + name +
+      ' (' + Math.max(0, sh.getLastRow() - 1) + ' แถว)' +
+      (missing.length ? ' — ยังไม่มีคอลัมน์ ' + missing.join(', ') + ' ให้รัน setupSheets()' : ''));
   });
+
+  // แถวที่ข้อมูลเลื่อนคอลัมน์ ดูจากช่องสาขาที่ไม่ใช่ชื่อสาขาจริง
+  try {
+    var byName = branchesByName_();
+    var bad = 0;
+    readRows_(SHEETS.REPAIRS).forEach(function (r) {
+      if (r.branch && !byName[r.branch] && byName[r.zone]) bad++;
+    });
+    readRows_(SHEETS.BATTERIES).forEach(function (b) {
+      if (b.branch && !byName[b.branch] && byName[b.zone]) bad++;
+    });
+    if (bad) {
+      lines.push('⚠️ มี ' + bad + ' แถวที่ข้อมูลเลื่อนคอลัมน์ (ชื่อรุ่น/อล. ไปโผล่ในช่องสาขา) — ' +
+        'สั่งเมนู "กู้แถวที่ข้อมูลเลื่อนคอลัมน์" เพื่อจัดกลับให้');
+    } else {
+      lines.push('✅ ไม่มีแถวที่ข้อมูลเลื่อนคอลัมน์');
+    }
+  } catch (err) {
+    lines.push('➖ ตรวจแถวที่เลื่อนคอลัมน์ไม่ได้: ' + (err.message || err));
+  }
+
   lines.push('🔑 รหัสเข้าโหมดแอดมิน: ' + getBatteryAdminKey_());
   var out = lines.join('\n');
   Logger.log(out);
@@ -1313,9 +1503,11 @@ function onOpen() {
     .addItem('ดูลิงก์สำหรับแจก', 'showBatteryLinksDialog')
     .addItem('ตรวจการตั้งค่า', 'checkSetupDialog')
     .addItem('ตรวจข้อมูล (ตอนหน้าเว็บไม่ขึ้น)', 'debugBatteriesDialog')
+    .addItem('กู้แถวที่ข้อมูลเลื่อนคอลัมน์', 'fixShiftedRowsDialog')
     .addToUi();
 }
 
 function checkSetupDialog() { SpreadsheetApp.getUi().alert(checkSetup()); }
 function showBatteryLinksDialog() { SpreadsheetApp.getUi().alert(showBatteryLinks()); }
 function debugBatteriesDialog() { SpreadsheetApp.getUi().alert(debugBatteries()); }
+function fixShiftedRowsDialog() { SpreadsheetApp.getUi().alert(fixShiftedRows()); }
