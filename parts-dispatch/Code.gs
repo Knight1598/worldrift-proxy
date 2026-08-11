@@ -1197,6 +1197,10 @@ function searchShipments_(opts) {
   var results = [];
   var byDate = {};
   var dates = [];
+  var byCarrier = {};
+  var carriers = [];
+  var byPart = {};
+  var partKeys = [];
   var totals = { shipments: 0, qty: 0, items: 0, days: 0 };
 
   for (var i = shipments.length - 1; i >= 0; i--) {
@@ -1227,6 +1231,29 @@ function searchShipments_(opts) {
     day.shipments++;
     day.qty += qty;
     day.items += items.length;
+
+    // สรุป "ไปกับใคร" และ "มีอะไรไปบ้าง" นับจากทุกแถวที่ตรงเงื่อนไข ใช้ตอนออกรายงาน PDF
+    var carrierName = cellText_(s.carrier) || 'ไม่ระบุขนส่ง';
+    var car = byCarrier[carrierName];
+    if (!car) {
+      car = byCarrier[carrierName] = { name: carrierName, shipments: 0, qty: 0 };
+      carriers.push(car);
+    }
+    car.shipments++;
+    car.qty += qty;
+
+    items.forEach(function (it) {
+      var key = (it.partCode || it.partName || '-').toLowerCase();
+      var rec = byPart[key];
+      if (!rec) {
+        rec = byPart[key] = { partCode: it.partCode, partName: it.partName, qty: 0, rounds: 0 };
+        partKeys.push(key);
+      }
+      var n = Number(String(it.qty == null ? '' : it.qty).replace(/,/g, ''));
+      if (!isNaN(n) && isFinite(n)) rec.qty += n;
+      rec.rounds++;
+      if (!rec.partName && it.partName) rec.partName = it.partName;
+    });
 
     totals.shipments++;
     totals.qty += qty;
@@ -1260,9 +1287,14 @@ function searchShipments_(opts) {
   dates.sort();
   dates.reverse();          // วันล่าสุดอยู่บนสุด ตรงกับลำดับการ์ดในรายงาน
 
+  function byQtyDesc(a, b) { return b.qty - a.qty || b.shipments - a.shipments; }
+
   return {
     results: results,
     days: dates.map(function (d) { return byDate[d]; }),
+    carriers: carriers.sort(byQtyDesc),
+    parts: partKeys.map(function (k) { return byPart[k]; })
+      .sort(function (a, b) { return b.qty - a.qty || b.rounds - a.rounds; }),
     totals: totals,
     truncated: totals.shipments > results.length
   };
@@ -1305,6 +1337,246 @@ function sumItemQty_(items) {
     if (!isNaN(n) && isFinite(n)) total += n;
   });
   return total;
+}
+
+/* =======================================================================
+ * ส่วนที่ 4.5 — ออกรายงานเป็น PDF ตามช่วงวันที่ที่เลือกไว้ในหน้ารายงาน
+ *
+ * สร้างเป็น Google Docs ก่อนแล้วแปลงเป็น PDF ไม่ได้แปลงจาก HTML ตรง ๆ
+ * เพราะตัวแปลง HTML → PDF ของ Apps Script ไม่มีฟอนต์ไทย ตัวหนังสือจะออกมาเป็นกล่องเปล่า
+ * ส่วน Docs ใช้ตัวเรนเดอร์เดียวกับ Google Docs จริง ภาษาไทยจึงออกมาครบ
+ * ===================================================================== */
+
+var PDF_FOLDER_NAME = 'รายงาน PDF ส่งอะไหล่';
+var PDF_MAX_ROUNDS = 500;        // เกินนี้รายงานจะยาวและสร้างไม่ทันในเวลาที่ Apps Script ให้
+var PDF_MAX_PART_ROWS = 200;     // ตารางสรุปอะไหล่ ยาวกว่านี้ตัดแล้วบอกว่าตัด
+
+/** ออกรายงาน PDF ตามเงื่อนไขเดียวกับที่ค้นในหน้ารายงาน */
+function apiExportPdf(payload) {
+  try {
+    return exportReportPdf_(payload || {});
+  } catch (err) {
+    return { ok: false, error: String(err.message || err) };
+  }
+}
+
+function exportReportPdf_(p) {
+  var found = searchShipments_({
+    q: p.q, zone: p.zone, branch: p.branch,
+    from: p.from, to: p.to, transferOnly: p.transferOnly,
+    limit: PDF_MAX_ROUNDS
+  });
+
+  if (!found.totals.shipments) {
+    throw new Error('ไม่มีรายการในเงื่อนไขที่เลือก จึงยังไม่มีอะไรให้ออกรายงาน');
+  }
+
+  var detail = String(p.detail || 'full') !== 'summary';
+  var name = pdfName_(p, found);
+  var doc = DocumentApp.create(name);
+
+  try {
+    buildReportDoc_(doc, p, found, detail);
+    doc.saveAndClose();
+
+    var pdf = DriveApp.getFileById(doc.getId()).getAs('application/pdf').setName(name + '.pdf');
+    var saved = getPdfFolder_().createFile(pdf);
+
+    return {
+      ok: true,
+      name: saved.getName(),
+      fileId: saved.getId(),
+      url: 'https://drive.google.com/file/d/' + saved.getId() + '/view',
+      base64: Utilities.base64Encode(pdf.getBytes()),
+      rounds: found.results.length,
+      totals: found.totals,
+      truncated: found.truncated
+    };
+  } finally {
+    // ไฟล์ Docs เป็นแค่ทางผ่าน ทิ้งทุกครั้งแม้สร้าง PDF ไม่สำเร็จ ไม่ให้ค้างในไดรฟ์
+    try { DriveApp.getFileById(doc.getId()).setTrashed(true); } catch (err) { /* ลบไม่ได้ก็ข้าม */ }
+  }
+}
+
+function getPdfFolder_() {
+  var id = prop_('PDF_FOLDER_ID');
+  if (id) {
+    try {
+      return DriveApp.getFolderById(id);
+    } catch (err) {
+      // โฟลเดอร์ถูกลบไป สร้างใหม่ให้
+    }
+  }
+  var folder = DriveApp.createFolder(PDF_FOLDER_NAME);
+  props_().setProperty('PDF_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+function pdfName_(p, found) {
+  var from = String(p.from || '');
+  var to = String(p.to || '');
+  var days = found.days;
+  if (!from && days.length) from = days[days.length - 1].date;
+  if (!to && days.length) to = days[0].date;
+  var span = (from === to) ? from : from + '_ถึง_' + to;
+  return 'รายงานส่งอะไหล่_' + (span || todayIso_());
+}
+
+/** เขียนเนื้อรายงานลงในเอกสาร */
+function buildReportDoc_(doc, p, found, detail) {
+  var body = doc.getBody();
+
+  // A4 นอน เพราะตารางรายละเอียดมี 6 คอลัมน์ ตั้งตรงจะแคบเกินไป
+  body.setPageWidth(842).setPageHeight(595);
+  body.setMarginTop(28).setMarginBottom(28).setMarginLeft(28).setMarginRight(28);
+
+  var title = body.appendParagraph('รายงานการส่งอะไหล่');
+  title.setHeading(DocumentApp.ParagraphHeading.TITLE);
+
+  head_(body, pdfRangeText_(p, found));
+  var cond = pdfConditionText_(p);
+  if (cond) head_(body, 'เงื่อนไข: ' + cond);
+  head_(body, 'พิมพ์เมื่อ ' + nowStamp_() + (p.sender ? ' โดย ' + p.sender : ''));
+
+  var sum = body.appendParagraph('รวม ' + found.totals.shipments + ' รอบส่ง • ' +
+    found.totals.qty + ' ชิ้น • ' + found.totals.days + ' วัน');
+  sum.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+
+  if (found.truncated) {
+    head_(body, '⚠️ รายละเอียดในรายงานนี้แสดง ' + found.results.length + ' รอบล่าสุดเท่านั้น ' +
+      '(ยอดสรุปด้านบนนับครบทุกรอบ) — แบ่งช่วงวันที่ให้แคบลงเพื่อให้ได้รายละเอียดครบ');
+  }
+
+  /* ---- สรุปรายวัน ---- */
+  section_(body, 'สรุปรายวัน');
+  var dayRows = [['วันที่', 'รอบส่ง', 'จำนวนชิ้น']];
+  found.days.forEach(function (d) {
+    dayRows.push([thaiDateText_(d.date), String(d.shipments), String(d.qty)]);
+  });
+  dayRows.push(['รวมทั้งหมด', String(found.totals.shipments), String(found.totals.qty)]);
+  styleTable_(body.appendTable(dayRows), [180, 90, 110], true);
+
+  /* ---- ไปกับใครบ้าง ---- */
+  section_(body, 'สรุปตามขนส่ง / ผู้มารับของ');
+  var carRows = [['ขนส่ง / ผู้มารับของ', 'รอบส่ง', 'จำนวนชิ้น']];
+  found.carriers.forEach(function (c) {
+    carRows.push([c.name, String(c.shipments), String(c.qty)]);
+  });
+  styleTable_(body.appendTable(carRows), [320, 90, 110], true);
+
+  /* ---- มีอะไรไปบ้าง ---- */
+  section_(body, 'สรุปตามอะไหล่');
+  var partRows = [['รหัสสินค้า', 'ชื่อสินค้า', 'จำนวนชิ้น', 'อยู่ในกี่รอบ']];
+  found.parts.slice(0, PDF_MAX_PART_ROWS).forEach(function (it) {
+    partRows.push([it.partCode || '-', it.partName || '-', String(it.qty), String(it.rounds)]);
+  });
+  styleTable_(body.appendTable(partRows), [140, 380, 100, 100], true);
+  if (found.parts.length > PDF_MAX_PART_ROWS) {
+    head_(body, 'แสดง ' + PDF_MAX_PART_ROWS + ' อันดับแรกจากทั้งหมด ' + found.parts.length + ' รายการ');
+  }
+
+  if (!detail) return;
+
+  /* ---- รายละเอียดแยกตามวัน ---- */
+  var byDate = {};
+  found.results.forEach(function (s) {
+    if (!byDate[s.shipDate]) byDate[s.shipDate] = [];
+    byDate[s.shipDate].push(s);
+  });
+
+  found.days.forEach(function (d) {
+    var rows = byDate[d.date];
+    if (!rows || !rows.length) return;      // วันนั้นถูกตัดออกจากรายละเอียดไปแล้ว
+
+    body.appendPageBreak();
+    section_(body, 'วันที่ ' + thaiDateText_(d.date) + ' — ' + d.shipments + ' รอบ • ' + d.qty + ' ชิ้น');
+
+    var table = [['เลขที่ใบ PR', 'สาขาปลายทาง', 'ขนส่ง / ผู้มารับของ', 'กล่อง / เลขพัสดุ',
+                  'รายการอะไหล่', 'ชิ้น']];
+    rows.forEach(function (s) {
+      table.push([
+        s.prNo || s.shipmentId,
+        s.destBranch + (s.zone ? '\n(เขต' + s.zone + ')' : '') +
+          (s.isTransfer ? '\nฝากลงที่ ' + s.dropPoint : ''),
+        s.carrier + (s.receiverName ? '\nผู้รับ ' + s.receiverName : ''),
+        [s.boxCount ? s.boxCount + ' กล่อง' : '', s.trackingNo].filter(String).join('\n') || '-',
+        itemLines_(s.items),
+        String(s.totalQty)
+      ]);
+    });
+    styleTable_(body.appendTable(table), [110, 130, 130, 100, 250, 50], true);
+  });
+}
+
+/** บรรทัดเล็กสีเทาใต้หัวเรื่อง */
+function head_(body, text) {
+  body.appendParagraph(text).setFontSize(9).setForegroundColor('#666666');
+}
+
+function section_(body, text) {
+  body.appendParagraph(text).setHeading(DocumentApp.ParagraphHeading.HEADING3);
+}
+
+/** รายการอะไหล่ในหนึ่งช่อง: บรรทัดละรายการ */
+function itemLines_(items) {
+  var lines = (items || []).map(function (it) {
+    return (it.partCode ? it.partCode + ' ' : '') + (it.partName || '') +
+      ' x' + it.qty + (it.unit ? ' ' + it.unit : '');
+  });
+  return lines.length ? lines.join('\n') : '-';
+}
+
+/**
+ * ใส่เส้นตาราง ขนาดตัวอักษร และทำหัวตารางให้เป็นตัวหนา
+ * ตั้งค่าเป็นก้อนเดียวทั้งตาราง ไม่ไล่ทำทีละช่อง เพราะเอกสารยาว ๆ จะช้ามาก
+ */
+function styleTable_(table, widths, boldHeader) {
+  table.setBorderWidth(0.5);
+  table.editAsText().setFontSize(9);
+  (widths || []).forEach(function (w, i) {
+    try { table.setColumnWidth(i, w); } catch (err) { /* คอลัมน์ไม่ครบก็ข้าม */ }
+  });
+  if (boldHeader && table.getNumRows()) {
+    var cols = table.getRow(0).getNumCells();
+    for (var c = 0; c < cols; c++) {
+      var cell = table.getCell(0, c);
+      cell.setBackgroundColor('#eeeeee');
+      cell.editAsText().setBold(true);
+    }
+  }
+  return table;
+}
+
+function thaiDateText_(iso) {
+  var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : (iso || 'ไม่ระบุวันจัดส่ง');
+}
+
+function pdfRangeText_(p, found) {
+  var from = String(p.from || '');
+  var to = String(p.to || '');
+  if (from && to) {
+    return from === to
+      ? 'ประจำวันที่ ' + thaiDateText_(from)
+      : 'ช่วงวันที่ ' + thaiDateText_(from) + ' ถึง ' + thaiDateText_(to);
+  }
+  if (from) return 'ตั้งแต่วันที่ ' + thaiDateText_(from);
+  if (to) return 'ถึงวันที่ ' + thaiDateText_(to);
+  var days = found.days;
+  if (days.length) {
+    return 'ทุกวันที่มีข้อมูล (' + thaiDateText_(days[days.length - 1].date) +
+      ' ถึง ' + thaiDateText_(days[0].date) + ')';
+  }
+  return 'ทุกวันที่มีข้อมูล';
+}
+
+function pdfConditionText_(p) {
+  var bits = [];
+  if (p.q) bits.push('คำค้น "' + p.q + '"');
+  if (p.zone) bits.push('เขต ' + p.zone);
+  if (p.branch) bits.push('สาขา' + p.branch);
+  if (p.transferOnly) bits.push('เฉพาะรายการที่ฝากลงที่อื่น');
+  return bits.join(' • ');
 }
 
 function groupItems_() {

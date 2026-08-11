@@ -727,6 +727,12 @@
         <button class="primary" id="searchBtn">ค้นหา</button>
         <button type="button" class="ghost" id="clearSearchBtn">ล้างการค้นหา</button>
       </div>
+
+      <div class="row" style="margin-top:8px;">
+        <button type="button" class="ghost" id="pdfFullBtn">📄 ส่งออก PDF</button>
+        <button type="button" class="ghost" id="pdfSumBtn">📄 เฉพาะยอดสรุป</button>
+      </div>
+      <div id="pdfMsg" class="muted hidden" style="margin-top:8px;"></div>
     </div>
 
     <div id="searchStatus" class="card hidden"></div>
@@ -1831,6 +1837,100 @@
       chip.appendChild(x);
       box.appendChild(chip);
     });
+  }
+
+  /* ---------- ส่งออกรายงานเป็น PDF ----------
+   *
+   * ใช้เงื่อนไขเดียวกับที่ค้นอยู่ตอนนั้น (ช่วงวันที่ / เขต / สาขา / คำค้น / เฉพาะฝากลง)
+   * เซิร์ฟเวอร์สร้างไฟล์แล้วส่งกลับมาทั้งไบต์และลิงก์ในไดรฟ์
+   * ที่ต้องมีทั้งสองทางเพราะหน้าเว็บของ Apps Script อยู่ในกรอบ iframe
+   * บางเครื่อง/บางเบราว์เซอร์กันการดาวน์โหลดจากในกรอบ จึงต้องเหลือลิงก์ไว้ให้กดเสมอ
+   */
+
+  var pdfBusy = false;
+
+  $('pdfFullBtn').addEventListener('click', function () { exportPdf('full'); });
+  $('pdfSumBtn').addEventListener('click', function () { exportPdf('summary'); });
+
+  function setPdfMsg(html, isError) {
+    var box = $('pdfMsg');
+    box.className = isError ? 'banner err' : 'muted';
+    box.style.whiteSpace = 'pre-line';
+    box.innerHTML = '';
+    box.appendChild(html instanceof Node ? html : document.createTextNode(String(html || '')));
+    box.classList.remove('hidden');
+  }
+
+  function exportPdf(detail) {
+    if (pdfBusy) return;
+    pdfBusy = true;
+    $('pdfFullBtn').disabled = true;
+    $('pdfSumBtn').disabled = true;
+    setPdfMsg('กำลังสร้างไฟล์ PDF… รายงานยาว ๆ อาจใช้เวลาสัก 10-60 วินาที');
+
+    call('apiExportPdf', {
+      q: $('q').value.trim(),
+      zone: comboZoneFilter.getValue(),
+      branch: comboBranchFilter.getValue(),
+      from: $('from').value,
+      to: $('to').value,
+      transferOnly: $('transferOnly').checked,
+      sender: $('sender').value.trim() || localStorage.getItem('pd_sender') || '',
+      detail: detail
+    }).then(function (res) {
+      pdfBusy = false;
+      $('pdfFullBtn').disabled = false;
+      $('pdfSumBtn').disabled = false;
+      if (!res || !res.ok) return setPdfMsg('ออกรายงานไม่สำเร็จ: ' + ((res && res.error) || ''), true);
+      finishPdf(res);
+    }).catch(function (err) {
+      pdfBusy = false;
+      $('pdfFullBtn').disabled = false;
+      $('pdfSumBtn').disabled = false;
+      setPdfMsg('ออกรายงานไม่สำเร็จ: ' + (err.message || err), true);
+    });
+  }
+
+  function finishPdf(res) {
+    var wrap = document.createElement('span');
+    wrap.appendChild(document.createTextNode(
+      '✅ ' + res.name + '\n' +
+      'รวม ' + res.totals.shipments + ' รอบส่ง • ' + res.totals.qty + ' ชิ้น • ' +
+      res.totals.days + ' วัน' +
+      (res.truncated ? '\n⚠️ รายละเอียดในไฟล์แสดง ' + res.rounds + ' รอบล่าสุด — แบ่งช่วงวันให้แคบลงถ้าต้องการครบ' : '') +
+      '\n'));
+
+    // ดาวน์โหลดให้เลย ถ้าเบราว์เซอร์ยอม
+    var url = '';
+    try {
+      var bytes = atob(res.base64);
+      var buf = new Uint8Array(bytes.length);
+      for (var i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+      url = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+    } catch (err) {
+      url = '';
+    }
+
+    if (url) {
+      var dl = document.createElement('a');
+      dl.href = url;
+      dl.download = res.name;
+      dl.textContent = '⬇️ ดาวน์โหลดไฟล์';
+      dl.style.color = 'var(--primary)';
+      wrap.appendChild(dl);
+      wrap.appendChild(document.createTextNode('  •  '));
+      try { dl.click(); } catch (err) { /* กดเองได้จากลิงก์ */ }
+    }
+
+    var open = document.createElement('a');
+    open.href = res.url;
+    open.target = '_blank';
+    open.rel = 'noopener';
+    open.textContent = '📂 เปิดไฟล์ในไดรฟ์';
+    open.style.color = 'var(--primary)';
+    wrap.appendChild(open);
+
+    setPdfMsg(wrap);
   }
 
   // กันผลค้นหาเก่ามาแทรกทีหลังจนการ์ดซ้ำ — นับรอบไว้ แล้วรับเฉพาะรอบล่าสุด
