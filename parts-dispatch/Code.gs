@@ -1342,9 +1342,13 @@ function sumItemQty_(items) {
 /* =======================================================================
  * ส่วนที่ 4.5 — ออกรายงานเป็น PDF ตามช่วงวันที่ที่เลือกไว้ในหน้ารายงาน
  *
- * สร้างเป็น Google Docs ก่อนแล้วแปลงเป็น PDF ไม่ได้แปลงจาก HTML ตรง ๆ
- * เพราะตัวแปลง HTML → PDF ของ Apps Script ไม่มีฟอนต์ไทย ตัวหนังสือจะออกมาเป็นกล่องเปล่า
- * ส่วน Docs ใช้ตัวเรนเดอร์เดียวกับ Google Docs จริง ภาษาไทยจึงออกมาครบ
+ * วิธีทำ: เขียนรายงานลงแท็บชั่วคราวในชีตเดิม แล้วให้ Google แปลงแท็บนั้นเป็น PDF
+ *
+ * ไม่ใช้ Utilities.newBlob(html).getAs('application/pdf') เพราะตัวแปลงตัวนั้น
+ * ไม่มีฟอนต์ไทย ตัวหนังสือออกมาเป็นกล่องเปล่าทั้งใบ
+ * และไม่ใช้ Google Docs เป็นทางผ่าน เพราะบริการนั้นต้องขอสิทธิ์ documents เพิ่ม
+ * ทำให้ต้องกดอนุญาตใหม่และ deploy ใหม่ทุกที ส่วนทางนี้ใช้สิทธิ์ชีตกับ Drive
+ * ที่ระบบมีอยู่แล้ว ติดตั้งทับของเดิมแล้วใช้ได้ทันที
  * ===================================================================== */
 
 var PDF_FOLDER_NAME = 'รายงาน PDF ส่งอะไหล่';
@@ -1373,13 +1377,18 @@ function exportReportPdf_(p) {
 
   var detail = String(p.detail || 'full') !== 'summary';
   var name = pdfName_(p, found);
-  var doc = DocumentApp.create(name);
+
+  var ss = getSpreadsheet_();
+  var sheet = ss.insertSheet('__รายงาน__' + Date.now());
 
   try {
-    buildReportDoc_(doc, p, found, detail);
-    doc.saveAndClose();
+    // ซ่อนไว้ก่อน ไม่ให้แท็บชั่วคราวโผล่ให้คนที่เปิดชีตอยู่เห็น
+    try { sheet.hideSheet(); } catch (err) { /* ซ่อนไม่ได้ก็ไม่เป็นไร เดี๋ยวลบทิ้งอยู่ดี */ }
 
-    var pdf = DriveApp.getFileById(doc.getId()).getAs('application/pdf').setName(name + '.pdf');
+    buildReportSheet_(sheet, p, found, detail);
+    SpreadsheetApp.flush();          // ต้องเขียนลงชีตให้เสร็จก่อน ตัว export อ่านผ่าน HTTP
+
+    var pdf = exportSheetAsPdf_(ss.getId(), sheet.getSheetId(), name);
     var saved = getPdfFolder_().createFile(pdf);
 
     return {
@@ -1393,9 +1402,38 @@ function exportReportPdf_(p) {
       truncated: found.truncated
     };
   } finally {
-    // ไฟล์ Docs เป็นแค่ทางผ่าน ทิ้งทุกครั้งแม้สร้าง PDF ไม่สำเร็จ ไม่ให้ค้างในไดรฟ์
-    try { DriveApp.getFileById(doc.getId()).setTrashed(true); } catch (err) { /* ลบไม่ได้ก็ข้าม */ }
+    // แท็บชั่วคราวต้องหายทุกกรณี แม้สร้าง PDF ไม่สำเร็จ
+    try { ss.deleteSheet(sheet); } catch (err) { console.warn('ลบแท็บชั่วคราวไม่สำเร็จ: ' + err); }
   }
+}
+
+/**
+ * สั่งให้ Google แปลงแท็บนั้นเป็น PDF ให้
+ * ใช้ที่อยู่ export ของสเปรดชีตตรง ๆ พร้อม token ของสคริปต์
+ * ไม่ต้องขอสิทธิ์เพิ่มเลย เพราะเป็นชีตของเราเองที่มีสิทธิ์อยู่แล้ว
+ */
+function exportSheetAsPdf_(ssId, gid, name) {
+  var url = 'https://docs.google.com/spreadsheets/d/' + ssId + '/export?' + [
+    'format=pdf',
+    'gid=' + gid,
+    'portrait=false',          // แนวนอน ตารางรายละเอียดมี 6 คอลัมน์
+    'size=A4',
+    'fitw=true',               // ย่อให้พอดีความกว้างกระดาษ
+    'gridlines=false',
+    'printtitle=false',
+    'sheetnames=false',
+    'pagenumbers=true',
+    'top_margin=0.40', 'bottom_margin=0.40', 'left_margin=0.40', 'right_margin=0.40'
+  ].join('&');
+
+  var res = UrlFetchApp.fetch(url, {
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  });
+  if (res.getResponseCode() !== 200) {
+    throw new Error('แปลงรายงานเป็น PDF ไม่สำเร็จ (HTTP ' + res.getResponseCode() + ')');
+  }
+  return res.getBlob().setName(name + '.pdf');
 }
 
 function getPdfFolder_() {
@@ -1423,98 +1461,113 @@ function pdfName_(p, found) {
 }
 
 /** เขียนเนื้อรายงานลงในเอกสาร */
-function buildReportDoc_(doc, p, found, detail) {
-  var body = doc.getBody();
+/**
+ * เขียนเนื้อรายงานลงในแท็บชั่วคราว
+ * เก็บค่าทั้งหมดไว้ในอาร์เรย์ก่อนแล้วเขียนทีเดียว
+ * ส่วนการจัดรูปแบบรวบเป็นชุด ๆ ด้วย getRangeList เพราะสั่งทีละช่องจะช้ามากเวลารายงานยาว
+ */
+function buildReportSheet_(sheet, p, found, detail) {
+  var rows = [];
+  var titleRows = [], subRows = [], sectionRows = [], headRows = [], boldRows = [];
+  var blocks = [];      // ขอบตารางและคอลัมน์ตัวเลข [{ start, count, numCols }]
 
-  // A4 นอน เพราะตารางรายละเอียดมี 6 คอลัมน์ ตั้งตรงจะแคบเกินไป
-  body.setPageWidth(842).setPageHeight(595);
-  body.setMarginTop(28).setMarginBottom(28).setMarginLeft(28).setMarginRight(28);
+  function put(cells) {
+    rows.push(cells);
+    return rows.length;          // เลขแถวจริงในชีต (เริ่มที่ 1)
+  }
+  function blank() { put(['']); }
 
-  var title = body.appendParagraph('รายงานการส่งอะไหล่');
-  title.setHeading(DocumentApp.ParagraphHeading.TITLE);
-
-  head_(body, pdfRangeText_(p, found));
+  titleRows.push(put(['รายงานการส่งอะไหล่']));
+  subRows.push(put([pdfRangeText_(p, found)]));
   var cond = pdfConditionText_(p);
-  if (cond) head_(body, 'เงื่อนไข: ' + cond);
-  head_(body, 'พิมพ์เมื่อ ' + nowStamp_() + (p.sender ? ' โดย ' + p.sender : ''));
+  if (cond) subRows.push(put(['เงื่อนไข: ' + cond]));
+  subRows.push(put(['พิมพ์เมื่อ ' + nowStamp_() + (p.sender ? ' โดย ' + p.sender : '')]));
 
-  var sum = body.appendParagraph('รวม ' + found.totals.shipments + ' รอบส่ง • ' +
-    found.totals.qty + ' ชิ้น • ' + found.totals.days + ' วัน');
-  sum.setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  boldRows.push(put(['รวม ' + found.totals.shipments + ' รอบส่ง • ' + found.totals.qty +
+    ' ชิ้น • ' + found.totals.days + ' วัน']));
 
   if (found.truncated) {
-    head_(body, '⚠️ รายละเอียดในรายงานนี้แสดง ' + found.results.length + ' รอบล่าสุดเท่านั้น ' +
-      '(ยอดสรุปด้านบนนับครบทุกรอบ) — แบ่งช่วงวันที่ให้แคบลงเพื่อให้ได้รายละเอียดครบ');
+    subRows.push(put(['⚠️ รายละเอียดในรายงานนี้แสดง ' + found.results.length + ' รอบล่าสุดเท่านั้น ' +
+      '(ยอดสรุปด้านบนนับครบทุกรอบ) — แบ่งช่วงวันที่ให้แคบลงเพื่อให้ได้รายละเอียดครบ']));
+  }
+
+  /**
+   * หัวข้อส่วน + ตารางหนึ่งชุด
+   * numCols = คอลัมน์ที่เป็นตัวเลข (นับจาก 1) จะถูกจัดให้ชิดขวาตอนจัดรูปแบบ
+   */
+  function table(heading, header, body, numCols, totalRow) {
+    blank();
+    sectionRows.push(put([heading]));
+    var start = put(header);
+    headRows.push(start);
+    body.forEach(function (r) { put(r); });
+    if (totalRow) boldRows.push(put(totalRow));
+    blocks.push({ start: start, count: rows.length - start + 1, numCols: numCols || [] });
   }
 
   /* ---- สรุปรายวัน ---- */
-  section_(body, 'สรุปรายวัน');
-  var dayRows = [['วันที่', 'รอบส่ง', 'จำนวนชิ้น']];
-  found.days.forEach(function (d) {
-    dayRows.push([thaiDateText_(d.date), String(d.shipments), String(d.qty)]);
-  });
-  dayRows.push(['รวมทั้งหมด', String(found.totals.shipments), String(found.totals.qty)]);
-  styleTable_(body.appendTable(dayRows), [180, 90, 110], true);
+  table('สรุปรายวัน',
+    ['วันที่', 'รอบส่ง', 'จำนวนชิ้น'],
+    found.days.map(function (d) {
+      return [thaiDateText_(d.date), String(d.shipments), String(d.qty)];
+    }),
+    [2, 3],
+    ['รวมทั้งหมด', String(found.totals.shipments), String(found.totals.qty)]);
 
   /* ---- ไปกับใครบ้าง ---- */
-  section_(body, 'สรุปตามขนส่ง / ผู้มารับของ');
-  var carRows = [['ขนส่ง / ผู้มารับของ', 'รอบส่ง', 'จำนวนชิ้น']];
-  found.carriers.forEach(function (c) {
-    carRows.push([c.name, String(c.shipments), String(c.qty)]);
-  });
-  styleTable_(body.appendTable(carRows), [320, 90, 110], true);
+  table('สรุปตามขนส่ง / ผู้มารับของ',
+    ['ขนส่ง / ผู้มารับของ', 'รอบส่ง', 'จำนวนชิ้น'],
+    found.carriers.map(function (c) {
+      return [c.name, String(c.shipments), String(c.qty)];
+    }),
+    [2, 3]);
 
   /* ---- มีอะไรไปบ้าง ---- */
-  section_(body, 'สรุปตามอะไหล่');
-  var partRows = [['รหัสสินค้า', 'ชื่อสินค้า', 'จำนวนชิ้น', 'อยู่ในกี่รอบ']];
-  found.parts.slice(0, PDF_MAX_PART_ROWS).forEach(function (it) {
-    partRows.push([it.partCode || '-', it.partName || '-', String(it.qty), String(it.rounds)]);
-  });
-  styleTable_(body.appendTable(partRows), [140, 380, 100, 100], true);
+  table('สรุปตามอะไหล่',
+    ['รหัสสินค้า', 'ชื่อสินค้า', 'จำนวนชิ้น', 'อยู่ในกี่รอบ'],
+    found.parts.slice(0, PDF_MAX_PART_ROWS).map(function (it) {
+      return [it.partCode || '-', it.partName || '-', String(it.qty), String(it.rounds)];
+    }),
+    [3, 4]);
   if (found.parts.length > PDF_MAX_PART_ROWS) {
-    head_(body, 'แสดง ' + PDF_MAX_PART_ROWS + ' อันดับแรกจากทั้งหมด ' + found.parts.length + ' รายการ');
+    subRows.push(put(['แสดง ' + PDF_MAX_PART_ROWS + ' อันดับแรกจากทั้งหมด ' +
+      found.parts.length + ' รายการ']));
   }
 
-  if (!detail) return;
-
   /* ---- รายละเอียดแยกตามวัน ---- */
-  var byDate = {};
-  found.results.forEach(function (s) {
-    if (!byDate[s.shipDate]) byDate[s.shipDate] = [];
-    byDate[s.shipDate].push(s);
-  });
-
-  found.days.forEach(function (d) {
-    var rows = byDate[d.date];
-    if (!rows || !rows.length) return;      // วันนั้นถูกตัดออกจากรายละเอียดไปแล้ว
-
-    body.appendPageBreak();
-    section_(body, 'วันที่ ' + thaiDateText_(d.date) + ' — ' + d.shipments + ' รอบ • ' + d.qty + ' ชิ้น');
-
-    var table = [['เลขที่ใบ PR', 'สาขาปลายทาง', 'ขนส่ง / ผู้มารับของ', 'กล่อง / เลขพัสดุ',
-                  'รายการอะไหล่', 'ชิ้น']];
-    rows.forEach(function (s) {
-      table.push([
-        s.prNo || s.shipmentId,
-        s.destBranch + (s.zone ? '\n(เขต' + s.zone + ')' : '') +
-          (s.isTransfer ? '\nฝากลงที่ ' + s.dropPoint : ''),
-        s.carrier + (s.receiverName ? '\nผู้รับ ' + s.receiverName : ''),
-        [s.boxCount ? s.boxCount + ' กล่อง' : '', s.trackingNo].filter(String).join('\n') || '-',
-        itemLines_(s.items),
-        String(s.totalQty)
-      ]);
+  if (detail) {
+    var byDate = {};
+    found.results.forEach(function (s) {
+      if (!byDate[s.shipDate]) byDate[s.shipDate] = [];
+      byDate[s.shipDate].push(s);
     });
-    styleTable_(body.appendTable(table), [110, 130, 130, 100, 250, 50], true);
+
+    found.days.forEach(function (d) {
+      var list = byDate[d.date];
+      if (!list || !list.length) return;      // วันนั้นถูกตัดออกจากรายละเอียดไปแล้ว
+
+      table('วันที่ ' + thaiDateText_(d.date) + ' — ' + d.shipments + ' รอบ • ' + d.qty + ' ชิ้น',
+        ['เลขที่ใบ PR', 'สาขาปลายทาง', 'ขนส่ง / ผู้มารับของ', 'กล่อง / เลขพัสดุ',
+         'รายการอะไหล่', 'ชิ้น'],
+        list.map(function (s) {
+          return [
+            s.prNo || s.shipmentId,
+            s.destBranch + (s.zone ? '\n(เขต' + s.zone + ')' : '') +
+              (s.isTransfer ? '\nฝากลงที่ ' + s.dropPoint : ''),
+            s.carrier + (s.receiverName ? '\nผู้รับ ' + s.receiverName : ''),
+            [s.boxCount ? s.boxCount + ' กล่อง' : '', s.trackingNo].filter(String).join('\n') || '-',
+            itemLines_(s.items),
+            String(s.totalQty)
+          ];
+        }),
+        [6]);
+    });
+  }
+
+  writeReportGrid_(sheet, rows, {
+    titleRows: titleRows, subRows: subRows, sectionRows: sectionRows,
+    headRows: headRows, boldRows: boldRows, blocks: blocks
   });
-}
-
-/** บรรทัดเล็กสีเทาใต้หัวเรื่อง */
-function head_(body, text) {
-  body.appendParagraph(text).setFontSize(9).setForegroundColor('#666666');
-}
-
-function section_(body, text) {
-  body.appendParagraph(text).setHeading(DocumentApp.ParagraphHeading.HEADING3);
 }
 
 /** รายการอะไหล่ในหนึ่งช่อง: บรรทัดละรายการ */
@@ -1526,25 +1579,59 @@ function itemLines_(items) {
   return lines.length ? lines.join('\n') : '-';
 }
 
-/**
- * ใส่เส้นตาราง ขนาดตัวอักษร และทำหัวตารางให้เป็นตัวหนา
- * ตั้งค่าเป็นก้อนเดียวทั้งตาราง ไม่ไล่ทำทีละช่อง เพราะเอกสารยาว ๆ จะช้ามาก
- */
-function styleTable_(table, widths, boldHeader) {
-  table.setBorderWidth(0.5);
-  table.editAsText().setFontSize(9);
-  (widths || []).forEach(function (w, i) {
-    try { table.setColumnWidth(i, w); } catch (err) { /* คอลัมน์ไม่ครบก็ข้าม */ }
+var PDF_SHEET_COLS = 6;
+var PDF_COL_WIDTHS = [115, 155, 155, 105, 300, 55];
+
+/** เขียนค่าลงชีตแล้วจัดรูปแบบเป็นชุด ๆ */
+function writeReportGrid_(sheet, rows, style) {
+  var height = rows.length;
+  var grid = rows.map(function (cells) {
+    var out = cells.slice(0, PDF_SHEET_COLS);
+    while (out.length < PDF_SHEET_COLS) out.push('');
+    return out;
   });
-  if (boldHeader && table.getNumRows()) {
-    var cols = table.getRow(0).getNumCells();
-    for (var c = 0; c < cols; c++) {
-      var cell = table.getCell(0, c);
-      cell.setBackgroundColor('#eeeeee');
-      cell.editAsText().setBold(true);
-    }
+
+  var all = sheet.getRange(1, 1, height, PDF_SHEET_COLS);
+  all.setNumberFormat('@');        // กันชีตแปลงรหัสสินค้า/วันที่เป็นตัวเลขแล้วตัด 0 นำหน้าทิ้ง
+  all.setValues(grid);
+  all.setFontSize(9).setWrap(true).setVerticalAlignment('top');
+
+  PDF_COL_WIDTHS.forEach(function (w, i) { sheet.setColumnWidth(i + 1, w); });
+
+  function ranges(list) {
+    return (list || []).map(function (n) { return 'A' + n + ':' + 'F' + n; });
   }
-  return table;
+
+  var t = ranges(style.titleRows);
+  if (t.length) sheet.getRangeList(t).setFontSize(15).setFontWeight('bold');
+
+  var s = ranges(style.subRows);
+  if (s.length) sheet.getRangeList(s).setFontColor('#666666');
+
+  var sec = ranges(style.sectionRows);
+  if (sec.length) {
+    sheet.getRangeList(sec).setFontSize(11).setFontWeight('bold').setBackground('#dce6f7');
+  }
+
+  var h = ranges(style.headRows);
+  if (h.length) sheet.getRangeList(h).setFontWeight('bold').setBackground('#eeeeee');
+
+  var b = ranges(style.boldRows);
+  if (b.length) sheet.getRangeList(b).setFontWeight('bold');
+
+  // หัวเรื่องกับบรรทัดคำอธิบายต้องกินความกว้างทั้งแถว ไม่งั้นข้อความถูกตัดในช่อง A
+  ranges(style.titleRows.concat(style.subRows, style.sectionRows)).forEach(function (a1) {
+    try { sheet.getRange(a1).mergeAcross(); } catch (err) { /* ทับกับ merge เดิมก็ข้าม */ }
+  });
+
+  (style.blocks || []).forEach(function (blk) {
+    sheet.getRange(blk.start, 1, blk.count, PDF_SHEET_COLS)
+      .setBorder(true, true, true, true, true, true, '#bbbbbb', SpreadsheetApp.BorderStyle.SOLID);
+    // ช่องตัวเลขชิดขวาให้อ่านง่าย (ทุกช่องเก็บเป็นข้อความ ชีตจึงไม่จัดให้เอง)
+    (blk.numCols || []).forEach(function (c) {
+      sheet.getRange(blk.start + 1, c, Math.max(blk.count - 1, 1), 1).setHorizontalAlignment('right');
+    });
+  });
 }
 
 function thaiDateText_(iso) {
