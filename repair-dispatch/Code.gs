@@ -465,6 +465,24 @@ function nextRepairId_(rows) {
  * ส่วนที่ 5 — รูปหลักฐาน
  * ===================================================================== */
 
+/**
+ * ข้อความบอกทางแก้เวลาโดน Google ปฏิเสธเพราะยังไม่ได้อนุญาตสิทธิ์ Drive
+ * ข้อความดิบของ Google เป็นภาษาอังกฤษปนลิงก์ยาว ๆ คนกรอกฟอร์มอ่านแล้วไม่รู้จะทำอะไร
+ */
+function drivePermissionError_(err) {
+  var raw = String((err && err.message) || err || '');
+  if (!/auth\/drive|Drive|ไม่ได้รับอนุญาต|not been granted|PERMISSION_DENIED/i.test(raw)) return null;
+
+  return new Error(
+    'ระบบยังไม่ได้รับสิทธิ์เข้าถึง Google Drive จึงเก็บรูปหลักฐานไม่ได้\n' +
+    'แจ้งคนที่ดูแลระบบให้ทำตามนี้ (ทำครั้งเดียว):\n' +
+    '1. เปิดโปรเจกต์ Apps Script ของฟอร์มนี้ แล้วรันฟังก์ชัน authorize\n' +
+    '2. กดอนุญาตให้ครบทุกข้อ รวมข้อที่ขอสิทธิ์ Google Drive\n' +
+    '3. Deploy → Manage deployments → ดินสอ → Version: New version\n' +
+    '(รายละเอียดเดิมจาก Google: ' + raw + ')'
+  );
+}
+
 /** โฟลเดอร์เก็บรูป (ตั้ง EVIDENCE_FOLDER_ID เองก็ได้ ไม่ตั้งระบบสร้างให้) */
 function getEvidenceFolder_() {
   var id = prop_('EVIDENCE_FOLDER_ID');
@@ -472,13 +490,20 @@ function getEvidenceFolder_() {
     try {
       return DriveApp.getFolderById(id);
     } catch (err) {
-      // โฟลเดอร์ถูกลบหรือ id ผิด สร้างใหม่ให้
+      var denied = drivePermissionError_(err);
+      if (denied) throw denied;
+      // นอกจากเรื่องสิทธิ์ ก็คือโฟลเดอร์ถูกลบหรือ id ผิด — สร้างใหม่ให้
     }
   }
-  var it = DriveApp.getFoldersByName(EVIDENCE_FOLDER_NAME);
-  var folder = it.hasNext() ? it.next() : DriveApp.createFolder(EVIDENCE_FOLDER_NAME);
-  props_().setProperty('EVIDENCE_FOLDER_ID', folder.getId());
-  return folder;
+
+  try {
+    var it = DriveApp.getFoldersByName(EVIDENCE_FOLDER_NAME);
+    var folder = it.hasNext() ? it.next() : DriveApp.createFolder(EVIDENCE_FOLDER_NAME);
+    props_().setProperty('EVIDENCE_FOLDER_ID', folder.getId());
+    return folder;
+  } catch (err2) {
+    throw drivePermissionError_(err2) || err2;
+  }
 }
 
 /**
@@ -493,12 +518,18 @@ function saveEvidenceImage_(clean) {
   var name = safeFileNamePart_(clean.jobNo) + '_' + todayIso_() + ext;
 
   var blob = Utilities.newBlob(Utilities.base64Decode(clean.imageBase64), type, name);
-  var file = getEvidenceFolder_().createFile(blob);
+
+  var file;
+  try {
+    file = getEvidenceFolder_().createFile(blob);
+  } catch (err) {
+    throw drivePermissionError_(err) || err;
+  }
 
   try {
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  } catch (err) {
-    console.warn('เปิดสิทธิ์ลิงก์รูปไม่ได้ (อาจติดนโยบายขององค์กร): ' + err);
+  } catch (err2) {
+    console.warn('เปิดสิทธิ์ลิงก์รูปไม่ได้ (อาจติดนโยบายขององค์กร): ' + err2);
   }
   return file.getUrl();
 }
@@ -536,11 +567,56 @@ function checkSetup() {
     }
 
     lines.push('✅ สาขาที่เลือกได้: ' + getBranches_().length + ' สาขา');
-    lines.push('📁 โฟลเดอร์รูปหลักฐาน: ' + getEvidenceFolder_().getName());
+
+    // แยก try ของ Drive ไว้ต่างหาก ติดเรื่องสิทธิ์แล้วบรรทัดอื่นต้องยังรายงานได้
+    try {
+      lines.push('📁 โฟลเดอร์รูปหลักฐาน: ' + getEvidenceFolder_().getName());
+    } catch (driveErr) {
+      lines.push('❌ Google Drive: ' + (driveErr.message || driveErr));
+      lines.push('   → รันฟังก์ชัน authorize แล้วกดอนุญาตให้ครบทุกข้อ');
+    }
+
     lines.push('🔗 ลิงก์ฟอร์มสำหรับแจกสาขา: ' + (ScriptApp.getService().getUrl() || 'ยังไม่ได้ deploy'));
   } catch (err) {
     lines.push('❌ ' + (err.message || err));
   }
+
+  var out = lines.join('\n');
+  Logger.log(out);
+  return out;
+}
+
+/**
+ * รันตัวนี้เพื่อให้หน้าขอสิทธิ์เด้งขึ้นมาครบทุกข้อ (ชีต + Drive)
+ *
+ * Apps Script คิดรายการสิทธิ์จากโค้ดที่มีอยู่ตอนกดรัน ถ้าเคยกดอนุญาตไว้ตอนโค้ดยังไม่ครบ
+ * ตัวโปรเจกต์จะค้างอยู่กับสิทธิ์ชุดเก่า แล้วพอถึงจังหวะเก็บรูปจริงก็โดนปฏิเสธ
+ * ฟังก์ชันนี้แตะทั้งชีตและ Drive ในทีเดียว สิทธิ์ที่ขอจึงครบตั้งแต่รอบแรก
+ */
+function authorize() {
+  var lines = [];
+  try {
+    var ss = getSpreadsheet_();
+    lines.push('✅ เปิดไฟล์ชีตได้: ' + ss.getName());
+  } catch (err) {
+    lines.push('❌ เปิดไฟล์ชีตไม่ได้: ' + (err.message || err));
+  }
+
+  try {
+    var folder = getEvidenceFolder_();
+    lines.push('✅ เข้าถึง Google Drive ได้');
+    lines.push('   โฟลเดอร์เก็บรูป: ' + folder.getName());
+    lines.push('   id: ' + folder.getId());
+  } catch (err2) {
+    lines.push('❌ เข้าถึง Google Drive ไม่ได้: ' + (err2.message || err2));
+    lines.push('   ถ้าไม่มีหน้าขอสิทธิ์เด้งขึ้นมาเลย ให้ถอนสิทธิ์เดิมออกก่อน:');
+    lines.push('   myaccount.google.com → ความเป็นส่วนตัว → แอปของบุคคลที่สาม');
+    lines.push('   → หาชื่อโปรเจกต์นี้ → ลบการเข้าถึง แล้วกลับมารัน authorize อีกครั้ง');
+  }
+
+  lines.push('');
+  lines.push('ถ้าผ่านทั้งสองข้อแล้ว อย่าลืม Deploy → Manage deployments → ดินสอ');
+  lines.push('→ Version: New version เพื่อให้เว็บแอปใช้สิทธิ์ชุดใหม่');
 
   var out = lines.join('\n');
   Logger.log(out);
