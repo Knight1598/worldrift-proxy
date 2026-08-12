@@ -623,6 +623,27 @@ function authorize() {
   return out;
 }
 
+/**
+ * รันตัวนี้ถ้ารัน authorize() แล้วไม่มีหน้าต่างขอสิทธิ์เด้งขึ้นมาเลย
+ *
+ * authorize() เรียกชีตก่อนแล้วค่อยเรียก Drive ทีหลัง ถ้าขั้นชีตผ่านไปเงียบ ๆ
+ * (เพราะได้รับอนุญาตอยู่แล้ว) บางเครื่อง/บางรอบตัวแก้ไขของ Apps Script จะไม่กลับมา
+ * เปิดหน้าต่างขอสิทธิ์ให้อีกตอนไปเจอ Drive กลางฟังก์ชัน กลายเป็นเจอ error ทันทีเงียบ ๆ
+ * ฟังก์ชันนี้แตะ Drive เป็นคำสั่งแรกและอย่างเดียว ไม่มีอะไรมาบังก่อน
+ * จึงมีโอกาสสูงกว่าที่หน้าต่างขอสิทธิ์จะเด้งขึ้นมาจริง
+ */
+function authorizeDrive() {
+  var folder = DriveApp.createFolder('ทดสอบสิทธิ์ไดรฟ์ - ลบได้');
+  var id = folder.getId();
+  folder.setTrashed(true);   // ทดสอบเสร็จก็ทิ้ง ไม่เกะกะไดรฟ์ของบัญชีที่ deploy
+
+  var msg = '✅ เข้าถึง Google Drive ได้แล้ว (ทดสอบสร้าง-ลบโฟลเดอร์สำเร็จ id: ' + id + ')\n' +
+    'กลับไปรัน authorize อีกครั้งเพื่อตรวจทั้งสองข้อพร้อมกัน ' +
+    'แล้ว Deploy → Manage deployments → ดินสอ → Version: New version';
+  Logger.log(msg);
+  return msg;
+}
+
 /** ดูลิงก์ฟอร์มสำหรับแจกสาขา */
 function showFormUrl() {
   var url = ScriptApp.getService().getUrl() || 'ยังไม่ได้ deploy เป็นเว็บแอป';
