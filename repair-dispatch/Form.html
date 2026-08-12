@@ -1,0 +1,755 @@
+<!--
+  ฟอร์มส่งรถซ่อมข้ามสาขา — หน้าเดียวจบ
+  ก็อปไฟล์นี้ไปวางใน Apps Script เป็นไฟล์ชนิด HTML ชื่อ Form
+
+  ออกแบบให้ใช้บนมือถือเป็นหลัก: ช่องกรอกตัวใหญ่ กดง่าย ไม่ต้องเลื่อนซ้ายขวา
+  ทุกช่องบังคับกรอก และรูปถูกย่อในเครื่องก่อนส่ง (มือถือถ่ายมา 4-8MB ส่งตรง ๆ จะหลุดโควตา)
+-->
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1b1f27;
+    --muted: #6b7280;
+    --line: #e2e5ea;
+    --primary: #0891b2;
+    --ok-bg: #e7f6ed;
+    --ok-text: #14622f;
+    --err-bg: #fdecec;
+    --err-text: #9b1c1c;
+    --warn-bg: #fff7e6;
+    --warn-text: #8a5300;
+    --radius: 12px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --card: #1e2127;
+      --text: #eceef2;
+      --muted: #9aa1ad;
+      --line: #333842;
+      --ok-bg: #16321f;
+      --ok-text: #a8e0bb;
+      --err-bg: #3a1a1a;
+      --err-text: #f5b5b5;
+      --warn-bg: #35291a;
+      --warn-text: #f0cf9a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    padding: 0 0 48px;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Noto Sans Thai", "Sarabun", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap { max-width: 620px; margin: 0 auto; padding: 0 14px; }
+
+  header.app {
+    background: var(--primary);
+    color: #fff;
+    padding: calc(14px + env(safe-area-inset-top)) 14px 14px;
+    margin-bottom: 14px;
+  }
+  header.app h1 { font-size: 19px; margin: 0; font-weight: 600; }
+  header.app .sub { font-size: 13px; opacity: .88; margin-top: 4px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 15px; margin: 0 0 12px; color: var(--muted); font-weight: 600; }
+
+  label {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 5px;
+    color: var(--muted);
+  }
+  label .req { color: var(--err-text); margin-left: 2px; }
+  label .hint { color: var(--muted); font-weight: 400; }
+
+  input, select, textarea, button { font-family: inherit; font-size: 16px; color: var(--text); }
+
+  input, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--card);
+    margin-bottom: 12px;
+  }
+  textarea { resize: vertical; line-height: 1.5; }
+  input:disabled { background: var(--bg); color: var(--muted); }
+  input.bad, textarea.bad { border-color: var(--err-text); }
+
+  button.primary {
+    width: 100%;
+    padding: 14px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 17px;
+    cursor: pointer;
+  }
+  button.primary:disabled { opacity: .6; cursor: default; }
+
+  button.ghost {
+    width: 100%;
+    padding: 11px;
+    background: none;
+    border: 1px dashed var(--line);
+    color: var(--primary);
+    border-radius: 10px;
+    font-size: 15px;
+    cursor: pointer;
+  }
+
+  .banner {
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 15px;
+    margin-bottom: 12px;
+    white-space: pre-line;
+  }
+  .banner.ok { background: var(--ok-bg); color: var(--ok-text); }
+  .banner.err { background: var(--err-bg); color: var(--err-text); }
+  .banner.warn { background: var(--warn-bg); color: var(--warn-text); }
+
+  .muted { color: var(--muted); font-size: 14px; }
+  .hidden { display: none !important; }
+
+  /* ช่องเลือกแบบพิมพ์ค้นหาได้ — สาขามี 166 แห่ง เลื่อนหาใน select ไม่ไหว */
+  .combo { position: relative; margin-bottom: 12px; }
+  .combo input { margin-bottom: 0; }
+
+  .combo-list {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 4px;
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    max-height: 270px;
+    overflow-y: auto;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.18);
+    -webkit-overflow-scrolling: touch;
+  }
+  .combo-item {
+    padding: 11px 12px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .combo-item.active { background: var(--primary); color: #fff; }
+  .combo-item .sub { font-size: 13px; color: var(--muted); margin-left: 6px; }
+  .combo-item.active .sub { color: rgba(255,255,255,.82); }
+  .combo-empty { padding: 11px 12px; font-size: 14px; color: var(--muted); }
+
+  /* กล่องแนบรูปหลักฐาน */
+  .pick {
+    display: block;
+    width: 100%;
+    padding: 22px 12px;
+    text-align: center;
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    color: var(--primary);
+    background: var(--bg);
+    cursor: pointer;
+  }
+  .pick .big { font-size: 26px; display: block; margin-bottom: 4px; }
+  .shot { margin-top: 10px; }
+  .shot img {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    display: block;
+  }
+  .shot .foot {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+  .shot .foot button {
+    background: none;
+    border: none;
+    color: var(--err-text);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  /* สรุปหลังส่งสำเร็จ */
+  .done .rid {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: .5px;
+    margin-bottom: 8px;
+  }
+  .kv { display: flex; gap: 8px; font-size: 15px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { color: var(--muted); flex: none; width: 108px; }
+  .kv .v { flex: 1; min-width: 0; word-break: break-word; }
+</style>
+
+<header class="app">
+  <h1>🚚 ส่งรถซ่อมข้ามสาขา</h1>
+  <div class="sub" id="sub">กำลังโหลดข้อมูลสาขา…</div>
+</header>
+
+<div class="wrap">
+  <div id="msg" class="banner hidden"></div>
+
+  <!-- ฟอร์มกรอก -->
+  <div id="formCard" class="card">
+    <h2>ข้อมูลรถที่ส่งซ่อม</h2>
+
+    <label for="fBranch-input">สาขาที่ส่ง<span class="req">*</span></label>
+    <div class="combo" id="fBranch"></div>
+
+    <div id="otherWrap" class="hidden">
+      <label for="fBranchOther">ชื่อสาขา (พิมพ์เอง)<span class="req">*</span></label>
+      <input type="text" id="fBranchOther" placeholder="เช่น สาขาใหม่ยังไม่เข้าระบบ">
+
+      <label for="fZoneOther">โซน (พิมพ์เอง)<span class="req">*</span></label>
+      <input type="text" id="fZoneOther" placeholder="เช่น โซน 12">
+    </div>
+
+    <label for="fZone">โซน <span class="hint">(ระบบเติมให้จากสาขา)</span></label>
+    <input type="text" id="fZone" disabled placeholder="—">
+
+    <label for="fJobNo">เลขที่ใบจ๊อบ<span class="req">*</span></label>
+    <input type="text" id="fJobNo" autocomplete="off" placeholder="เช่น JOB-2568-00123">
+
+    <label for="fModel">รุ่นรถ<span class="req">*</span></label>
+    <input type="text" id="fModel" autocomplete="off" placeholder="เช่น G5 Pro">
+
+    <label for="fPlate">ข้อมูลขนส่ง + ทะเบียนรถ<span class="req">*</span></label>
+    <input type="text" id="fPlate" autocomplete="off" placeholder="เช่น ขนส่งเอกชัย / ทะเบียน 1กก 1234">
+
+    <label for="fSender">ชื่อผู้ส่ง<span class="req">*</span></label>
+    <input type="text" id="fSender" autocomplete="off" placeholder="ชื่อคนที่ส่งรถ">
+
+    <label for="fNote">อาการเบื้องต้น<span class="req">*</span></label>
+    <textarea id="fNote" rows="3" placeholder="เล่าอาการที่เจอ เช่น สตาร์ทไม่ติด ไฟโชว์รูปแบต"></textarea>
+
+    <label>รูปหลักฐาน<span class="req">*</span> <span class="hint">(ถ่ายรถหรือใบจ๊อบก็ได้)</span></label>
+    <label class="pick" for="fImage" id="pickBox">
+      <span class="big">📷</span>
+      <span id="pickText">กดเพื่อถ่ายรูป หรือเลือกรูปจากเครื่อง</span>
+    </label>
+    <input type="file" id="fImage" accept="image/*" class="hidden">
+    <div id="shot" class="shot hidden">
+      <img id="shotImg" alt="รูปหลักฐาน">
+      <div class="foot">
+        <span id="shotName"></span>
+        <button type="button" id="shotClear">ลบรูป</button>
+      </div>
+    </div>
+
+    <div id="imgMsg" class="banner warn hidden"></div>
+
+    <button class="primary" id="submitBtn" style="margin-top:6px">ส่งข้อมูลรถซ่อม</button>
+    <p class="muted" style="margin:10px 0 0">
+      ส่งแล้วรายการจะไปโผล่ที่หน้ารับรถของสาขาหลัก รอเจ้าหน้าที่ตรวจทะเบียนแล้วกดรับรถ
+    </p>
+  </div>
+
+  <!-- สรุปหลังส่งสำเร็จ -->
+  <div id="doneCard" class="card done hidden">
+    <h2>ส่งข้อมูลเรียบร้อย</h2>
+    <div class="rid" id="doneId"></div>
+    <div id="doneRows"></div>
+    <button class="ghost" id="againBtn" style="margin-top:14px">ส่งรถคันต่อไป</button>
+  </div>
+</div>
+
+<script>
+  var OTHER = '__other__';        // ค่าที่ใช้แทนตัวเลือก "อื่น ๆ (ระบุเอง)" (เซิร์ฟเวอร์ส่งค่าจริงมาให้ตอน bootstrap)
+  var cbBranch = null;
+  var image = null;               // { base64, mimeType, dataUrl, name }
+  var sending = false;
+
+  function $(id) { return document.getElementById(id); }
+
+  function call(fnName, arg) {
+    return new Promise(function (resolve, reject) {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fnName](arg);
+    });
+  }
+
+  function setMsg(text, kind) {
+    var box = $('msg');
+    if (!text) return box.classList.add('hidden');
+    box.className = 'banner ' + (kind || 'ok');
+    box.textContent = text;
+    box.classList.remove('hidden');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function setImgMsg(text) {
+    var box = $('imgMsg');
+    if (!text) return box.classList.add('hidden');
+    box.textContent = text;
+    box.classList.remove('hidden');
+  }
+
+  /* ---------- ช่องเลือกแบบพิมพ์ค้นหาได้ ----------
+   * ใช้แทน <select> เพราะสาขามี 166 แห่ง พิมพ์รหัสหรือชื่อก็เจอ (จับคู่แบบ substring)
+   */
+  function makeCombo(hostId, config) {
+    config = config || {};
+    var host = $(hostId);
+    var options = [];
+    var filtered = [];
+    var value = '';
+    var activeIndex = -1;
+    var open = false;
+    var blurTimer = null;
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = hostId + '-input';
+    input.autocomplete = 'off';
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-expanded', 'false');
+    input.placeholder = config.placeholder || '';
+
+    var list = document.createElement('ul');
+    list.className = 'combo-list hidden';
+
+    host.appendChild(input);
+    host.appendChild(list);
+
+    function norm(s) { return String(s == null ? '' : s).toLowerCase().replace(/\s+/g, ''); }
+
+    function labelOf(v) {
+      for (var i = 0; i < options.length; i++) {
+        if (options[i].value === v) return options[i].label;
+      }
+      return '';
+    }
+
+    function filter(query) {
+      var q = norm(query);
+      filtered = q
+        ? options.filter(function (o) { return norm(o.label + ' ' + (o.sub || '')).indexOf(q) >= 0; })
+        : options.slice();
+      if (filtered.length > 50) filtered = filtered.slice(0, 50);
+    }
+
+    function render() {
+      list.innerHTML = '';
+      if (!filtered.length) {
+        var empty = document.createElement('li');
+        empty.className = 'combo-empty';
+        empty.textContent = 'ไม่พบสาขาที่ตรง — เลือก "อื่น ๆ (ระบุเอง)" ได้';
+        list.appendChild(empty);
+        return;
+      }
+      filtered.forEach(function (o, i) {
+        var li = document.createElement('li');
+        li.className = 'combo-item' + (i === activeIndex ? ' active' : '');
+        li.textContent = o.label;
+        if (o.sub) {
+          var sub = document.createElement('span');
+          sub.className = 'sub';
+          sub.textContent = o.sub;
+          li.appendChild(sub);
+        }
+        // ใช้ mousedown เพราะ blur ของ input ยิงก่อน click
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(o); });
+        list.appendChild(li);
+      });
+    }
+
+    function openList(query) {
+      if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; }
+      filter(query === undefined ? '' : query);
+      activeIndex = filtered.length ? 0 : -1;
+      render();
+      list.classList.remove('hidden');
+      input.setAttribute('aria-expanded', 'true');
+      open = true;
+    }
+
+    function closeList() {
+      list.classList.add('hidden');
+      input.setAttribute('aria-expanded', 'false');
+      open = false;
+      activeIndex = -1;
+    }
+
+    function choose(option) {
+      value = option.value;
+      input.value = option.label;
+      closeList();
+      if (config.onChange) config.onChange(value, option);
+    }
+
+    input.addEventListener('input', function () { openList(input.value); });
+    input.addEventListener('focus', function () { openList(''); });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (!open) return openList(input.value);
+        if (!filtered.length) return;
+        activeIndex = e.key === 'ArrowDown'
+          ? (activeIndex + 1) % filtered.length
+          : (activeIndex - 1 + filtered.length) % filtered.length;
+        render();
+        var el = list.children[activeIndex];
+        if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter') {
+        if (open && activeIndex >= 0 && filtered[activeIndex]) {
+          e.preventDefault();
+          choose(filtered[activeIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        closeList();
+      }
+    });
+
+    // พิมพ์ค้างแล้วคลิกออกโดยไม่เลือก → คืนข้อความเป็นค่าที่เลือกไว้ล่าสุด กันส่งค่าที่ไม่มีจริง
+    input.addEventListener('blur', function () {
+      blurTimer = setTimeout(function () {
+        blurTimer = null;
+        closeList();
+        input.value = value ? labelOf(value) : '';
+      }, 120);
+    });
+
+    return {
+      input: input,
+      setOptions: function (list_) {
+        options = (list_ || []).slice();
+        if (value && !labelOf(value)) { value = ''; input.value = ''; }
+      },
+      getValue: function () { return value; },
+      clear: function () { value = ''; input.value = ''; closeList(); },
+      setPlaceholder: function (t) { input.placeholder = t; }
+    };
+  }
+
+  /* ---------- เตรียมรูปในเครื่องก่อนส่ง ----------
+   * รูปจากมือถือมักตะแคง (EXIF) และใหญ่ 4-8MB ย่อเหลือด้านยาว 1600px คุณภาพ 0.85
+   * ดูออกสบายและส่งผ่าน google.script.run ได้ไม่ติดขนาด
+   */
+  var IMG_MAX = 1600, IMG_Q = 0.85;
+
+  function loadImage(file, done) {
+    if (window.createImageBitmap) {
+      createImageBitmap(file, { imageOrientation: 'from-image' })
+        .then(function (bmp) { done(bmp); })
+        .catch(function () { loadImageFallback(file, done); });
+      return;
+    }
+    loadImageFallback(file, done);
+  }
+
+  function loadImageFallback(file, done) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () { done(img); };
+      img.onerror = function () { done(null); };
+      img.src = reader.result;
+    };
+    reader.onerror = function () { done(null); };
+    reader.readAsDataURL(file);
+  }
+
+  function shrinkImage(file, done) {
+    loadImage(file, function (img) {
+      if (!img) return done(null);
+      var dataUrl;
+      try {
+        var w = img.width, h = img.height;
+        var scale = Math.min(1, IMG_MAX / Math.max(w, h));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * scale));
+        canvas.height = Math.max(1, Math.round(h * scale));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        dataUrl = canvas.toDataURL('image/jpeg', IMG_Q);
+      } catch (err) {
+        return done(null);
+      }
+      done({
+        dataUrl: dataUrl,
+        base64: dataUrl.split(',')[1],
+        mimeType: 'image/jpeg',
+        name: String(file.name || 'รูปหลักฐาน')
+      });
+    });
+  }
+
+  /** ไฟล์ .HEIC ของไอโฟนเบราว์เซอร์ถอดรหัสไม่ออก บอกทางแก้ไปเลยจะได้ไม่ต้องเดา */
+  function cannotOpenText(file) {
+    var name = String((file && file.name) || '');
+    var type = String((file && file.type) || '');
+    if (/heic|heif/i.test(type) || /\.hei[cf]$/i.test(name)) {
+      return 'ไฟล์ .HEIC ของไอโฟน เบราว์เซอร์เปิดตรง ๆ ไม่ได้\n' +
+        'ทางแก้ที่เร็วที่สุด: กดปุ่มถ่ายรูปในฟอร์มนี้แล้วถ่ายใหม่ (รูปที่ถ่ายผ่านฟอร์มจะเป็น JPG)\n' +
+        'หรือตั้งค่ากล้อง → รูปแบบ → "เข้ากันได้มากที่สุด" เพื่อให้ถ่ายออกมาเป็น JPG';
+    }
+    return 'เปิดไฟล์รูปไม่ได้ ลองเลือกรูปใหม่' + (name ? ' (' + name + ')' : '');
+  }
+
+  function sizeText(base64) {
+    var bytes = Math.round(String(base64 || '').length * 3 / 4);
+    return bytes > 1048576
+      ? (bytes / 1048576).toFixed(1) + ' MB'
+      : Math.max(1, Math.round(bytes / 1024)) + ' KB';
+  }
+
+  function showShot() {
+    if (!image) {
+      $('shot').classList.add('hidden');
+      $('shotImg').removeAttribute('src');
+      $('pickText').textContent = 'กดเพื่อถ่ายรูป หรือเลือกรูปจากเครื่อง';
+      return;
+    }
+    $('shotImg').src = image.dataUrl;
+    $('shotName').textContent = image.name + ' · ' + sizeText(image.base64);
+    $('shot').classList.remove('hidden');
+    $('pickText').textContent = 'เปลี่ยนรูป';
+  }
+
+  $('fImage').addEventListener('change', function (e) {
+    var file = e.target.files && e.target.files[0];
+    e.target.value = '';                 // เลือกไฟล์เดิมซ้ำต้องให้ยิง change ได้อีก
+    if (!file) return;
+
+    setImgMsg('กำลังย่อรูป…');
+    shrinkImage(file, function (prepared) {
+      if (!prepared) {
+        image = null;
+        showShot();
+        return setImgMsg(cannotOpenText(file));
+      }
+      image = prepared;
+      setImgMsg('');
+      showShot();
+    });
+  });
+
+  $('shotClear').addEventListener('click', function () {
+    image = null;
+    setImgMsg('');
+    showShot();
+  });
+
+  /* ---------- สาขา / โซน ---------- */
+
+  function onBranchChange(value, option) {
+    var isOther = value === OTHER;
+    $('otherWrap').classList.toggle('hidden', !isOther);
+    $('fZone').value = isOther ? '' : ((option && option.zone) || '');
+    $('fZone').placeholder = isOther ? 'พิมพ์ในช่องโซนด้านบน' : '—';
+    if (isOther) $('fBranchOther').focus();
+  }
+
+  function boot() {
+    cbBranch = makeCombo('fBranch', {
+      placeholder: 'พิมพ์รหัสสาขาหรือชื่อสาขา',
+      onChange: onBranchChange
+    });
+
+    call('apiBootstrap').then(function (res) {
+      if (!res || !res.ok) throw new Error((res && res.message) || 'โหลดข้อมูลสาขาไม่สำเร็จ');
+      var data = res.data || {};
+      OTHER = data.otherBranchValue || OTHER;
+
+      var options = (data.branches || []).map(function (b) {
+        return {
+          value: b.name,
+          label: b.name,
+          sub: [b.code, b.zone].filter(Boolean).join(' · '),
+          zone: b.zone
+        };
+      });
+      options.push({ value: OTHER, label: 'อื่น ๆ (ระบุเอง)', sub: 'ไม่มีสาขาในรายการ' });
+      cbBranch.setOptions(options);
+
+      $('sub').textContent = 'เลือกสาขาได้ ' + (data.branches || []).length + ' แห่ง · วันที่ ' + (data.today || '');
+    }).catch(function (err) {
+      $('sub').textContent = 'โหลดข้อมูลสาขาไม่สำเร็จ';
+      setMsg('โหลดข้อมูลสาขาไม่สำเร็จ: ' + (err.message || err) +
+        '\nลองรีเฟรชหน้านี้อีกครั้ง', 'err');
+    });
+  }
+
+  /* ---------- ส่งข้อมูล ---------- */
+
+  /** ตรวจในหน้าเว็บก่อน เพื่อไม่ต้องรอเซิร์ฟเวอร์ตอบเรื่องช่องว่าง (เซิร์ฟเวอร์ก็ตรวจซ้ำอยู่ดี) */
+  function collect() {
+    var bad = [];
+    function need(id, name) {
+      var el = $(id);
+      var v = String(el.value || '').trim();
+      el.classList.toggle('bad', !v);
+      if (!v) bad.push(name);
+      return v;
+    }
+
+    var branch = cbBranch.getValue();
+    cbBranch.input.classList.toggle('bad', !branch);
+    if (!branch) bad.push('สาขาที่ส่ง');
+
+    var branchOther = '', zoneOther = '';
+    if (branch === OTHER) {
+      branchOther = need('fBranchOther', 'ชื่อสาขา');
+      zoneOther = need('fZoneOther', 'โซน');
+    }
+
+    var payload = {
+      branch: branch,
+      branchOther: branchOther,
+      zoneOther: zoneOther,
+      jobNo: need('fJobNo', 'เลขที่ใบจ๊อบ'),
+      vehicleModel: need('fModel', 'รุ่นรถ'),
+      plateNo: need('fPlate', 'ข้อมูลขนส่ง + ทะเบียนรถ'),
+      sender: need('fSender', 'ชื่อผู้ส่ง'),
+      note: need('fNote', 'อาการเบื้องต้น')
+    };
+
+    if (!image) bad.push('รูปหลักฐาน');
+    else {
+      payload.imageBase64 = image.base64;
+      payload.imageMimeType = image.mimeType;
+    }
+
+    return { payload: payload, missing: bad };
+  }
+
+  function submit() {
+    if (sending) return;
+
+    var got = collect();
+    if (got.missing.length) {
+      return setMsg('ยังกรอกไม่ครบ: ' + got.missing.join(', '), 'err');
+    }
+
+    sending = true;
+    setMsg('กำลังส่งข้อมูล…');
+    $('submitBtn').disabled = true;
+    $('submitBtn').textContent = 'กำลังส่ง…';
+
+    function finish() {
+      sending = false;
+      $('submitBtn').disabled = false;
+      $('submitBtn').textContent = 'ส่งข้อมูลรถซ่อม';
+    }
+
+    call('apiSubmitRepair', got.payload).then(function (res) {
+      finish();
+      if (!res || !res.ok) {
+        return setMsg((res && res.message) || 'ส่งข้อมูลไม่สำเร็จ', 'err');
+      }
+      showDone(res);
+    }).catch(function (err) {
+      finish();
+      setMsg('ส่งข้อมูลไม่สำเร็จ: ' + (err.message || err) +
+        '\nข้อมูลที่กรอกยังอยู่ กดส่งอีกครั้งได้เลย', 'err');
+    });
+  }
+
+  function showDone(res) {
+    var d = res.data || {};
+    $('doneId').textContent = d.repairId || '';
+
+    var rows = [
+      ['เลขที่ใบจ๊อบ', d.jobNo],
+      ['สาขาที่ส่ง', [d.branch, d.zone].filter(Boolean).join(' · ')],
+      ['รุ่นรถ', d.vehicleModel],
+      ['ขนส่ง/ทะเบียน', d.plateNo],
+      ['เวลาที่ส่ง', d.submittedAt],
+      ['สถานะ', 'รอสาขาหลักกดรับรถ']
+    ];
+
+    var box = $('doneRows');
+    box.innerHTML = '';
+    rows.forEach(function (r) {
+      if (!r[1]) return;
+      var line = document.createElement('div');
+      line.className = 'kv';
+      var k = document.createElement('span');
+      k.className = 'k';
+      k.textContent = r[0];
+      var v = document.createElement('span');
+      v.className = 'v';
+      v.textContent = r[1];
+      line.appendChild(k);
+      line.appendChild(v);
+      box.appendChild(line);
+    });
+
+    if (d.evidenceImage) {
+      var line = document.createElement('div');
+      line.className = 'kv';
+      var k = document.createElement('span');
+      k.className = 'k';
+      k.textContent = 'รูปหลักฐาน';
+      var v = document.createElement('span');
+      v.className = 'v';
+      var a = document.createElement('a');
+      a.href = d.evidenceImage;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.textContent = 'เปิดดูรูป';
+      v.appendChild(a);
+      line.appendChild(k);
+      line.appendChild(v);
+      box.appendChild(line);
+    }
+
+    $('formCard').classList.add('hidden');
+    $('doneCard').classList.remove('hidden');
+    setMsg(res.message || 'ส่งข้อมูลแล้ว', 'ok');
+  }
+
+  /** เคลียร์ฟอร์มให้พร้อมกรอกคันต่อไป — เก็บสาขาเดิมไว้ เพราะคนเดิมมักส่งหลายคันติดกัน */
+  function resetForm() {
+    ['fJobNo', 'fModel', 'fPlate', 'fNote'].forEach(function (id) {
+      $(id).value = '';
+      $(id).classList.remove('bad');
+    });
+    image = null;
+    setImgMsg('');
+    showShot();
+
+    $('doneCard').classList.add('hidden');
+    $('formCard').classList.remove('hidden');
+    setMsg('');
+    window.scrollTo({ top: 0 });
+    $('fJobNo').focus();
+  }
+
+  $('submitBtn').addEventListener('click', function () { submit(); });
+  $('againBtn').addEventListener('click', function () { resetForm(); });
+
+  boot();
+</script>

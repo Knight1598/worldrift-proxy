@@ -21,9 +21,15 @@ var HEADERS = {
     'status', 'note', 'updatedAt', 'updatedBy',
     'deliveredAt', 'receiver', 'deliveryNote', 'deliveryPhotoId'
   ],
+  /**
+   * คอลัมน์ชุดหลังของ Repairs (BranchCode ถึง ReceivedAt) เพิ่มมาเพื่อรับรถจากสาขาอื่น
+   * ต่อท้ายไว้ด้านขวาโดยเจตนา ลำดับคอลัมน์เดิมจึงไม่ขยับ
+   * โปรเจกต์ฟอร์มสาขาอื่นใช้ชื่อคอลัมน์ชุดเดียวกันนี้ ห้ามเปลี่ยนชื่อข้างเดียว
+   */
   Repairs: [
     'repairId', 'receivedDate', 'jobNo', 'contractNo', 'vehicleModel', 'branch', 'zone',
-    'status', 'note', 'updatedAt', 'updatedBy'
+    'status', 'note', 'updatedAt', 'updatedBy',
+    'BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt'
   ]
 };
 
@@ -31,7 +37,7 @@ var HEADERS = {
 var TEXT_COLUMNS = {
   Branches: ['branchCode'],
   Batteries: ['receivedDate', 'alNo', 'serial', 'updatedAt', 'deliveredAt'],
-  Repairs: ['receivedDate', 'jobNo', 'contractNo', 'updatedAt']
+  Repairs: ['receivedDate', 'jobNo', 'contractNo', 'updatedAt', 'BranchCode', 'PlateNo', 'ReceivedAt']
 };
 
 /** ขั้นตอนการกระตุ้นแบตเตอรี่ เรียงตามลำดับงานจริง */
@@ -51,13 +57,27 @@ var DELIVERED_STATUS = 'จัดส่งแล้ว';
 
 var DELIVERY_FOLDER_NAME = 'หลักฐานการจัดส่งแบตเตอรี่';
 
-/** ขั้นตอนการซ่อมรถ เรียงจากยังไม่ได้ลงมือ → ติดของ → กำลังทำ → เสร็จ */
+/**
+ * ขั้นตอนการซ่อมรถ เรียงจากยังไม่ได้ลงมือ → ติดของ → กำลังทำ → เสร็จ
+ * ตัวแรกเป็นสถานะตั้งต้นของรายการที่คีย์ในระบบนี้ จึงต้องเป็น 'รอซ่อม' เสมอ
+ *
+ * 'รอรับรถ (กำลังจัดส่ง)' ต่อไว้ท้ายสุด — เป็นสถานะของรถที่สาขาอื่นกดส่งมาแล้ว
+ * แต่สาขาหลักยังไม่กดรับเข้า ตั้งได้จากฟอร์มสาขาอื่นเท่านั้น
+ * ชื่อสถานะนี้ต้องตรงกับในโปรเจกต์ฟอร์มสาขาอื่นเป๊ะ ๆ ห้ามแก้ข้างเดียว
+ */
 var REPAIR_STATUSES = [
   'รอซ่อม',
   'รออะไหล่',
   'กำลังซ่อม',
-  'ซ่อมเสร็จแล้ว'
+  'ซ่อมเสร็จแล้ว',
+  'รอรับรถ (กำลังจัดส่ง)'
 ];
+
+/** สถานะของรถที่สาขาอื่นส่งมาแล้วรอสาขาหลักกดรับ */
+var INCOMING_STATUS = 'รอรับรถ (กำลังจัดส่ง)';
+
+/** สถานะหลังกดรับรถเข้าซ่อมแล้ว */
+var RECEIVED_STATUS = 'รอซ่อม';
 
 /**
  * รหัสเข้าโหมดแอดมิน — แก้ได้ที่บรรทัดนี้บรรทัดเดียว
@@ -814,6 +834,98 @@ function apiListRepairs(payload) {
   }
 }
 
+/* =======================================================================
+ * ส่วนที่ 5.5 — รับรถที่สาขาอื่นส่งมา
+ *
+ * ฟอร์มของสาขาอื่นอยู่อีกโปรเจกต์ (แยก URL) แต่เขียนลงชีต Repairs ไฟล์เดียวกันนี้
+ * แถวที่ส่งมาจะมีสถานะ 'รอรับรถ (กำลังจัดส่ง)' รอให้สาขาหลักกดรับ
+ * พอกดรับแล้วสถานะเปลี่ยนเป็น 'รอซ่อม' และไหลเข้ากระบวนการเดิมทั้งหมด
+ * ===================================================================== */
+
+/** รายการรถที่กำลังส่งมา เรียงจากที่ส่งมาก่อน (เก่าสุดขึ้นก่อน) — ใครก็ดูได้ */
+function apiListIncomingRepairs() {
+  try {
+    var rows = readRepairs_().filter(function (r) { return r.status === INCOMING_STATUS; });
+
+    // เก่าสุดขึ้นก่อน อิงเวลาที่กดส่ง คันที่รออยู่นานที่สุดจะได้อยู่บนสุด
+    rows.sort(function (a, b) {
+      var x = String(a.updatedAt || '');
+      var y = String(b.updatedAt || '');
+      if (x && y && x !== y) return x < y ? -1 : 1;
+      return String(a.repairId) < String(b.repairId) ? -1 : 1;
+    });
+
+    return {
+      ok: true,
+      message: rows.length ? 'มีรถรออยู่ ' + rows.length + ' คัน' : 'ยังไม่มีรถที่กำลังส่งมา',
+      data: rows.map(toRepairDto_)
+    };
+  } catch (err) {
+    return { ok: false, message: String(err.message || err) };
+  }
+}
+
+/**
+ * กดรับรถเข้าซ่อม — ต้องมี key ของแอดมิน เหมือนการเขียนอย่างอื่นในระบบนี้
+ * ค้นแถวด้วย repairId เท่านั้น (ไม่ใช้เลขแถวจากหน้าเว็บ กันกรณีมีคนแทรกแถวในชีต)
+ */
+function apiReceiveRepair(payload) {
+  try {
+    payload = payload || {};
+    requireBatteryAdmin_(payload.key);
+
+    var id = String(payload.repairId || '').trim();
+    var receivedBy = String(payload.receivedBy || '').trim();
+    if (!id) throw new Error('ไม่ได้ระบุรายการที่จะรับ');
+    if (!receivedBy) throw new Error('ยังไม่ได้กรอกชื่อผู้รับรถ');
+
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(20000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดอีกครั้ง');
+
+    var dto;
+    try {
+      var sh = getWritableSheet_(SHEETS.REPAIRS);
+      var rows = readRepairs_();
+      var target = null;
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].repairId === id) { target = rows[i]; break; }
+      }
+      if (!target) throw new Error('ไม่พบรายการ ' + id + ' — อาจถูกลบไปแล้ว');
+
+      // กันสองเครื่องกดรับคันเดียวกันพร้อมกัน คนที่มาทีหลังจะเจอว่าสถานะเปลี่ยนไปแล้ว
+      if (target.status !== INCOMING_STATUS) {
+        throw new Error('รายการนี้ถูกรับเข้าไปแล้ว (สถานะปัจจุบัน "' + target.status + '")');
+      }
+
+      var stamp = nowStamp_();
+      var updates = {
+        status: RECEIVED_STATUS,
+        receivedDate: stamp.substring(0, 10),   // ช่องเดิมเก็บเป็นวันที่ ให้ฟอร์มเดิมใช้ต่อได้
+        ReceivedAt: stamp,                      // เวลาที่รับจริง เก็บแยกไว้ครบวินาที
+        ReceivedBy: receivedBy,
+        updatedAt: stamp,
+        updatedBy: receivedBy
+      };
+      Object.keys(updates).forEach(function (field) {
+        sh.getRange(target._row, fieldCol_(sh, SHEETS.REPAIRS, field)).setValue(updates[field]);
+      });
+
+      Object.keys(updates).forEach(function (field) { target[field] = updates[field]; });
+      dto = toRepairDto_(target);
+    } finally {
+      lock.releaseLock();
+    }
+
+    return {
+      ok: true,
+      message: 'รับรถ ' + (dto.PlateNo || dto.jobNo || id) + ' เข้าซ่อมแล้ว',
+      data: dto
+    };
+  } catch (err) {
+    return { ok: false, message: String(err.message || err) };
+  }
+}
+
 /** เพิ่ม/แก้ไขรายการรถส่งซ่อม — ต้องมี key ของแอดมิน */
 function apiSaveRepair(payload) {
   try {
@@ -907,6 +1019,16 @@ function saveRepair_(p) {
     }
 
     if (!target) row.repairId = nextRepairId_(rows);
+
+    /* คอลัมน์ของงานรับรถข้ามสาขา ฟอร์มนี้ไม่มีช่องให้กรอก
+     * ต้องยกค่าเดิมมาใส่ ไม่งั้นการกดแก้ไขรายการที่สาขาอื่นส่งมา
+     * จะล้างทะเบียนรถ/รูปหลักฐาน/ชื่อผู้รับทิ้งทั้งหมด
+     */
+    ['BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt']
+      .forEach(function (field) {
+        row[field] = target ? (target[field] || '') : (p[field] === undefined ? '' : p[field]);
+      });
+
     var values = toRowValues_(sh, SHEETS.REPAIRS, row);
 
     if (target) sh.getRange(target._row, 1, 1, values.length).setValues([values]);
@@ -923,10 +1045,13 @@ function nextRepairId_(existing) {
   var prefix = 'RP-' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd') + '-';
   var max = 0;
   existing.forEach(function (r) {
-    if (r.repairId.indexOf(prefix) === 0) {
-      var n = parseInt(r.repairId.substring(prefix.length), 10);
-      if (!isNaN(n) && n > max) max = n;
-    }
+    if (r.repairId.indexOf(prefix) !== 0) return;
+    var tail = r.repairId.substring(prefix.length);
+    // ฟอร์มสาขาอื่นออกเลขแบบ RP-yyyyMMdd-HHmmss-### ซึ่งมีขีดคั่นอีกชั้น
+    // ต้องไม่เอาส่วนเวลามานับ ไม่งั้นเลขของระบบนี้จะกระโดดไปเป็นหลักแสน
+    if (!/^\d+$/.test(tail)) return;
+    var n = parseInt(tail, 10);
+    if (!isNaN(n) && n > max) max = n;
   });
   return prefix + ('00' + (max + 1)).slice(-3);
 }

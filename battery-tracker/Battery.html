@@ -274,6 +274,15 @@
   .r1 { --s-color: #dc2626; }   /* รออะไหล่ — ติดของ ต้องสะดุดตา */
   .r2 { --s-color: #f59e0b; }   /* กำลังซ่อม */
   .r3 { --s-color: #16a34a; }   /* ซ่อมเสร็จแล้ว */
+  .r4 { --s-color: #0891b2; }   /* รอรับรถ (กำลังจัดส่ง) — ยังไม่ถึงมือช่าง */
+
+  /* แถบเตือนสีเหลือง ใช้ตอนให้ยืนยันก่อนทำอะไรที่ย้อนไม่ได้ */
+  .banner.warn {
+    background: var(--warn-bg, #fff5e6);
+    color: var(--warn-text, #92400e);
+    border-left: 4px solid #f59e0b;
+    white-space: pre-line;
+  }
 </style>
 
 <header class="app">
@@ -289,6 +298,7 @@
 <div class="tabs" id="tabs">
   <button type="button" class="tab active" id="tabBattery">🔋 แบตเตอรี่</button>
   <button type="button" class="tab" id="tabRepair">🔧 รถส่งซ่อม</button>
+  <button type="button" class="tab" id="tabIncoming">🚚 รับรถเข้า<span id="tabIncomingCount"></span></button>
 </div>
 
 <div class="wrap">
@@ -475,6 +485,22 @@
     <div id="rResults"></div>
 
   </div><!-- /viewRepair -->
+
+  <!-- ================= รับรถที่สาขาอื่นส่งมา ================= -->
+  <div id="viewIncoming" class="hidden">
+
+    <div class="card">
+      <div class="muted" style="margin-bottom:10px;">
+        รถที่สาขาอื่นกดส่งมาแล้ว แต่ยังไม่ได้รับเข้าซ่อม — เรียงคันที่ส่งมาก่อนไว้บนสุด
+        <br>หน้านี้รีเฟรชเองทุก 60 วินาที
+      </div>
+      <button type="button" class="primary" id="inRefreshBtn">🔄 รีเฟรชรายการ</button>
+    </div>
+
+    <div id="inStatus" class="card hidden"></div>
+    <div id="inResults"></div>
+
+  </div><!-- /viewIncoming -->
 
 </div>
 
@@ -766,22 +792,35 @@
   /* ---------- สลับระหว่างงานแบตกับงานซ่อมรถ ---------- */
 
   var repairLoaded = false;
+  var incomingLoaded = false;
 
   $('tabBattery').addEventListener('click', function () { showTab('battery'); });
   $('tabRepair').addEventListener('click', function () { showTab('repair'); });
+  $('tabIncoming').addEventListener('click', function () { showTab('incoming'); });
+
+  var TAB_TITLES = {
+    battery: '🔋 สถานะการกระตุ้นแบตเตอรี่',
+    repair: '🔧 สถานะรถส่งซ่อม',
+    incoming: '🚚 รับรถที่สาขาอื่นส่งมา'
+  };
 
   function showTab(name) {
-    var repair = name === 'repair';
-    $('tabBattery').classList.toggle('active', !repair);
-    $('tabRepair').classList.toggle('active', repair);
-    $('viewBattery').classList.toggle('hidden', repair);
-    $('viewRepair').classList.toggle('hidden', !repair);
-    $('appTitle').textContent = repair ? '🔧 สถานะรถส่งซ่อม' : '🔋 สถานะการกระตุ้นแบตเตอรี่';
+    if (!TAB_TITLES[name]) name = 'battery';
+    ['battery', 'repair', 'incoming'].forEach(function (t) {
+      var cap = t.charAt(0).toUpperCase() + t.substring(1);
+      $('tab' + cap).classList.toggle('active', t === name);
+      $('view' + cap).classList.toggle('hidden', t !== name);
+    });
+    $('appTitle').textContent = TAB_TITLES[name];
     window.scrollTo({ top: 0 });
 
-    if (repair && !repairLoaded) {
+    if (name === 'repair' && !repairLoaded) {
       repairLoaded = true;
       rSearch();
+    }
+    if (name === 'incoming' && !incomingLoaded) {
+      incomingLoaded = true;
+      inLoad();
     }
   }
 
@@ -1891,6 +1930,218 @@
       $('rSaveBtn').textContent = 'บันทึก';
       rFormError('บันทึกไม่สำเร็จ: ' + (err.message || err));
     });
+  }
+
+  /* ---------- รับรถที่สาขาอื่นส่งมา ----------
+   *
+   * ฟอร์มของสาขาอื่นอยู่อีกโปรเจกต์ (แยก URL) แต่เขียนลงชีต Repairs ไฟล์เดียวกัน
+   * หน้านี้อ่านเฉพาะแถวที่สถานะเป็น "รอรับรถ (กำลังจัดส่ง)" เรียงคันที่ส่งมาก่อนขึ้นก่อน
+   * กดรับแล้วสถานะเปลี่ยนเป็น "รอซ่อม" การ์ดจะหายจากหน้านี้และไปโผล่ในแท็บรถส่งซ่อม
+   */
+
+  var inTimer = null;
+  var inSeq = 0;          // กันผลเก่ากลับมาช้าแล้วมาทับผลใหม่ (การ์ดจะซ้ำ)
+
+  $('inRefreshBtn').addEventListener('click', function () { inLoad(); });
+
+  function inSetStatus(msg, isError) {
+    var box = $('inStatus');
+    box.classList.remove('hidden');
+    box.innerHTML = '';
+    var div = document.createElement('div');
+    div.className = isError ? 'banner err' : 'muted';
+    div.textContent = msg;
+    box.appendChild(div);
+  }
+
+  function inLoad(doneMsg) {
+    var seq = ++inSeq;
+    if (!doneMsg) inSetStatus('กำลังโหลดรายการ…');
+
+    call('apiListIncomingRepairs').then(function (res) {
+      if (seq !== inSeq) return;
+      $('inResults').innerHTML = '';
+      if (!res || !res.ok) return inSetStatus((res && res.message) || 'โหลดรายการไม่สำเร็จ', true);
+
+      inRender(res.data || []);
+      inSetStatus(doneMsg ? doneMsg + ' — ' + res.message : res.message);
+      inArmTimer();
+    }).catch(function (err) {
+      if (seq !== inSeq) return;
+      inSetStatus('โหลดรายการไม่สำเร็จ: ' + (err.message || err), true);
+      inArmTimer();
+    });
+  }
+
+  /** รีเฟรชเองทุก 60 วินาที ตั้งใหม่ทุกครั้งที่โหลดเสร็จ ไม่ให้ตัวจับเวลาซ้อนกัน */
+  function inArmTimer() {
+    if (inTimer) clearTimeout(inTimer);
+    inTimer = setTimeout(function () {
+      if (!$('viewIncoming').classList.contains('hidden')) inLoad();
+      else inArmTimer();
+    }, 60000);
+  }
+
+  function inRender(rows) {
+    $('tabIncomingCount').textContent = rows.length ? ' (' + rows.length + ')' : '';
+    if (!rows.length) return;
+
+    var box = $('inResults');
+    rows.forEach(function (r) {
+      var el = document.createElement('div');
+      el.className = 'bat r4';        // สีเดียวกับสถานะรอรับรถในแท็บรถส่งซ่อม
+
+      var head = document.createElement('div');
+      head.className = 'head';
+      var left = document.createElement('span');
+      left.textContent = r.repairId;
+      var right = document.createElement('span');
+      right.textContent = r.updatedAt ? 'ส่งเมื่อ ' + r.updatedAt : '';
+      head.appendChild(left);
+      head.appendChild(right);
+      el.appendChild(head);
+
+      // ทะเบียนรถเป็นตัวชี้คันที่ชัดที่สุดตอนรถมาถึงหน้าร้าน จึงอยู่บนสุดตัวใหญ่
+      var plate = document.createElement('div');
+      plate.className = 'branch';
+      plate.textContent = r.PlateNo || 'ไม่ระบุขนส่ง/ทะเบียน';
+      el.appendChild(plate);
+
+      var model = document.createElement('div');
+      model.className = 'meta';
+      model.textContent = (r.vehicleModel ? '🛺 ' + r.vehicleModel : '🛺 ไม่ระบุรุ่นรถ') +
+        (r.jobNo ? '  •  JOB ' + r.jobNo : '');
+      el.appendChild(model);
+
+      var from = document.createElement('div');
+      from.className = 'meta';
+      from.textContent = '📍 ' + (r.branch || 'ไม่ระบุสาขา') +
+        (r.zone ? ' (เขต' + r.zone + ')' : '') +
+        (r.updatedBy ? '  •  ผู้ส่ง ' + r.updatedBy : '');
+      el.appendChild(from);
+
+      if (r.note) {
+        var note = document.createElement('div');
+        note.className = 'meta';
+        note.textContent = '📝 ' + r.note;
+        el.appendChild(note);
+      }
+
+      if (r.EvidenceImage) {
+        var link = document.createElement('a');
+        link.className = 'meta';
+        link.href = r.EvidenceImage;
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.style.color = 'var(--primary)';
+        link.style.display = 'block';
+        link.textContent = '📎 ดูรูปหลักฐาน';
+        el.appendChild(link);
+      }
+
+      if (IS_ADMIN) el.appendChild(inReceiveBox(r));
+      box.appendChild(el);
+    });
+  }
+
+  /** ปุ่มรับรถ + ช่องยืนยันในการ์ด (ยืนยันทะเบียน แล้วกรอกชื่อผู้รับ) */
+  function inReceiveBox(r) {
+    var wrap = document.createElement('div');
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'primary';
+    btn.style.marginTop = '10px';
+    btn.textContent = '✅ รับรถคันนี้';
+    wrap.appendChild(btn);
+
+    var panel = document.createElement('div');
+    panel.className = 'card hidden';
+    panel.style.marginTop = '10px';
+    wrap.appendChild(panel);
+
+    var confirmText = document.createElement('div');
+    confirmText.className = 'banner warn';
+    confirmText.style.whiteSpace = 'pre-line';
+    confirmText.textContent = 'ยืนยันว่ารถคันนี้มาถึงแล้ว\n' +
+      (r.PlateNo ? 'ขนส่ง/ทะเบียน: ' + r.PlateNo : 'ไม่ได้ระบุขนส่ง/ทะเบียนมา') +
+      (r.vehicleModel ? '\nรุ่นรถ: ' + r.vehicleModel : '');
+    panel.appendChild(confirmText);
+
+    var label = document.createElement('label');
+    label.textContent = 'ชื่อผู้รับรถ';
+    panel.appendChild(label);
+
+    var who = document.createElement('input');
+    who.type = 'text';
+    who.autocomplete = 'off';
+    who.value = localStorage.getItem('bt_by') || '';
+    panel.appendChild(who);
+
+    var msg = document.createElement('div');
+    msg.className = 'banner err hidden';
+    panel.appendChild(msg);
+
+    var row = document.createElement('div');
+    row.className = 'row';
+    var ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'primary';
+    ok.textContent = 'ยืนยันรับรถ';
+    var cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'ghost';
+    cancel.textContent = 'ยกเลิก';
+    row.appendChild(ok);
+    row.appendChild(cancel);
+    panel.appendChild(row);
+
+    btn.addEventListener('click', function () {
+      panel.classList.remove('hidden');
+      btn.classList.add('hidden');
+      who.focus();
+    });
+    cancel.addEventListener('click', function () {
+      panel.classList.add('hidden');
+      btn.classList.remove('hidden');
+      msg.classList.add('hidden');
+    });
+
+    ok.addEventListener('click', function () {
+      var name = who.value.trim();
+      if (!name) {
+        msg.textContent = 'ยังไม่ได้กรอกชื่อผู้รับรถ';
+        msg.classList.remove('hidden');
+        return;
+      }
+      localStorage.setItem('bt_by', name);
+      ok.disabled = true;
+      cancel.disabled = true;
+      ok.textContent = 'กำลังบันทึก…';
+
+      call('apiReceiveRepair', { key: ADMIN_KEY, repairId: r.repairId, receivedBy: name })
+        .then(function (res) {
+          if (!res || !res.ok) {
+            ok.disabled = false;
+            cancel.disabled = false;
+            ok.textContent = 'ยืนยันรับรถ';
+            msg.textContent = (res && res.message) || 'รับรถไม่สำเร็จ';
+            msg.classList.remove('hidden');
+            return;
+          }
+          // รับแล้วสถานะไม่ใช่ "รอรับรถ" อีก โหลดใหม่การ์ดนี้จะหายไปเอง
+          repairLoaded = false;
+          inLoad(res.message);
+        }).catch(function (err) {
+          ok.disabled = false;
+          cancel.disabled = false;
+          ok.textContent = 'ยืนยันรับรถ';
+          msg.textContent = 'รับรถไม่สำเร็จ: ' + (err.message || err);
+          msg.classList.remove('hidden');
+        });
+    });
+
+    return wrap;
   }
 
   boot();
