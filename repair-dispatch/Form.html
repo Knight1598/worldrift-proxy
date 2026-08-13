@@ -243,6 +243,9 @@
     <label for="fJobNo">เลขที่ใบจ๊อบ<span class="req">*</span></label>
     <input type="text" id="fJobNo" autocomplete="off" placeholder="เช่น JOB-2568-00123">
 
+    <label for="fJobDate">วันที่เปิดจ๊อบ<span class="req">*</span></label>
+    <input type="date" id="fJobDate" autocomplete="off">
+
     <label for="fModel">รุ่นรถ<span class="req">*</span></label>
     <input type="text" id="fModel" autocomplete="off" placeholder="เช่น G5 Pro">
 
@@ -288,6 +291,7 @@
 
 <script>
   var OTHER = '__other__';        // ค่าที่ใช้แทนตัวเลือก "อื่น ๆ (ระบุเอง)" (เซิร์ฟเวอร์ส่งค่าจริงมาให้ตอน bootstrap)
+  var TODAY = '';                 // วันที่ปัจจุบันจากเซิร์ฟเวอร์ ใช้เติมช่องวันที่เปิดจ๊อบให้ตั้งต้น
   var cbBranch = null;
   var image = null;               // { base64, mimeType, dataUrl, name }
   var sending = false;
@@ -582,6 +586,8 @@
       if (!res || !res.ok) throw new Error((res && res.message) || 'โหลดข้อมูลสาขาไม่สำเร็จ');
       var data = res.data || {};
       OTHER = data.otherBranchValue || OTHER;
+      TODAY = data.today || '';
+      if (TODAY && !$('fJobDate').value) $('fJobDate').value = TODAY;
 
       var options = (data.branches || []).map(function (b) {
         return {
@@ -630,6 +636,7 @@
       branchOther: branchOther,
       zoneOther: zoneOther,
       jobNo: need('fJobNo', 'เลขที่ใบจ๊อบ'),
+      jobOpenedDate: need('fJobDate', 'วันที่เปิดจ๊อบ'),
       vehicleModel: need('fModel', 'รุ่นรถ'),
       plateNo: need('fPlate', 'ข้อมูลขนส่ง + ทะเบียนรถ'),
       sender: need('fSender', 'ชื่อผู้ส่ง'),
@@ -683,6 +690,7 @@
 
     var rows = [
       ['เลขที่ใบจ๊อบ', d.jobNo],
+      ['วันที่เปิดจ๊อบ', d.jobOpenedDate],
       ['สาขาที่ส่ง', [d.branch, d.zone].filter(Boolean).join(' · ')],
       ['รุ่นรถ', d.vehicleModel],
       ['ขนส่ง/ทะเบียน', d.plateNo],
@@ -737,6 +745,9 @@
       $(id).value = '';
       $(id).classList.remove('bad');
     });
+    // วันที่เปิดจ๊อบตั้งกลับเป็นวันนี้ให้ (คันส่วนใหญ่เปิดจ๊อบวันเดียวกับที่ส่ง) แก้เองได้ถ้าไม่ตรง
+    $('fJobDate').value = TODAY;
+    $('fJobDate').classList.remove('bad');
     image = null;
     setImgMsg('');
     showShot();

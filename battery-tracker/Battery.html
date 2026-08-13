@@ -531,6 +531,8 @@
   var cbBranch = null, cbBranchFilter = null, cbRBranch = null, cbRBranchFilter = null;
   var APP_URL = '';              // ใช้ทำลิงก์เปิดรูป (หน้าอยู่ในไอเฟรม อ่าน URL เองไม่ได้)
   var DELIVERED_STATUS = 'จัดส่งแล้ว';
+  var INCOMING_STATUS = 'รอรับรถ (กำลังจัดส่ง)';   // ใช้คำนวณระยะเวลาบนการ์ด (ดู repairTimelineLines)
+  var REPAIR_DONE_STATUS = 'ซ่อมเสร็จแล้ว';
   var dlvBattery = null;         // แบตก้อนที่กำลังกรอกใบจัดส่งให้
   var dlvImage = null;           // { base64, mimeType, dataUrl }
   var searchSeq = 0, rSearchSeq = 0;   // ลำดับคำขอ ใช้ทิ้งผลลัพธ์ที่ล้าสมัย
@@ -842,6 +844,8 @@
       R_STATUSES = res.repairStatuses || [];
       APP_URL = res.appUrl || '';
       if (res.deliveredStatus) DELIVERED_STATUS = res.deliveredStatus;
+      if (res.incomingStatus) INCOMING_STATUS = res.incomingStatus;
+      if (res.repairDoneStatus) REPAIR_DONE_STATUS = res.repairDoneStatus;
 
       // ตัวเลือกสาขา: พิมพ์ได้ทั้งรหัสและชื่อ เพราะจับคู่กับข้อความทั้งบรรทัด
       var branchOptions = res.branches.map(function (b) {
@@ -1675,6 +1679,114 @@
   }
 
   /* =====================================================================
+   * ระยะเวลาระหว่างขั้นตอนของงานซ่อมข้ามสาขา
+   * เปิดจ๊อบ → จัดส่ง → ถึงสาขาหลัก → ซ่อมเสร็จ
+   * เก็บเป็นข้อความล้วน (yyyy-MM-dd หรือ yyyy-MM-dd HH:mm:ss) แปลงเป็น Date ในเครื่องผู้ใช้เอง
+   * เวลาที่แสดงหน้าเว็บผู้ใช้จึงอิงโซนเวลาของเครื่อง — ใช้งานจริงในไทยทั้งหมดจึงตรงกับ Asia/Bangkok
+   * =================================================================== */
+
+  function parseStamp_(s) {
+    s = String(s == null ? '' : s).trim();
+    if (!s) return null;
+    var iso = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s + 'T00:00:00' : s.replace(' ', 'T');
+    var d = new Date(iso);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function nowStampLocal_() {
+    var d = new Date();
+    function p(n) { return ('0' + n).slice(-2); }
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' +
+      p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
+  /** ระยะเวลาระหว่างสองจุดเวลา เป็นข้อความสั้น ๆ อ่านง่าย เช่น "3 วัน 5 ชม." */
+  function spanText_(fromStr, toStr) {
+    var from = parseStamp_(fromStr);
+    var to = parseStamp_(toStr);
+    if (!from || !to) return '';
+    var ms = Math.max(0, to.getTime() - from.getTime());
+    var minutes = Math.floor(ms / 60000);
+    var days = Math.floor(minutes / 1440);
+    var hours = Math.floor((minutes % 1440) / 60);
+    var mins = minutes % 60;
+    if (days > 0) return days + ' วัน' + (hours ? ' ' + hours + ' ชม.' : '');
+    if (hours > 0) return hours + ' ชม.' + (mins ? ' ' + mins + ' นาที' : '');
+    if (mins > 0) return mins + ' นาที';
+    return 'ไม่ถึงนาที';
+  }
+
+  /** ระยะเวลานับจากจุดเวลาหนึ่งจนถึงตอนนี้ ใช้กับขั้นที่ยังไม่จบ */
+  function spanSinceNow_(fromStr) {
+    return spanText_(fromStr, nowStampLocal_());
+  }
+
+  /**
+   * จำนวนวันปฏิทินระหว่างสองวันที่ (ตัดเวลาออกก่อนเทียบ) กัน DispatchedAt ที่มีเวลาแฝงมา
+   * ทำให้ตัวเลขวันเพี้ยน เช่น เปิดจ๊อบ 10 โมงเช้า ส่งเย็นวันเดียวกัน ควรนับเป็น "วันเดียวกัน" ไม่ใช่ "0 วัน 8 ชม."
+   */
+  function daysBetweenDates_(fromStr, toStr) {
+    var from = parseStamp_(fromStr);
+    var to = parseStamp_(toStr);
+    if (!from || !to) return null;
+    var a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+    var b = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+    return Math.round((b.getTime() - a.getTime()) / 86400000);
+  }
+
+  function daysText_(n) {
+    if (n === null) return '';
+    if (n <= 0) return 'วันเดียวกัน';
+    return n + ' วัน';
+  }
+
+  /**
+   * บรรทัดระยะเวลาของงานซ่อมข้ามสาขา ใช้ทั้งการ์ดแท็บ "รับรถเข้า" และการ์ดแท็บ "รถส่งซ่อม"
+   * ช่องไหนไม่มีข้อมูลพอจะคำนวณ (เช่น รายการที่แอดมินคีย์เองไม่ผ่านฟอร์มสาขาอื่น) ก็ข้ามบรรทัดนั้นไปเงียบ ๆ
+   */
+  function repairTimelineLines(r) {
+    var lines = [];
+
+    if (r.JobOpenedDate && r.DispatchedAt) {
+      lines.push('🗓️ เปิดจ๊อบ→จัดส่ง ' + daysText_(daysBetweenDates_(r.JobOpenedDate, r.DispatchedAt)));
+    }
+
+    if (r.DispatchedAt) {
+      if (r.status === INCOMING_STATUS) {
+        lines.push('🚚 อยู่ระหว่างขนส่งมาแล้ว ' + spanSinceNow_(r.DispatchedAt));
+      } else if (r.ReceivedAt) {
+        lines.push('🚚 ใช้เวลาขนส่งถึงสาขาหลัก ' + spanText_(r.DispatchedAt, r.ReceivedAt));
+      }
+    }
+
+    if (r.status !== INCOMING_STATUS) {
+      var repairStart = r.ReceivedAt || (r.receivedDate ? r.receivedDate : '');
+      if (repairStart) {
+        if (r.status === REPAIR_DONE_STATUS && r.RepairDoneAt) {
+          lines.push('🔧 ใช้เวลาซ่อม ' + spanText_(repairStart, r.RepairDoneAt));
+        } else if (r.status !== REPAIR_DONE_STATUS) {
+          lines.push('🔧 อยู่ระหว่างซ่อมมาแล้ว ' + spanSinceNow_(repairStart));
+        }
+      }
+    }
+
+    return lines;
+  }
+
+  /** วาดบรรทัดระยะเวลาลงในกล่องที่ให้มา ล้างของเดิมทิ้งก่อนทุกครั้ง ใช้ซ้ำได้ตอนสถานะเปลี่ยน */
+  function renderTimelineInto(box, r) {
+    box.innerHTML = '';
+    var lines = repairTimelineLines(r);
+    if (!lines.length) return;
+    box.className = 'meta';
+    box.style.marginTop = '4px';
+    lines.forEach(function (text, i) {
+      if (i > 0) box.appendChild(document.createElement('br'));
+      box.appendChild(document.createTextNode(text));
+    });
+  }
+
+  /* =====================================================================
    * งานรถส่งซ่อม — โครงเดียวกับงานแบต ต่างที่ตัวระบุงานคือเลข JOB
    * =================================================================== */
 
@@ -1785,6 +1897,10 @@
         el.appendChild(note);
       }
 
+      var rTimeline = document.createElement('div');
+      renderTimelineInto(rTimeline, r);
+      el.appendChild(rTimeline);
+
       var rUpd = document.createElement('div');
       rUpd.className = 'meta';
       rUpd.style.marginTop = '6px';
@@ -1812,9 +1928,12 @@
               return rSetStatus((res && res.error) || 'อัปเดตไม่สำเร็จ', true);
             }
             bumpSummary('rSummary', R_STATUSES, prev, next);
+            // ยกค่าจากเซิร์ฟเวอร์มาทั้งชุด (โดยเฉพาะ RepairDoneAt ที่ประทับ/ล้างให้เองตามสถานะใหม่)
+            if (res.repair) Object.keys(res.repair).forEach(function (k) { r[k] = res.repair[k]; });
             r.status = next;
             el.className = 'bat ' + rStatusClass(next);
             badge.textContent = next;
+            renderTimelineInto(rTimeline, r);
             rUpd.textContent = 'อัปเดตล่าสุด เมื่อสักครู่' + (by ? ' โดย ' + by : '');
             rUpd.classList.remove('hidden');
             rSetStatus('อัปเดต ' + r.repairId + ' เป็น "' + next + '" แล้ว');
@@ -2026,6 +2145,10 @@
         note.textContent = '📝 ' + r.note;
         el.appendChild(note);
       }
+
+      var inTimeline = document.createElement('div');
+      renderTimelineInto(inTimeline, r);
+      el.appendChild(inTimeline);
 
       if (r.EvidenceImage) {
         var link = document.createElement('a');

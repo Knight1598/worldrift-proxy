@@ -23,13 +23,19 @@ var HEADERS = {
   ],
   /**
    * คอลัมน์ชุดหลังของ Repairs (BranchCode ถึง ReceivedAt) เพิ่มมาเพื่อรับรถจากสาขาอื่น
-   * ต่อท้ายไว้ด้านขวาโดยเจตนา ลำดับคอลัมน์เดิมจึงไม่ขยับ
    * โปรเจกต์ฟอร์มสาขาอื่นใช้ชื่อคอลัมน์ชุดเดียวกันนี้ ห้ามเปลี่ยนชื่อข้างเดียว
+   *
+   * JobOpenedDate / DispatchedAt มาจากฟอร์มสาขาอื่นเช่นกัน (วันที่เปิดจ๊อบ + เวลาที่กดส่ง)
+   * ส่วน RepairDoneAt ระบบนี้ประทับเองตอนสถานะเพิ่งเปลี่ยนเป็น "ซ่อมเสร็จแล้ว"
+   * ทั้งสามใช้คำนวณระยะเวลาแต่ละขั้นบนการ์ด (ดู repairTimelineLines ใน Battery.html)
+   *
+   * ต่อท้ายไว้ด้านขวาโดยเจตนา ลำดับคอลัมน์เดิมจึงไม่ขยับ
    */
   Repairs: [
     'repairId', 'receivedDate', 'jobNo', 'contractNo', 'vehicleModel', 'branch', 'zone',
     'status', 'note', 'updatedAt', 'updatedBy',
-    'BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt'
+    'BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt',
+    'JobOpenedDate', 'DispatchedAt', 'RepairDoneAt'
   ]
 };
 
@@ -37,7 +43,8 @@ var HEADERS = {
 var TEXT_COLUMNS = {
   Branches: ['branchCode'],
   Batteries: ['receivedDate', 'alNo', 'serial', 'updatedAt', 'deliveredAt'],
-  Repairs: ['receivedDate', 'jobNo', 'contractNo', 'updatedAt', 'BranchCode', 'PlateNo', 'ReceivedAt']
+  Repairs: ['receivedDate', 'jobNo', 'contractNo', 'updatedAt', 'BranchCode', 'PlateNo', 'ReceivedAt',
+            'JobOpenedDate', 'DispatchedAt', 'RepairDoneAt']
 };
 
 /** ขั้นตอนการกระตุ้นแบตเตอรี่ เรียงตามลำดับงานจริง */
@@ -78,6 +85,9 @@ var INCOMING_STATUS = 'รอรับรถ (กำลังจัดส่ง)
 
 /** สถานะหลังกดรับรถเข้าซ่อมแล้ว */
 var RECEIVED_STATUS = 'รอซ่อม';
+
+/** สถานะซ่อมเสร็จ — ใช้ประทับ/ล้าง RepairDoneAt ตอนสถานะเปลี่ยนเข้า-ออกจากขั้นนี้ */
+var REPAIR_DONE_STATUS = 'ซ่อมเสร็จแล้ว';
 
 /**
  * รหัสเข้าโหมดแอดมิน — แก้ได้ที่บรรทัดนี้บรรทัดเดียว
@@ -462,6 +472,8 @@ function apiBatteryBootstrap() {
       statuses: BATTERY_STATUSES,
       repairStatuses: REPAIR_STATUSES,
       deliveredStatus: DELIVERED_STATUS,
+      incomingStatus: INCOMING_STATUS,
+      repairDoneStatus: REPAIR_DONE_STATUS,
       appUrl: appUrl
     };
   } catch (err) {
@@ -796,6 +808,17 @@ function toRepairDto_(r) {
   return dto;
 }
 
+/**
+ * เวลาที่ซ่อมเสร็จ ประทับให้เองตอนสถานะเพิ่งเปลี่ยน "เข้า" ขั้นซ่อมเสร็จแล้ว
+ * และล้างทิ้งตอนสถานะเปลี่ยน "ออก" จากขั้นนั้น (เช่น กดผิดแล้วเปลี่ยนกลับไปกำลังซ่อม)
+ * เปลี่ยนสถานะอื่นที่ไม่เกี่ยวกับขั้นนี้เลย ค่าเดิมยังอยู่เหมือนเดิม
+ */
+function repairDoneStamp_(prevStatus, newStatus, prevStamp) {
+  if (newStatus === REPAIR_DONE_STATUS && prevStatus !== REPAIR_DONE_STATUS) return nowStamp_();
+  if (newStatus !== REPAIR_DONE_STATUS && prevStatus === REPAIR_DONE_STATUS) return '';
+  return prevStamp || '';
+}
+
 /** ค้นรายการรถส่งซ่อม — เปิดให้ทุกคนเรียกได้ เพราะเป็นข้อมูลที่ให้สาขาติดตาม */
 function apiListRepairs(payload) {
   try {
@@ -952,11 +975,18 @@ function apiUpdateRepairStatus(payload) {
     var rows = readRepairs_();
     for (var i = 0; i < rows.length; i++) {
       if (rows[i].repairId === id) {
-        sh.getRange(rows[i]._row, fieldCol_(sh, 'Repairs', 'status')).setValue(status);
-        sh.getRange(rows[i]._row, fieldCol_(sh, 'Repairs', 'updatedAt')).setValue(nowStamp_());
-        sh.getRange(rows[i]._row, fieldCol_(sh, 'Repairs', 'updatedBy'))
+        var r = rows[i];
+        var repairDoneAt = repairDoneStamp_(r.status, status, r.RepairDoneAt);
+
+        sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'status')).setValue(status);
+        sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'updatedAt')).setValue(nowStamp_());
+        sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'updatedBy'))
           .setValue(String(payload.updatedBy || '').trim());
-        return { ok: true, repairId: id, status: status };
+        sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'RepairDoneAt')).setValue(repairDoneAt);
+
+        r.status = status;
+        r.RepairDoneAt = repairDoneAt;
+        return { ok: true, repairId: id, status: status, repair: toRepairDto_(r) };
       }
     }
     throw new Error('ไม่พบรายการ ' + id);
@@ -1022,12 +1052,16 @@ function saveRepair_(p) {
 
     /* คอลัมน์ของงานรับรถข้ามสาขา ฟอร์มนี้ไม่มีช่องให้กรอก
      * ต้องยกค่าเดิมมาใส่ ไม่งั้นการกดแก้ไขรายการที่สาขาอื่นส่งมา
-     * จะล้างทะเบียนรถ/รูปหลักฐาน/ชื่อผู้รับทิ้งทั้งหมด
+     * จะล้างทะเบียนรถ/รูปหลักฐาน/ชื่อผู้รับ/วันที่เปิดจ๊อบ/เวลาที่ส่งทิ้งทั้งหมด
      */
-    ['BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt']
+    ['BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt',
+     'JobOpenedDate', 'DispatchedAt']
       .forEach(function (field) {
         row[field] = target ? (target[field] || '') : (p[field] === undefined ? '' : p[field]);
       });
+
+    // เวลาซ่อมเสร็จ ประทับ/ล้างเองตามการเปลี่ยนสถานะ ไม่ใช่ช่องที่ฟอร์มกรอกตรง ๆ
+    row.RepairDoneAt = repairDoneStamp_(target ? target.status : '', status, target ? target.RepairDoneAt : '');
 
     var values = toRowValues_(sh, SHEETS.REPAIRS, row);
 

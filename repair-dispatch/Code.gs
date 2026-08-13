@@ -26,12 +26,14 @@ var SHEETS = {
 var REPAIR_FIELDS = [
   'repairId', 'receivedDate', 'jobNo', 'contractNo', 'vehicleModel', 'branch', 'zone',
   'status', 'note', 'updatedAt', 'updatedBy',
-  'BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt'
+  'BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt',
+  'JobOpenedDate', 'DispatchedAt', 'RepairDoneAt'
 ];
 
 /** คอลัมน์ที่ต้องบังคับให้ชีตเก็บเป็นข้อความ ไม่งั้น Sheets แปลงเป็นวันที่/ตัวเลขให้เอง */
 var TEXT_FIELDS = ['receivedDate', 'jobNo', 'contractNo', 'updatedAt',
-                   'BranchCode', 'PlateNo', 'ReceivedAt'];
+                   'BranchCode', 'PlateNo', 'ReceivedAt',
+                   'JobOpenedDate', 'DispatchedAt', 'RepairDoneAt'];
 
 var BRANCH_FIELDS = ['branchCode', 'branchName', 'zone', 'active'];
 
@@ -357,7 +359,10 @@ function submitRepair_(p) {
       Source: SOURCE_LABEL,
       EvidenceImage: evidenceUrl,
       ReceivedBy: '',
-      ReceivedAt: ''
+      ReceivedAt: '',
+      JobOpenedDate: clean.jobOpenedDate,
+      DispatchedAt: stamp,              // เวลาที่กดส่ง เก็บแยกจาก updatedAt เพราะรับรถแล้ว updatedAt จะถูกเขียนทับ
+      RepairDoneAt: ''
     };
 
     var values = toRowValues_(sh, REPAIR_FIELDS, rec);
@@ -381,6 +386,7 @@ function submitRepair_(p) {
     data: {
       repairId: saved.repairId,
       jobNo: saved.jobNo,
+      jobOpenedDate: saved.JobOpenedDate,
       branch: saved.branch,
       zone: saved.zone,
       plateNo: saved.PlateNo,
@@ -414,6 +420,10 @@ function validateSubmission_(p) {
   var jobNo = String(p.jobNo || '').trim();
   if (!jobNo) throw new Error('ยังไม่ได้กรอกเลขที่งาน');
 
+  var jobOpenedDate = String(p.jobOpenedDate || '').trim();
+  if (!jobOpenedDate) throw new Error('ยังไม่ได้กรอกวันที่เปิดจ๊อบ');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(jobOpenedDate)) throw new Error('วันที่เปิดจ๊อบไม่ถูกต้อง');
+
   var vehicleModel = String(p.vehicleModel || '').trim();
   if (!vehicleModel) throw new Error('ยังไม่ได้กรอกรุ่นรถ');
 
@@ -434,6 +444,7 @@ function validateSubmission_(p) {
     zone: zone,
     branchCode: branchCode,
     jobNo: jobNo,
+    jobOpenedDate: jobOpenedDate,
     vehicleModel: vehicleModel,
     plateNo: plateNo,
     sender: sender,
