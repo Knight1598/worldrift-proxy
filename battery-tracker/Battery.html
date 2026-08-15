@@ -450,6 +450,8 @@
         </div>
       </div>
 
+      <div id="rfEvidence"></div>
+
       <label for="rfNote">หมายเหตุ</label>
       <input type="text" id="rfNote" autocomplete="off" placeholder="เช่น ทะเบียน / อาการ / อะไหล่ที่รอ">
 
@@ -530,6 +532,7 @@
   var editingId = '';
   var rEditingId = '';
   var cbBranch = null, cbBranchFilter = null, cbRBranch = null, cbRBranchFilter = null;
+  var rfPic = null;   // ช่องแนบรูปหลักฐานในฟอร์ม "เพิ่มรายการรถส่งซ่อม"
   var APP_URL = '';              // ใช้ทำลิงก์เปิดรูป (หน้าอยู่ในไอเฟรม อ่าน URL เองไม่ได้)
   var DELIVERED_STATUS = 'จัดส่งแล้ว';
   var INCOMING_STATUS = 'รอรับรถ (กำลังจัดส่ง)';   // ใช้คำนวณระยะเวลาบนการ์ด (ดู repairTimelineLines)
@@ -833,6 +836,8 @@
     cbRBranch = makeCombo('rfBranch', { placeholder: hint });
     cbBranchFilter = makeCombo('branchFilter', { placeholder: 'ทุกสาขา' });
     cbRBranchFilter = makeCombo('rBranchFilter', { placeholder: 'ทุกสาขา' });
+    rfPic = evidencePicker();
+    $('rfEvidence').appendChild(rfPic.el);
   }
 
   function boot() {
@@ -1902,6 +1907,8 @@
       renderTimelineInto(rTimeline, r);
       el.appendChild(rTimeline);
 
+      el.appendChild(evidenceGallery(r.repairId));
+
       var rUpd = document.createElement('div');
       rUpd.className = 'meta';
       rUpd.style.marginTop = '6px';
@@ -1915,18 +1922,80 @@
         var sel = document.createElement('select');
         R_STATUSES.forEach(function (s) { sel.appendChild(new Option(s, s)); });
         sel.value = r.status;
+        el.appendChild(sel);
+
+        // เปลี่ยนสถานะต้องแนบรูปหลักฐานก่อนเสมอ — เลือกในดรอปดาวน์แค่กางแผงยืนยันขึ้นมา
+        // ยังไม่ยิงไปเซิร์ฟเวอร์จนกว่าจะกดยืนยันพร้อมรูป
+        var statusPanel = document.createElement('div');
+        statusPanel.className = 'card hidden';
+        statusPanel.style.marginTop = '10px';
+        el.appendChild(statusPanel);
+
+        var statusMsg = document.createElement('div');
+        statusMsg.className = 'banner warn';
+        statusPanel.appendChild(statusMsg);
+
+        var statusPic = evidencePicker();
+        statusPanel.appendChild(statusPic.el);
+
+        var statusErr = document.createElement('div');
+        statusErr.className = 'banner err hidden';
+        statusPanel.appendChild(statusErr);
+
+        var statusRow = document.createElement('div');
+        statusRow.className = 'row';
+        var statusOk = document.createElement('button');
+        statusOk.type = 'button';
+        statusOk.className = 'primary';
+        statusOk.textContent = 'ยืนยันเปลี่ยนสถานะ';
+        var statusCancel = document.createElement('button');
+        statusCancel.type = 'button';
+        statusCancel.className = 'ghost';
+        statusCancel.textContent = 'ยกเลิก';
+        statusRow.appendChild(statusOk);
+        statusRow.appendChild(statusCancel);
+        statusPanel.appendChild(statusRow);
+
+        function closeStatusPanel(revertTo) {
+          if (revertTo !== undefined) sel.value = revertTo;
+          statusPanel.classList.add('hidden');
+          statusErr.classList.add('hidden');
+          statusPic.clear();
+        }
+
         sel.addEventListener('change', function () {
-          var prev = r.status;   // เหตุผลเดียวกับฝั่งแบต
+          statusMsg.textContent = 'เปลี่ยนสถานะ "' + r.status + '" → "' + sel.value + '" ' +
+            'ต้องแนบรูปหลักฐานก่อนยืนยัน';
+          statusPanel.classList.remove('hidden');
+        });
+
+        statusCancel.addEventListener('click', function () { closeStatusPanel(r.status); });
+
+        statusOk.addEventListener('click', function () {
+          var image = statusPic.getImage();
+          if (!image) {
+            statusErr.textContent = 'ยังไม่ได้แนบรูปหลักฐาน';
+            statusErr.classList.remove('hidden');
+            return;
+          }
+          var prev = r.status;
           var next = sel.value;
           var by = localStorage.getItem('bt_by') || '';
-          sel.disabled = true;
+          statusOk.disabled = true;
+          statusCancel.disabled = true;
+          statusOk.textContent = 'กำลังบันทึก…';
+
           call('apiUpdateRepairStatus', {
-            key: ADMIN_KEY, repairId: r.repairId, status: next, updatedBy: by
+            key: ADMIN_KEY, repairId: r.repairId, status: next, updatedBy: by,
+            base64: image.base64, mimeType: image.mimeType
           }).then(function (res) {
-            sel.disabled = false;
+            statusOk.disabled = false;
+            statusCancel.disabled = false;
+            statusOk.textContent = 'ยืนยันเปลี่ยนสถานะ';
             if (!res || !res.ok) {
-              sel.value = prev;
-              return rSetStatus((res && res.error) || 'อัปเดตไม่สำเร็จ', true);
+              statusErr.textContent = (res && res.error) || 'อัปเดตไม่สำเร็จ';
+              statusErr.classList.remove('hidden');
+              return;
             }
             bumpSummary('rSummary', R_STATUSES, prev, next);
             // ยกค่าจากเซิร์ฟเวอร์มาทั้งชุด (โดยเฉพาะ RepairDoneAt ที่ประทับ/ล้างให้เองตามสถานะใหม่)
@@ -1937,14 +2006,16 @@
             renderTimelineInto(rTimeline, r);
             rUpd.textContent = 'อัปเดตล่าสุด เมื่อสักครู่' + (by ? ' โดย ' + by : '');
             rUpd.classList.remove('hidden');
+            closeStatusPanel();
             rSetStatus('อัปเดต ' + r.repairId + ' เป็น "' + next + '" แล้ว');
           }).catch(function (err) {
-            sel.disabled = false;
-            sel.value = prev;
-            rSetStatus('อัปเดตไม่สำเร็จ: ' + (err.message || err), true);
+            statusOk.disabled = false;
+            statusCancel.disabled = false;
+            statusOk.textContent = 'ยืนยันเปลี่ยนสถานะ';
+            statusErr.textContent = 'อัปเดตไม่สำเร็จ: ' + (err.message || err);
+            statusErr.classList.remove('hidden');
           });
         });
-        el.appendChild(sel);
 
         // แก้ไข/ลบ ทำในการ์ดนี้เลย เหมือนฝั่งแบต
         var gJob, gContract, gVehicle, gBranch, gDate, gNote;
@@ -2000,6 +2071,7 @@
     $('rfStatus').value = r ? r.status : R_STATUSES[0];
     $('rfNote').value = r ? r.note : '';
     $('rfBy').value = localStorage.getItem('bt_by') || '';
+    rfPic.clear();
 
     $('rFormMsg').classList.add('hidden');
     $('rFormCard').classList.remove('hidden');
@@ -2011,6 +2083,7 @@
     $('rFormCard').classList.add('hidden');
     $('rFilterCard').classList.remove('hidden');
     rEditingId = '';
+    rfPic.clear();
   }
 
   function rFormError(msg) {
@@ -2032,6 +2105,15 @@
       updatedBy: $('rfBy').value.trim()
     };
     if (!payload.branch) return rFormError('ยังไม่ได้เลือกสาขา');
+
+    // สร้างรายการใหม่เท่านั้นที่บังคับรูป — แก้ไขรายการเดิมไม่มีช่องนี้เปิดให้ใช้
+    if (!rEditingId) {
+      var image = rfPic.getImage();
+      if (!image) return rFormError('ยังไม่ได้แนบรูปหลักฐาน');
+      payload.base64 = image.base64;
+      payload.mimeType = image.mimeType;
+    }
+
     localStorage.setItem('bt_by', payload.updatedBy);
 
     $('rSaveBtn').disabled = true;
@@ -2151,24 +2233,178 @@
       renderTimelineInto(inTimeline, r);
       el.appendChild(inTimeline);
 
-      if (r.EvidenceImage) {
-        var link = document.createElement('a');
-        link.className = 'meta';
-        link.href = r.EvidenceImage;
-        link.target = '_blank';
-        link.rel = 'noopener';
-        link.style.color = 'var(--primary)';
-        link.style.display = 'block';
-        link.textContent = '📎 ดูรูปหลักฐาน';
-        el.appendChild(link);
-      }
+      el.appendChild(evidenceGallery(r.repairId));
 
       if (IS_ADMIN) el.appendChild(inReceiveBox(r));
       box.appendChild(el);
     });
   }
 
-  /** ปุ่มรับรถ + ช่องยืนยันในการ์ด (ยืนยันทะเบียน แล้วกรอกชื่อผู้รับ) */
+  /**
+   * ช่องแนบรูปหลักฐานแบบใช้ซ้ำได้ — ปุ่มถ่ายรูป/เลือกรูป + รูปตัวอย่าง
+   * ใช้กับทุกจุดที่ต้องแนบรูปก่อนดำเนินการต่อ (รับรถ / เปลี่ยนสถานะ / สร้างรายการใหม่)
+   * ย่อรูปเหลือด้านยาว 1600px แบบเดียวกับใบบันทึกการจัดส่ง ก่อนส่งขึ้นเซิร์ฟเวอร์
+   */
+  function evidencePicker() {
+    var image = null;
+    var wrap = document.createElement('div');
+    wrap.style.margin = '8px 0';
+
+    var label = document.createElement('label');
+    label.textContent = 'รูปหลักฐาน *';
+    wrap.appendChild(label);
+
+    var camInput = document.createElement('input');
+    camInput.type = 'file';
+    camInput.accept = 'image/*';
+    camInput.capture = 'environment';
+    camInput.className = 'hidden';
+    var fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    fileInput.className = 'hidden';
+    wrap.appendChild(camInput);
+    wrap.appendChild(fileInput);
+
+    var row = document.createElement('div');
+    row.className = 'row';
+    var camBtn = document.createElement('button');
+    camBtn.type = 'button';
+    camBtn.className = 'primary';
+    camBtn.textContent = '📷 ถ่ายรูป';
+    var pickBtn = document.createElement('button');
+    pickBtn.type = 'button';
+    pickBtn.className = 'primary';
+    pickBtn.style.cssText = 'background:var(--card);color:var(--primary);border:1px solid var(--primary);';
+    pickBtn.textContent = '🖼️ เลือกรูป';
+    row.appendChild(camBtn);
+    row.appendChild(pickBtn);
+    wrap.appendChild(row);
+
+    var preview = document.createElement('img');
+    preview.className = 'hidden';
+    preview.style.cssText = 'max-width:100%;border-radius:10px;margin:10px 0 4px;border:1px solid var(--line);';
+    wrap.appendChild(preview);
+
+    var status = document.createElement('div');
+    status.className = 'muted';
+    status.style.fontSize = '13px';
+    wrap.appendChild(status);
+
+    function handleFile(file) {
+      if (!file) return;
+      status.textContent = 'กำลังเตรียมรูป…';
+      var reader = new FileReader();
+      reader.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var max = 1600;
+          var scale = Math.min(1, max / Math.max(img.width, img.height));
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          var dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          image = { dataUrl: dataUrl, base64: dataUrl.split(',')[1], mimeType: 'image/jpeg' };
+          preview.src = dataUrl;
+          preview.classList.remove('hidden');
+          status.textContent = 'แนบรูปแล้ว — กดปุ่มด้านบนถ้าจะเปลี่ยนรูป';
+        };
+        img.onerror = function () { status.textContent = 'เปิดไฟล์รูปไม่ได้ ลองเลือกรูปใหม่'; };
+        img.src = reader.result;
+      };
+      reader.onerror = function () { status.textContent = 'อ่านไฟล์รูปไม่ได้ ลองเลือกรูปใหม่'; };
+      reader.readAsDataURL(file);
+    }
+
+    camBtn.addEventListener('click', function () { camInput.click(); });
+    pickBtn.addEventListener('click', function () { fileInput.click(); });
+    camInput.addEventListener('change', function () { handleFile(this.files[0]); this.value = ''; });
+    fileInput.addEventListener('change', function () { handleFile(this.files[0]); this.value = ''; });
+
+    return {
+      el: wrap,
+      getImage: function () { return image; },
+      clear: function () {
+        image = null;
+        preview.classList.add('hidden');
+        preview.removeAttribute('src');
+        status.textContent = '';
+      }
+    };
+  }
+
+  /**
+   * ปุ่ม "ดูรูปหลักฐานทั้งหมด" — กดครั้งแรกค่อยโหลดประวัติรูปของงานซ่อมนี้จากเซิร์ฟเวอร์
+   * รวมรูปทุกขั้นตอน (ส่งจากสาขา / รับรถเข้า / ทุกครั้งที่เปลี่ยนสถานะ) เรียงเก่าสุดขึ้นก่อน
+   */
+  function evidenceGallery(repairId) {
+    var wrap = document.createElement('div');
+    wrap.style.marginTop = '6px';
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.style.cssText = 'background:none;border:none;padding:4px 0;color:var(--primary);' +
+      'font-size:14px;cursor:pointer;display:block;';
+    btn.textContent = '📎 ดูรูปหลักฐานทั้งหมด';
+    wrap.appendChild(btn);
+
+    var list = document.createElement('div');
+    list.className = 'hidden';
+    list.style.marginTop = '4px';
+    wrap.appendChild(list);
+
+    var loaded = false;
+    btn.addEventListener('click', function () {
+      if (!list.classList.contains('hidden')) {
+        list.classList.add('hidden');
+        return;
+      }
+      list.classList.remove('hidden');
+      if (loaded) return;
+      loaded = true;
+      list.textContent = 'กำลังโหลด…';
+
+      call('apiListRepairEvidence', { repairId: repairId }).then(function (res) {
+        list.innerHTML = '';
+        if (!res || !res.ok) {
+          list.textContent = (res && res.message) || 'โหลดไม่สำเร็จ';
+          loaded = false;
+          return;
+        }
+        if (!res.data.length) {
+          list.textContent = 'ยังไม่มีรูปหลักฐาน';
+          return;
+        }
+        res.data.forEach(function (ev) {
+          var line = document.createElement('div');
+          line.style.cssText = 'font-size:13px;padding:5px 0;border-top:1px solid var(--line);';
+          var href = ev.url ||
+            (ev.photoId && APP_URL ? APP_URL + '?revimg=' + encodeURIComponent(ev.photoId) : '');
+          var a = document.createElement('a');
+          a.href = href || '#';
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.style.color = 'var(--primary)';
+          a.textContent = '🖼️ ' + (ev.label || 'รูปหลักฐาน');
+          line.appendChild(a);
+          var meta = document.createElement('span');
+          meta.className = 'muted';
+          meta.style.marginLeft = '6px';
+          meta.textContent = (ev.at || '') + (ev.updatedBy ? ' · ' + ev.updatedBy : '');
+          line.appendChild(meta);
+          list.appendChild(line);
+        });
+      }).catch(function (err) {
+        list.textContent = 'โหลดไม่สำเร็จ: ' + (err.message || err);
+        loaded = false;
+      });
+    });
+
+    return wrap;
+  }
+
+  /** ปุ่มรับรถ + ช่องยืนยันในการ์ด (ยืนยันทะเบียน แล้วกรอกชื่อผู้รับ พร้อมรูปหลักฐาน) */
   function inReceiveBox(r) {
     var wrap = document.createElement('div');
 
@@ -2202,6 +2438,9 @@
     who.value = localStorage.getItem('bt_by') || '';
     panel.appendChild(who);
 
+    var pic = evidencePicker();
+    panel.appendChild(pic.el);
+
     var msg = document.createElement('div');
     msg.className = 'banner err hidden';
     panel.appendChild(msg);
@@ -2229,6 +2468,7 @@
       panel.classList.add('hidden');
       btn.classList.remove('hidden');
       msg.classList.add('hidden');
+      pic.clear();
     });
 
     ok.addEventListener('click', function () {
@@ -2238,12 +2478,21 @@
         msg.classList.remove('hidden');
         return;
       }
+      var image = pic.getImage();
+      if (!image) {
+        msg.textContent = 'ยังไม่ได้แนบรูปหลักฐานตอนรับรถ';
+        msg.classList.remove('hidden');
+        return;
+      }
       localStorage.setItem('bt_by', name);
       ok.disabled = true;
       cancel.disabled = true;
       ok.textContent = 'กำลังบันทึก…';
 
-      call('apiReceiveRepair', { key: ADMIN_KEY, repairId: r.repairId, receivedBy: name })
+      call('apiReceiveRepair', {
+        key: ADMIN_KEY, repairId: r.repairId, receivedBy: name,
+        base64: image.base64, mimeType: image.mimeType
+      })
         .then(function (res) {
           if (!res || !res.ok) {
             ok.disabled = false;

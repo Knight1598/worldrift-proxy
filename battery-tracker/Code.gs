@@ -11,7 +11,8 @@
 var SHEETS = {
   BRANCHES: 'Branches',
   BATTERIES: 'Batteries',
-  REPAIRS: 'Repairs'
+  REPAIRS: 'Repairs',
+  REPAIR_EVIDENCE: 'RepairEvidence'
 };
 
 var HEADERS = {
@@ -36,7 +37,14 @@ var HEADERS = {
     'status', 'note', 'updatedAt', 'updatedBy',
     'BranchCode', 'PlateNo', 'Source', 'EvidenceImage', 'ReceivedBy', 'ReceivedAt',
     'JobOpenedDate', 'DispatchedAt', 'RepairDoneAt'
-  ]
+  ],
+  /**
+   * รูปหลักฐานทุกขั้นตอนของงานซ่อม — หนึ่งแถวต่อหนึ่งรูป หนึ่งรายการซ่อมมีได้หลายแถว
+   * (ต่างจาก EvidenceImage ในชีต Repairs ที่เก็บได้แค่รูปเดียวตอนสาขาส่งมา)
+   * label คือชื่อขั้นตอนตอนถ่ายรูปนั้น เช่น "รับรถเข้า", "รออะไหล่", "ซ่อมเสร็จแล้ว"
+   * photoId คือ Drive file id ไม่ใช่ URL ตรง ๆ — ไฟล์เก็บเป็นส่วนตัว เปิดผ่าน ?revimg= เท่านั้น
+   */
+  RepairEvidence: ['evidenceId', 'repairId', 'at', 'label', 'photoId', 'updatedBy']
 };
 
 /** คอลัมน์ที่ต้องบังคับให้ชีตเก็บเป็นข้อความ ไม่งั้น Sheets จะแปลงเป็นวันที่/ตัวเลขให้เอง */
@@ -44,7 +52,8 @@ var TEXT_COLUMNS = {
   Branches: ['branchCode'],
   Batteries: ['receivedDate', 'alNo', 'serial', 'updatedAt', 'deliveredAt'],
   Repairs: ['receivedDate', 'jobNo', 'contractNo', 'updatedAt', 'BranchCode', 'PlateNo', 'ReceivedAt',
-            'JobOpenedDate', 'DispatchedAt', 'RepairDoneAt']
+            'JobOpenedDate', 'DispatchedAt', 'RepairDoneAt'],
+  RepairEvidence: ['evidenceId', 'repairId', 'at', 'photoId']
 };
 
 /** ขั้นตอนการกระตุ้นแบตเตอรี่ เรียงตามลำดับงานจริง */
@@ -63,6 +72,9 @@ var STATUS_RENAMES = { 'กำลังจัดส่ง': 'จัดส่ง�
 var DELIVERED_STATUS = 'จัดส่งแล้ว';
 
 var DELIVERY_FOLDER_NAME = 'หลักฐานการจัดส่งแบตเตอรี่';
+
+/** โฟลเดอร์เก็บรูปหลักฐานทุกขั้นตอนของงานซ่อม (รับรถ/เปลี่ยนสถานะ/สร้างรายการใหม่) */
+var REPAIR_EVIDENCE_FOLDER_NAME = 'หลักฐานขั้นตอนรถส่งซ่อม';
 
 /**
  * ขั้นตอนการซ่อมรถ เรียงจากยังไม่ได้ลงมือ → ติดของ (อะไหล่/แบต) → กำลังทำ → เสร็จ
@@ -382,6 +394,11 @@ function doGet(e) {
   // เสิร์ฟผ่านเว็บแอปแทนการเปิดลิงก์ Drive ตรง ๆ จะได้ไม่ต้องแชร์ไฟล์เป็นสาธารณะ
   var imgId = String(params.img || '').trim();
   if (imgId) return serveDeliveryImage_(imgId);
+
+  // เปิดดูรูปหลักฐานขั้นตอนงานซ่อม: ?revimg=<fileId> (คนละโฟลเดอร์กับรูปจัดส่งแบต)
+  var revImgId = String(params.revimg || '').trim();
+  if (revImgId) return serveRepairEvidenceImage_(revImgId);
+
   var key = String(params.key || '');
   var isAdmin = (key === getBatteryAdminKey_());
 
@@ -745,6 +762,121 @@ function serveDeliveryImage_(fileId) {
   }
 }
 
+/* =======================================================================
+ * ส่วนที่ 5ข1 — รูปหลักฐานทุกขั้นตอนของงานซ่อม
+ *
+ * ทุกจุดที่เปลี่ยนสถานะงานซ่อม (รับรถเข้า / เปลี่ยนสถานะในคิว / สร้างรายการใหม่)
+ * บังคับแนบรูป 1 รูปเสมอ เก็บเป็นประวัติสะสมในชีต RepairEvidence แยกจาก Repairs
+ * เพื่อให้ดูย้อนหลังได้ครบทุกขั้นตอน ไม่ใช่แค่รูปล่าสุด
+ * ===================================================================== */
+
+function getRepairEvidenceFolder_() {
+  var id = prop_('REPAIR_EVIDENCE_FOLDER_ID');
+  if (id) {
+    try {
+      return DriveApp.getFolderById(id);
+    } catch (err) {
+      // โฟลเดอร์ถูกลบไป สร้างใหม่ให้
+    }
+  }
+  var folder = DriveApp.createFolder(REPAIR_EVIDENCE_FOLDER_NAME);
+  props_().setProperty('REPAIR_EVIDENCE_FOLDER_ID', folder.getId());
+  return folder;
+}
+
+/** ตั้งชื่อไฟล์เป็น วันที่_เลขที่รายการ_ขั้นตอน เพื่อให้ค้นในไดรฟ์ได้ง่าย */
+function saveRepairEvidencePhoto_(base64, mimeType, repairId, label) {
+  var type = String(mimeType || 'image/jpeg');
+  var ext = type.indexOf('png') >= 0 ? '.png' : '.jpg';
+  var name = [todayIso_(), repairId, safeFileNamePart_(label)].join('_') + ext;
+  var blob = Utilities.newBlob(Utilities.base64Decode(base64), type, name);
+  return getRepairEvidenceFolder_().createFile(blob).getId();
+}
+
+/** เสิร์ฟรูปหลักฐานขั้นตอนงานซ่อมผ่านเว็บแอป — เหมือน serveDeliveryImage_ เป๊ะ ๆ คนละโฟลเดอร์ */
+function serveRepairEvidenceImage_(fileId) {
+  try {
+    var file = DriveApp.getFileById(fileId);
+    var blob = file.getBlob();
+    var dataUri = 'data:' + blob.getContentType() + ';base64,' +
+      Utilities.base64Encode(blob.getBytes());
+    var html = '<div style="margin:0;background:#111;text-align:center">' +
+      '<img src="' + dataUri + '" style="max-width:100%;height:auto">' +
+      '</div>';
+    return HtmlService.createHtmlOutput(html)
+      .setTitle(file.getName())
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  } catch (err) {
+    return HtmlService.createHtmlOutput('<p>เปิดรูปไม่ได้: ' + String(err.message || err) + '</p>');
+  }
+}
+
+/** เลขที่หลักฐาน ใช้แค่อ้างอิง/ค้นหา ไม่ต้องเรียงต่อเนื่องเหมือนเลขที่รายการซ่อม */
+function nextEvidenceId_() {
+  return 'EV-' + Utilities.formatDate(new Date(), TZ, 'yyyyMMdd-HHmmss') + '-' +
+    Math.floor(1000 + Math.random() * 9000);
+}
+
+/**
+ * บันทึกรูปหลักฐานหนึ่งขั้นตอนของงานซ่อม
+ * เรียกใต้ lock ของฟังก์ชันที่เรียกเท่านั้น (apiReceiveRepair / apiUpdateRepairStatus /
+ * saveRepair_ ถือ lock ของตัวเองอยู่แล้วตอนเรียกฟังก์ชันนี้ ฟังก์ชันนี้เองไม่ล็อกซ้ำ)
+ */
+function saveRepairEvidence_(repairId, label, base64, mimeType, updatedBy) {
+  var photoId = saveRepairEvidencePhoto_(base64, mimeType, repairId, label);
+  var sh = getWritableSheet_(SHEETS.REPAIR_EVIDENCE);
+  var rec = {
+    evidenceId: nextEvidenceId_(),
+    repairId: repairId,
+    at: nowStamp_(),
+    label: label,
+    photoId: photoId,
+    updatedBy: String(updatedBy || '').trim()
+  };
+  var values = toRowValues_(sh, SHEETS.REPAIR_EVIDENCE, rec);
+  sh.getRange(sh.getLastRow() + 1, 1, 1, values.length).setValues([values]);
+  return rec;
+}
+
+/**
+ * รูปหลักฐานทุกขั้นตอนของงานซ่อมหนึ่งรายการ เรียงเก่าสุดขึ้นก่อน — ใครก็ดูได้ (แก้ไม่ได้)
+ * แถวแรกสุดสังเคราะห์จากรูปตอนสาขาอื่นส่งมา (EvidenceImage ในชีต Repairs) ถ้ามี
+ */
+function apiListRepairEvidence(payload) {
+  try {
+    payload = payload || {};
+    var repairId = String(payload.repairId || '').trim();
+    if (!repairId) throw new Error('ไม่ได้ระบุรายการ');
+
+    var rows = readRows_(SHEETS.REPAIR_EVIDENCE)
+      .filter(function (r) { return r.repairId === repairId; })
+      .map(function (r) {
+        return { evidenceId: r.evidenceId, at: r.at, label: r.label, photoId: r.photoId, updatedBy: r.updatedBy };
+      });
+    rows.sort(function (a, b) { return String(a.at) < String(b.at) ? -1 : (String(a.at) > String(b.at) ? 1 : 0); });
+
+    var repairs = readRepairs_().filter(function (r) { return r.repairId === repairId; });
+    if (repairs.length && repairs[0].EvidenceImage) {
+      var r0 = repairs[0];
+      rows.unshift({
+        evidenceId: '',
+        at: r0.DispatchedAt || r0.updatedAt || '',
+        label: 'ส่งจากสาขา' + (r0.branch ? ' (' + r0.branch + ')' : ''),
+        url: r0.EvidenceImage,   // มาจากระบบข้ามสาขา เป็นลิงก์ Drive เต็มอยู่แล้ว ไม่ต้องผ่าน ?revimg=
+        updatedBy: r0.updatedBy
+      });
+    }
+
+    return {
+      ok: true,
+      message: rows.length ? 'มีรูปหลักฐาน ' + rows.length + ' รายการ' : 'ยังไม่มีรูปหลักฐาน',
+      data: rows
+    };
+  } catch (err) {
+    return { ok: false, message: String(err.message || err) };
+  }
+}
+
 /**
  * บันทึกใบจัดส่งของแบตก้อนหนึ่ง — ต้องมี key ของแอดมิน
  * บันทึกแล้วสถานะจะกลายเป็น "จัดส่งแล้ว" ให้เอง ไม่ต้องไปกดเปลี่ยนอีกที
@@ -903,13 +1035,15 @@ function apiReceiveRepair(payload) {
 
     var id = String(payload.repairId || '').trim();
     var receivedBy = String(payload.receivedBy || '').trim();
+    var base64 = String(payload.base64 || '');
     if (!id) throw new Error('ไม่ได้ระบุรายการที่จะรับ');
     if (!receivedBy) throw new Error('ยังไม่ได้กรอกชื่อผู้รับรถ');
+    if (!base64) throw new Error('ยังไม่ได้แนบรูปหลักฐานตอนรับรถ');
 
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดอีกครั้ง');
 
-    var dto;
+    var dto, evidence;
     try {
       var sh = getWritableSheet_(SHEETS.REPAIRS);
       var rows = readRepairs_();
@@ -923,6 +1057,8 @@ function apiReceiveRepair(payload) {
       if (target.status !== INCOMING_STATUS) {
         throw new Error('รายการนี้ถูกรับเข้าไปแล้ว (สถานะปัจจุบัน "' + target.status + '")');
       }
+
+      evidence = saveRepairEvidence_(id, 'รับรถเข้า', base64, payload.mimeType, receivedBy);
 
       var stamp = nowStamp_();
       var updates = {
@@ -946,7 +1082,8 @@ function apiReceiveRepair(payload) {
     return {
       ok: true,
       message: 'รับรถ ' + (dto.PlateNo || dto.jobNo || id) + ' เข้าซ่อมแล้ว',
-      data: dto
+      data: dto,
+      evidence: evidence
     };
   } catch (err) {
     return { ok: false, message: String(err.message || err) };
@@ -958,7 +1095,8 @@ function apiSaveRepair(payload) {
   try {
     payload = payload || {};
     requireBatteryAdmin_(payload.key);
-    return { ok: true, repair: saveRepair_(payload) };
+    var result = saveRepair_(payload);
+    return { ok: true, repair: result.row, evidence: result.evidence };
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
@@ -972,28 +1110,38 @@ function apiUpdateRepairStatus(payload) {
 
     var id = String(payload.repairId || '').trim();
     var status = String(payload.status || '').trim();
+    var base64 = String(payload.base64 || '');
+    var updatedBy = String(payload.updatedBy || '').trim();
     if (!id) throw new Error('ไม่ได้ระบุรายการ');
     if (REPAIR_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
+    if (!base64) throw new Error('ต้องแนบรูปหลักฐานก่อนเปลี่ยนสถานะ');
 
-    var sh = getWritableSheet_(SHEETS.REPAIRS);
-    var rows = readRepairs_();
-    for (var i = 0; i < rows.length; i++) {
-      if (rows[i].repairId === id) {
-        var r = rows[i];
-        var repairDoneAt = repairDoneStamp_(r.status, status, r.RepairDoneAt);
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(20000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดอีกครั้ง');
 
-        sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'status')).setValue(status);
-        sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'updatedAt')).setValue(nowStamp_());
-        sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'updatedBy'))
-          .setValue(String(payload.updatedBy || '').trim());
-        sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'RepairDoneAt')).setValue(repairDoneAt);
+    try {
+      var sh = getWritableSheet_(SHEETS.REPAIRS);
+      var rows = readRepairs_();
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].repairId === id) {
+          var r = rows[i];
+          var repairDoneAt = repairDoneStamp_(r.status, status, r.RepairDoneAt);
+          var evidence = saveRepairEvidence_(id, status, base64, payload.mimeType, updatedBy);
 
-        r.status = status;
-        r.RepairDoneAt = repairDoneAt;
-        return { ok: true, repairId: id, status: status, repair: toRepairDto_(r) };
+          sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'status')).setValue(status);
+          sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'updatedAt')).setValue(nowStamp_());
+          sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'updatedBy')).setValue(updatedBy);
+          sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'RepairDoneAt')).setValue(repairDoneAt);
+
+          r.status = status;
+          r.RepairDoneAt = repairDoneAt;
+          return { ok: true, repairId: id, status: status, repair: toRepairDto_(r), evidence: evidence };
+        }
       }
+      throw new Error('ไม่พบรายการ ' + id);
+    } finally {
+      lock.releaseLock();
     }
-    throw new Error('ไม่พบรายการ ' + id);
   } catch (err) {
     return { ok: false, error: String(err.message || err) };
   }
@@ -1011,8 +1159,12 @@ function saveRepair_(p) {
   var receivedDate = String(p.receivedDate || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(receivedDate)) receivedDate = todayIso_();
 
-  var branchInfo = findBranch_(branch);
+  var base64 = String(p.base64 || '');
+  // แก้รายการเดิม (แผงแก้ไขในการ์ด) ไม่มีช่องแนบรูป จึงบังคับแค่ตอนสร้างรายการใหม่เท่านั้น
   var originalId = String(p.repairId || '').trim();
+  if (!originalId && !base64) throw new Error('ยังไม่ได้แนบรูปหลักฐาน');
+
+  var branchInfo = findBranch_(branch);
   var row = {
     repairId: originalId,
     receivedDate: receivedDate,
@@ -1067,6 +1219,9 @@ function saveRepair_(p) {
     // เวลาซ่อมเสร็จ ประทับ/ล้างเองตามการเปลี่ยนสถานะ ไม่ใช่ช่องที่ฟอร์มกรอกตรง ๆ
     row.RepairDoneAt = repairDoneStamp_(target ? target.status : '', status, target ? target.RepairDoneAt : '');
 
+    // สร้างรายการใหม่ (ไม่ใช่แก้ไข) ถ่ายรูปหลักฐานตอนรับเข้าไว้ด้วย ป้ายกำกับเป็นสถานะที่เลือก
+    var evidence = target ? null : saveRepairEvidence_(row.repairId, status, base64, p.mimeType, row.updatedBy);
+
     var values = toRowValues_(sh, SHEETS.REPAIRS, row);
 
     if (target) sh.getRange(target._row, 1, 1, values.length).setValues([values]);
@@ -1075,7 +1230,7 @@ function saveRepair_(p) {
     lock.releaseLock();
   }
 
-  return row;
+  return { row: row, evidence: evidence };
 }
 
 /** เลขที่รายการซ่อม รูปแบบ RP-YYYYMMDD-NNN (เรียกใต้ lock เท่านั้น) */
