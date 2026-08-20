@@ -113,6 +113,12 @@ var REPAIR_DONE_STATUS = 'ซ่อมเสร็จแล้ว';
 var REPAIR_NOT_FIXED_STATUS = 'ไม่ซ่อมส่งรถกลับ(ติดต่อ903)';
 
 /**
+ * สถานะที่ไม่บังคับแนบรูปหลักฐานตอนเปลี่ยนเข้า (ยังบังคับสถานะอื่นทุกอันตามปกติ)
+ * 'รอกระตุ้นแบต' เป็นแค่การรอคิว ไม่ได้มีอะไรให้ถ่ายรูปเป็นหลักฐานต่างจากตอนรับรถเข้ามา
+ */
+var REPAIR_PHOTO_OPTIONAL_STATUS = 'รอกระตุ้นแบต';
+
+/**
  * รหัสเข้าโหมดแอดมิน — แก้ได้ที่บรรทัดนี้บรรทัดเดียว
  * เปลี่ยนแล้วต้อง Deploy เวอร์ชันใหม่ รหัสเดิมจะใช้ไม่ได้ทันที
  *
@@ -503,6 +509,7 @@ function apiBatteryBootstrap() {
       incomingStatus: INCOMING_STATUS,
       repairDoneStatus: REPAIR_DONE_STATUS,
       repairNotFixedStatus: REPAIR_NOT_FIXED_STATUS,
+      repairPhotoOptionalStatus: REPAIR_PHOTO_OPTIONAL_STATUS,
       appUrl: appUrl
     };
   } catch (err) {
@@ -1122,7 +1129,9 @@ function apiUpdateRepairStatus(payload) {
     var updatedBy = String(payload.updatedBy || '').trim();
     if (!id) throw new Error('ไม่ได้ระบุรายการ');
     if (REPAIR_STATUSES.indexOf(status) < 0) throw new Error('สถานะไม่ถูกต้อง: ' + status);
-    if (!base64) throw new Error('ต้องแนบรูปหลักฐานก่อนเปลี่ยนสถานะ');
+    if (status !== REPAIR_PHOTO_OPTIONAL_STATUS && !base64) {
+      throw new Error('ต้องแนบรูปหลักฐานก่อนเปลี่ยนสถานะ');
+    }
 
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดอีกครั้ง');
@@ -1134,7 +1143,7 @@ function apiUpdateRepairStatus(payload) {
         if (rows[i].repairId === id) {
           var r = rows[i];
           var repairDoneAt = repairDoneStamp_(r.status, status, r.RepairDoneAt);
-          var evidence = saveRepairEvidence_(id, status, base64, payload.mimeType, updatedBy);
+          var evidence = base64 ? saveRepairEvidence_(id, status, base64, payload.mimeType, updatedBy) : null;
 
           sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'status')).setValue(status);
           sh.getRange(r._row, fieldCol_(sh, 'Repairs', 'updatedAt')).setValue(nowStamp_());
@@ -1169,8 +1178,11 @@ function saveRepair_(p) {
 
   var base64 = String(p.base64 || '');
   // แก้รายการเดิม (แผงแก้ไขในการ์ด) ไม่มีช่องแนบรูป จึงบังคับแค่ตอนสร้างรายการใหม่เท่านั้น
+  // (ยกเว้นตั้งสถานะเริ่มต้นเป็น 'รอกระตุ้นแบต' ไม่บังคับเหมือนตอนเปลี่ยนสถานะ)
   var originalId = String(p.repairId || '').trim();
-  if (!originalId && !base64) throw new Error('ยังไม่ได้แนบรูปหลักฐาน');
+  if (!originalId && status !== REPAIR_PHOTO_OPTIONAL_STATUS && !base64) {
+    throw new Error('ยังไม่ได้แนบรูปหลักฐาน');
+  }
 
   var branchInfo = findBranch_(branch);
   var row = {
@@ -1228,7 +1240,7 @@ function saveRepair_(p) {
     row.RepairDoneAt = repairDoneStamp_(target ? target.status : '', status, target ? target.RepairDoneAt : '');
 
     // สร้างรายการใหม่ (ไม่ใช่แก้ไข) ถ่ายรูปหลักฐานตอนรับเข้าไว้ด้วย ป้ายกำกับเป็นสถานะที่เลือก
-    var evidence = target ? null : saveRepairEvidence_(row.repairId, status, base64, p.mimeType, row.updatedBy);
+    var evidence = (target || !base64) ? null : saveRepairEvidence_(row.repairId, status, base64, p.mimeType, row.updatedBy);
 
     var values = toRowValues_(sh, SHEETS.REPAIRS, row);
 

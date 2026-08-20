@@ -452,6 +452,7 @@
       </div>
 
       <div id="rfEvidence"></div>
+      <div id="rfEvidenceNote" class="muted hidden" style="margin:4px 0 8px">ไม่ต้องแนบรูปหลักฐานสำหรับสถานะนี้</div>
 
       <label for="rfNote">หมายเหตุ</label>
       <input type="text" id="rfNote" autocomplete="off" placeholder="เช่น ทะเบียน / อาการ / อะไหล่ที่รอ">
@@ -539,6 +540,7 @@
   var INCOMING_STATUS = 'รอรับรถ (กำลังจัดส่ง)';   // ใช้คำนวณระยะเวลาบนการ์ด (ดู repairTimelineLines)
   var REPAIR_DONE_STATUS = 'ซ่อมเสร็จแล้ว';
   var REPAIR_NOT_FIXED_STATUS = 'ไม่ซ่อมส่งรถกลับ(ติดต่อ903)';
+  var REPAIR_PHOTO_OPTIONAL_STATUS = 'รอกระตุ้นแบต';   // สถานะเดียวที่ไม่บังคับแนบรูปตอนเปลี่ยนสถานะ
   var dlvBattery = null;         // แบตก้อนที่กำลังกรอกใบจัดส่งให้
   var dlvImage = null;           // { base64, mimeType, dataUrl }
   var searchSeq = 0, rSearchSeq = 0;   // ลำดับคำขอ ใช้ทิ้งผลลัพธ์ที่ล้าสมัย
@@ -855,6 +857,7 @@
       if (res.incomingStatus) INCOMING_STATUS = res.incomingStatus;
       if (res.repairDoneStatus) REPAIR_DONE_STATUS = res.repairDoneStatus;
       if (res.repairNotFixedStatus) REPAIR_NOT_FIXED_STATUS = res.repairNotFixedStatus;
+      if (res.repairPhotoOptionalStatus) REPAIR_PHOTO_OPTIONAL_STATUS = res.repairPhotoOptionalStatus;
 
       // ตัวเลือกสาขา: พิมพ์ได้ทั้งรหัสและชื่อ เพราะจับคู่กับข้อความทั้งบรรทัด
       var branchOptions = res.branches.map(function (b) {
@@ -877,6 +880,7 @@
         $('rStatusFilter').appendChild(new Option(s, s));
         $('rfStatus').appendChild(new Option(s, s));
       });
+      $('rfStatus').addEventListener('change', rSyncEvidenceOptional);
       $('fDate').value = res.today;
       $('rfDate').value = res.today;
 
@@ -1967,16 +1971,19 @@
         }
 
         sel.addEventListener('change', function () {
+          var photoNeeded = sel.value !== REPAIR_PHOTO_OPTIONAL_STATUS;
+          statusPic.el.classList.toggle('hidden', !photoNeeded);
           statusMsg.textContent = 'เปลี่ยนสถานะ "' + r.status + '" → "' + sel.value + '" ' +
-            'ต้องแนบรูปหลักฐานก่อนยืนยัน';
+            (photoNeeded ? 'ต้องแนบรูปหลักฐานก่อนยืนยัน' : '(สถานะนี้ไม่ต้องแนบรูปหลักฐาน)');
           statusPanel.classList.remove('hidden');
         });
 
         statusCancel.addEventListener('click', function () { closeStatusPanel(r.status); });
 
         statusOk.addEventListener('click', function () {
+          var photoNeeded = sel.value !== REPAIR_PHOTO_OPTIONAL_STATUS;
           var image = statusPic.getImage();
-          if (!image) {
+          if (photoNeeded && !image) {
             statusErr.textContent = 'ยังไม่ได้แนบรูปหลักฐาน';
             statusErr.classList.remove('hidden');
             return;
@@ -1990,7 +1997,7 @@
 
           call('apiUpdateRepairStatus', {
             key: ADMIN_KEY, repairId: r.repairId, status: next, updatedBy: by,
-            base64: image.base64, mimeType: image.mimeType
+            base64: image ? image.base64 : '', mimeType: image ? image.mimeType : ''
           }).then(function (res) {
             statusOk.disabled = false;
             statusCancel.disabled = false;
@@ -2063,6 +2070,13 @@
     });
   }
 
+  /** ซ่อนช่องแนบรูปในฟอร์มบนสุดตอนเลือกสถานะที่ไม่บังคับรูป (เช่น 'รอกระตุ้นแบต') */
+  function rSyncEvidenceOptional() {
+    var optional = $('rfStatus').value === REPAIR_PHOTO_OPTIONAL_STATUS;
+    rfPic.el.classList.toggle('hidden', optional);
+    $('rfEvidenceNote').classList.toggle('hidden', !optional);
+  }
+
   function rOpenForm(r) {
     rEditingId = r ? r.repairId : '';
     $('rFormTitle').textContent = r ? 'แก้ไข ' + r.repairId : 'เพิ่มรายการรถส่งซ่อม';
@@ -2075,6 +2089,7 @@
     $('rfNote').value = r ? r.note : '';
     $('rfBy').value = localStorage.getItem('bt_by') || '';
     rfPic.clear();
+    rSyncEvidenceOptional();
 
     $('rFormMsg').classList.add('hidden');
     $('rFormCard').classList.remove('hidden');
@@ -2110,11 +2125,18 @@
     if (!payload.branch) return rFormError('ยังไม่ได้เลือกสาขา');
 
     // สร้างรายการใหม่เท่านั้นที่บังคับรูป — แก้ไขรายการเดิมไม่มีช่องนี้เปิดให้ใช้
-    if (!rEditingId) {
+    // ยกเว้นตั้งสถานะเริ่มต้นเป็น 'รอกระตุ้นแบต' ไม่บังคับเหมือนตอนเปลี่ยนสถานะ
+    if (!rEditingId && payload.status !== REPAIR_PHOTO_OPTIONAL_STATUS) {
       var image = rfPic.getImage();
       if (!image) return rFormError('ยังไม่ได้แนบรูปหลักฐาน');
       payload.base64 = image.base64;
       payload.mimeType = image.mimeType;
+    } else if (!rEditingId) {
+      var optionalImage = rfPic.getImage();
+      if (optionalImage) {
+        payload.base64 = optionalImage.base64;
+        payload.mimeType = optionalImage.mimeType;
+      }
     }
 
     localStorage.setItem('bt_by', payload.updatedBy);
