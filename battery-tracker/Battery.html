@@ -275,7 +275,8 @@
   .r2 { --s-color: #ca8a04; }   /* รอกระตุ้นแบต — ติดของคนละแบบกับอะไหล่ แยกสีให้ดูออก */
   .r3 { --s-color: #f59e0b; }   /* กำลังซ่อม */
   .r4 { --s-color: #16a34a; }   /* ซ่อมเสร็จแล้ว */
-  .r5 { --s-color: #0891b2; }   /* รอรับรถ (กำลังจัดส่ง) — ยังไม่ถึงมือช่าง */
+  .r5 { --s-color: #64748b; }   /* ไม่ซ่อมส่งรถกลับ(ติดต่อ903) — จบงานอีกทาง ไม่ใช่เขียวเพราะไม่ได้ซ่อมจริง */
+  .r6 { --s-color: #0891b2; }   /* รอรับรถ (กำลังจัดส่ง) — ยังไม่ถึงมือช่าง */
 
   /* แถบเตือนสีเหลือง ใช้ตอนให้ยืนยันก่อนทำอะไรที่ย้อนไม่ได้ */
   .banner.warn {
@@ -537,6 +538,7 @@
   var DELIVERED_STATUS = 'จัดส่งแล้ว';
   var INCOMING_STATUS = 'รอรับรถ (กำลังจัดส่ง)';   // ใช้คำนวณระยะเวลาบนการ์ด (ดู repairTimelineLines)
   var REPAIR_DONE_STATUS = 'ซ่อมเสร็จแล้ว';
+  var REPAIR_NOT_FIXED_STATUS = 'ไม่ซ่อมส่งรถกลับ(ติดต่อ903)';
   var dlvBattery = null;         // แบตก้อนที่กำลังกรอกใบจัดส่งให้
   var dlvImage = null;           // { base64, mimeType, dataUrl }
   var searchSeq = 0, rSearchSeq = 0;   // ลำดับคำขอ ใช้ทิ้งผลลัพธ์ที่ล้าสมัย
@@ -852,6 +854,7 @@
       if (res.deliveredStatus) DELIVERED_STATUS = res.deliveredStatus;
       if (res.incomingStatus) INCOMING_STATUS = res.incomingStatus;
       if (res.repairDoneStatus) REPAIR_DONE_STATUS = res.repairDoneStatus;
+      if (res.repairNotFixedStatus) REPAIR_NOT_FIXED_STATUS = res.repairNotFixedStatus;
 
       // ตัวเลือกสาขา: พิมพ์ได้ทั้งรหัสและชื่อ เพราะจับคู่กับข้อความทั้งบรรทัด
       var branchOptions = res.branches.map(function (b) {
@@ -1770,7 +1773,7 @@
       if (repairStart) {
         if (r.status === REPAIR_DONE_STATUS && r.RepairDoneAt) {
           lines.push('🔧 ใช้เวลาซ่อม ' + spanText_(repairStart, r.RepairDoneAt));
-        } else if (r.status !== REPAIR_DONE_STATUS) {
+        } else if (r.status !== REPAIR_DONE_STATUS && r.status !== REPAIR_NOT_FIXED_STATUS) {
           lines.push('🔧 อยู่ระหว่างซ่อมมาแล้ว ' + spanSinceNow_(repairStart));
         }
       }
@@ -2191,7 +2194,7 @@
     var box = $('inResults');
     rows.forEach(function (r) {
       var el = document.createElement('div');
-      el.className = 'bat r5';        // สีเดียวกับสถานะรอรับรถในแท็บรถส่งซ่อม
+      el.className = 'bat r6';        // สีเดียวกับสถานะรอรับรถในแท็บรถส่งซ่อม
 
       var head = document.createElement('div');
       head.className = 'head';
