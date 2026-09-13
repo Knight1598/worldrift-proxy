@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blacksmith Tycoon</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+
+<div class="game-area" id="standStageView">
+  <div class="scene-bg scene-bg--wall"></div>
+  <div class="scene-bg scene-bg--floor"></div>
+  <div class="stand-tint-overlay" id="standTintOverlay"></div>
+  <div class="shop-counter"></div>
+  <div class="customer-lane" id="customerLane"></div>
+  <div class="worker-layer" id="workerLayer"></div>
+  <img class="stand-booth" id="standBooth" src="../assets/blacksmith/station_stall.png" alt="">
+  <img class="stand-booth stand-booth-front" id="standBoothFront" src="../assets/blacksmith/station_stall.png" alt="" aria-hidden="true">
+  <div id="sideStations"></div>
+  <div id="stationArrows"></div>
+  <button class="product-badge" id="productBadge" title="อัปเกรดสินค้า">
+    <img id="productBadgeIcon" src="" alt="">
+    <span class="product-badge-level pixel-num" id="productBadgeLevel">0</span>
+  </button>
+
+  <div class="hud-bar">
+    <div class="hud-currency-group">
+      <div class="gold-counter"><img class="coin-icon" src="../assets/blacksmith/coin.png" alt="gold"><span id="goldValue" class="pixel-num">0</span></div>
+      <div class="gem-counter" id="gemCounter" title="เพชร — ได้จากภารกิจ/ความสำเร็จ ใช้อัปเกรดอุปกรณ์"><img class="gem-icon" src="../assets/ui/gem_blue.png" alt="gem"><span id="gemValue" class="pixel-num">0</span></div>
+      <div class="renown-counter" id="renownCounter" title="ชื่อเสียง — จากการเกิดใหม่ ให้ตัวคูณรายได้ถาวร">🏅<span id="renownValue" class="pixel-num">0</span></div>
+    </div>
+    <div class="hud-title">⚒️ Blacksmith Tycoon</div>
+    <div class="hud-btn-group">
+      <button class="btn-frenzy" id="btnOpenFrenzy" title="โหมดเตาเดือด — ท้าทายเก็บไฮสกอร์!">🔥 เตาเดือด</button>
+      <button class="btn-tertiary" id="btnOpenRewards" title="รางวัล & ความสำเร็จ">🏆<span class="hud-badge" id="rewardsBadge"></span></button>
+      <button class="btn-tertiary" id="btnOpenSettings" title="ตั้งค่า">⚙️</button>
+    </div>
+  </div>
+  <div class="fever-bar-wrap" id="feverBarWrap" title="สะสมคอมโบจากการส่งออเดอร์สำเร็จ เต็มแล้วแตะเพื่อเข้าสู่ Fever Mode">
+    <div class="fever-bar-bg"><div class="fever-bar-fill" id="feverBarFill"></div></div>
+    <span class="fever-bar-label" id="feverBarLabel">FEVER</span>
+  </div>
+  <div class="material-stock-panel" id="materialStockPanel"></div>
+
+  <!-- Active Rush: ตัวเลขคอมโบตัวโต (โผล่ตอนคอมโบ >= 2) + แบนเนอร์ Rush -->
+  <div class="combo-indicator" id="comboIndicator"></div>
+  <div class="rush-banner" id="rushBanner">✨ ช่วงขายดี! ลูกค้าแน่นร้าน</div>
+
+  <!-- ป้ายเป้าหมายนำทาง (Guided Objective Chain) — ค้างเหนือปุ่ม FAB ชี้นำผู้เล่นใหม่ทีละสเต็ป -->
+  <div class="objective-banner" id="objectiveBanner">
+    <div class="objective-icon" id="objectiveIcon">🍽️</div>
+    <div class="objective-main">
+      <div class="objective-title" id="objectiveTitle"></div>
+      <div class="objective-bar-bg"><div class="objective-bar-fill" id="objectiveBarFill"></div></div>
+    </div>
+    <div class="objective-progress pixel-num" id="objectiveProgress">0/0</div>
+    <div class="objective-reward" id="objectiveReward"></div>
+  </div>
+
+  <!-- แถบชื่อด่าน + ความคืบหน้า Renovate แบบบางๆ ลอยล่างสุดของฉาก (ไม่กินพื้นที่ scene) -->
+  <div class="stage-strip">
+    <span class="stage-strip-name" id="stageName">แผงขายของริมทาง</span>
+    <span class="stage-strip-progress pixel-num" id="stageRenovateProgress">Lv 0/25</span>
+  </div>
+
+  <!-- ปุ่มลอยแบบเกมต้นแบบ: 🔨 Renovate ซ้ายล่าง / ⬆️ Upgrades ขวาล่าง -->
+  <button class="fab fab--left" id="btnOpenRenovate" title="Renovate — ขยับขยายร้าน">🔨</button>
+  <button class="fab fab--right" id="btnOpenUpgrades" title="อัปเกรดร้าน">⬆️</button>
+</div>
+
+<div class="modal-overlay" id="upgradesModal">
+  <div class="modal-box upgrades-box">
+    <button class="modal-close-x" id="btnCloseUpgrades">✕</button>
+    <h2>อัปเกรดร้าน</h2>
+    <div class="upgrades-scroll">
+      <div class="section-label section-label--buff">อุปกรณ์สวมใส่ (ใช้เพชรอัปเกรดถาวร — โบนัสติดตัวตลอด)</div>
+      <div class="equipment-panel" id="equipmentPanel"></div>
+      <div class="section-label">อัปเกรดด่านนี้</div>
+      <div class="upgrade-list" id="upgradeList"></div>
+      <div class="section-label">อัปเกรดถาวร (ไม่รีเซ็ตตอนขึ้นด่านใหม่)</div>
+      <div class="upgrade-list" id="permUpgradeList"></div>
+      <div class="section-label section-label--prestige">เกิดใหม่ (ชื่อเสียงถาวร ข้ามทุกด่าน)</div>
+      <button class="prestige-row" id="prestigeRow">
+        <span class="prestige-row-icon">🏅</span>
+        <span class="prestige-row-info">
+          <span class="prestige-row-title">เกิดใหม่ · <span id="prestigeRowMult">x1.00</span></span>
+          <span class="prestige-row-sub" id="prestigeRowSub">เริ่มร้านใหม่ แลกชื่อเสียงเพิ่มรายได้ถาวร</span>
+        </span>
+        <span class="prestige-row-gain" id="prestigeRowGain">+0 🏅</span>
+      </button>
+      <div class="stats-footer" id="statsFooter"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="renovateModal">
+  <div class="modal-box renovate-box">
+    <button class="modal-close-x" id="btnCloseRenovate">✕</button>
+    <h2>🔨 Renovate</h2>
+    <p class="renovate-subtitle">ขยับขยายร้านของคุณ!</p>
+    <div class="renovate-compare">
+      <div class="renovate-side">
+        <div class="renovate-side-label">ตอนนี้</div>
+        <img id="renovateBeforeImg" src="" alt="">
+        <div class="renovate-side-name" id="renovateBeforeName"></div>
+      </div>
+      <div class="renovate-arrow">➜</div>
+      <div class="renovate-side">
+        <div class="renovate-side-label">ถัดไป</div>
+        <img id="renovateAfterImg" src="" alt="">
+        <div class="renovate-side-name" id="renovateAfterName"></div>
+      </div>
+    </div>
+    <div class="renovate-rewards" id="renovateRewards"></div>
+    <button class="btn-cta-mega" id="btnConfirmRenovate">Renovate!</button>
+    <p class="renovate-gate-text" id="renovateGateText"></p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="productLevelModal">
+  <div class="modal-box product-level-box">
+    <button class="modal-close-x" id="btnCloseProductLevel">✕</button>
+    <h2 id="productLevelTitle">ระดับ 0 — สินค้า</h2>
+    <img class="product-level-icon" id="productLevelIcon" src="" alt="">
+    <div class="product-level-stars" id="productLevelStars"></div>
+    <div class="product-level-progress-bg"><div class="product-level-progress-fill" id="productLevelProgressFill"></div></div>
+    <div class="product-level-stats">
+      <span class="product-stat" title="เงินต่อออเดอร์">🪙 <span class="pixel-num" id="productStatRevenue">0</span></span>
+      <span class="product-stat" title="เวลาคราฟต์ต่อชิ้น">⏱️ <span class="pixel-num" id="productStatCraft">0s</span></span>
+    </div>
+    <button class="btn-cta-mega" id="btnBuyProductLevel">อัปเกรด</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="welcomeBackModal">
+  <div class="modal-box">
+    <div class="modal-emoji-big">👋</div>
+    <h2>ยินดีต้อนรับกลับ!</h2>
+    <p id="welcomeBackText"></p>
+    <button class="btn-cta-mega" id="btnCloseWelcomeBack">รับเลย!</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="rewardsModal">
+  <div class="modal-box rewards-box">
+    <button class="modal-close-x" id="btnCloseRewards">✕</button>
+    <h2>🏆 รางวัล</h2>
+    <div class="rewards-scroll">
+      <div class="section-label">รางวัลล็อกอินรายวัน</div>
+      <div class="daily-panel" id="dailyPanel"></div>
+      <div class="section-label">ความสำเร็จ</div>
+      <div class="achievement-list" id="achievementList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="tutorialModal">
+  <div class="modal-box tutorial-box">
+    <div class="tutorial-emoji" id="tutorialIcon">👋</div>
+    <h2 id="tutorialTitle"></h2>
+    <p id="tutorialBody"></p>
+    <div class="tutorial-dots" id="tutorialDots"></div>
+    <button class="btn-cta-mega" id="btnTutorialNext">ต่อไป</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box">
+    <h2>⚙️ ตั้งค่า</h2>
+    <div class="settings-row">
+      <span>เสียงเอฟเฟกต์</span>
+      <button id="btnToggleSound">เปิดอยู่</button>
+    </div>
+    <div class="settings-row">
+      <span>เพลงประกอบ</span>
+      <button id="btnToggleMusic">เปิดอยู่</button>
+    </div>
+    <div class="settings-row">
+      <span>ดูวิธีเล่นอีกครั้ง</span>
+      <button id="btnReplayTutorial">ดู</button>
+    </div>
+    <div class="settings-row">
+      <span>รีเซ็ตเกม</span>
+      <button id="btnResetGame">รีเซ็ต</button>
+    </div>
+    <button class="btn-secondary-modal" id="btnCloseSettings">ปิด</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="gameCompleteModal">
+  <div class="modal-box">
+    <div class="modal-emoji-big">👑</div>
+    <h2>สร้างอาณาจักรช่างตีเหล็กสำเร็จ!</h2>
+    <p class="game-complete-reward" id="gameCompleteRewardText"></p>
+    <p>อัปเกรดร้านจนสุดทางแล้ว! ถึงเวลา <b>เกิดใหม่</b> — เริ่มร้านใหม่พร้อมชื่อเสียงที่ทำให้รวยไวขึ้นตลอดไป</p>
+    <button class="btn-cta-mega" id="btnGameCompletePrestige">🏅 เกิดใหม่เลย!</button>
+    <button class="btn-secondary-modal" id="btnCloseGameComplete">ไว้ก่อน</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="prestigeModal">
+  <div class="modal-box prestige-box">
+    <button class="modal-close-x" id="btnClosePrestige">✕</button>
+    <div class="modal-emoji-big">🏅</div>
+    <h2>เกิดใหม่ (Prestige)</h2>
+    <p class="prestige-intro">เริ่มร้านใหม่ตั้งแต่ต้น แต่ได้ <b>ชื่อเสียง</b> ที่เพิ่มรายได้ทุกสถานีอย่างถาวร</p>
+    <div class="prestige-stats">
+      <div class="prestige-stat"><span class="prestige-stat-label">ชื่อเสียงตอนนี้</span><span class="prestige-stat-val" id="prestigeCurrentRenown">0 🏅</span></div>
+      <div class="prestige-stat"><span class="prestige-stat-label">ตัวคูณรายได้ตอนนี้</span><span class="prestige-stat-val" id="prestigeCurrentMult">x1.00</span></div>
+      <div class="prestige-stat prestige-stat--gain"><span class="prestige-stat-label">เกิดใหม่รอบนี้จะได้</span><span class="prestige-stat-val" id="prestigeGain">+0 🏅</span></div>
+      <div class="prestige-stat prestige-stat--gain"><span class="prestige-stat-label">ตัวคูณใหม่จะเป็น</span><span class="prestige-stat-val" id="prestigeNextMult">x1.00</span></div>
+    </div>
+    <p class="prestige-warn">⚠️ Gold / ด่าน / อัปเกรด / สถานี / ลูกมือ จะรีเซ็ต — แต่ 💎 เพชร และ 🏅 ชื่อเสียง จะอยู่ครบ</p>
+    <button class="btn-cta-mega" id="btnConfirmPrestige">🏅 เกิดใหม่!</button>
+    <button class="btn-secondary-modal" id="btnOpenRenownShop">🏪 ร้านชื่อเสียง — ใช้ 🏅 ซื้ออัปเกรดถาวร</button>
+    <p class="prestige-gate-text" id="prestigeGateText"></p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="renownShopModal">
+  <div class="modal-box renown-shop-box">
+    <button class="modal-close-x" id="btnCloseRenownShop">✕</button>
+    <h2>🏪 ร้านชื่อเสียง</h2>
+    <p class="renown-shop-balance">มีชื่อเสียง <b id="renownShopBalance">0 🏅</b> — อัปเกรดพวกนี้อยู่ถาวร ไม่หายตอนเกิดใหม่</p>
+    <div class="renown-shop-list" id="renownShopList"></div>
+  </div>
+</div>
+
+<script src="js/core/events.js"></script>
+<script src="js/core/event-types.js"></script>
+<script src="js/core/format.js"></script>
+<script src="js/core/particles.js"></script>
+<script src="js/data.js"></script>
+<script src="js/state.js"></script>
+<script src="js/formulas.js"></script>
+<script src="js/sound.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/entities/worker.js"></script>
+<script src="js/entities/customer.js"></script>
+<script src="js/entities/economy.js"></script>
+<script src="js/entities/materials.js"></script>
+<script src="js/features/fever.js"></script>
+<script src="js/features/combo.js"></script>
+<script src="js/features/rush.js"></script>
+<script src="js/features/goblin.js"></script>
+<script src="js/features/giftbox.js"></script>
+<script src="js/systems/income-tracker.js"></script>
+<script src="js/systems/leaderboard.js"></script>
+<script src="js/systems/missions.js"></script>
+<script src="js/systems/equipment.js"></script>
+<script src="js/systems/prestige.js"></script>
+<script src="js/systems/achievements.js"></script>
+<script src="js/systems/daily.js"></script>
+<script src="js/systems/objectives.js"></script>
+<script src="js/progression.js"></script>
+<script src="js/ui/floating-text.js"></script>
+<script src="js/ui/active-rush-hud.js"></script>
+<script src="js/ui/hud.js"></script>
+<script src="js/ui/stage-status-bar.js"></script>
+<script src="js/ui/upgrade-list.js"></script>
+<script src="js/ui/perm-upgrade-list.js"></script>
+<script src="js/ui/product-modal.js"></script>
+<script src="js/ui/upgrades-modal.js"></script>
+<script src="js/ui/renovate-modal.js"></script>
+<script src="js/ui/stage-complete-modal.js"></script>
+<script src="js/ui/settings-modal.js"></script>
+<script src="js/ui/stats-footer.js"></script>
+<script src="js/ui/material-stock.js"></script>
+<script src="js/ui/stations.js"></script>
+<script src="js/ui/equipment-panel.js"></script>
+<script src="js/ui/prestige-modal.js"></script>
+<script src="js/ui/renown-shop.js"></script>
+<script src="js/ui/rewards-modal.js"></script>
+<script src="js/ui/objective-banner.js"></script>
+<script src="js/ui/tutorial.js"></script>
+<script src="js/render.js"></script>
+<!-- ===== Forge Frenzy (โหมดเตาเดือด) overlay ===== -->
+<div class="frenzy-overlay" id="frenzyOverlay">
+  <div class="frenzy-scene" id="frenzyScene">
+    <button class="frenzy-quit" id="frenzyQuit">✕</button>
+    <div class="frenzy-top">
+      <div class="frenzy-score-box">คะแนน<br><span class="pixel-num" id="frenzyScore">0</span></div>
+      <div class="frenzy-best-box">🏆 สูงสุด<br><span class="pixel-num" id="frenzyBest">0</span></div>
+    </div>
+    <div class="frenzy-lives" id="frenzyLives">❤️❤️❤️</div>
+    <div class="frenzy-combo" id="frenzyCombo"></div>
+    <div class="frenzy-order" id="frenzyOrder">
+      <div class="frenzy-timer-bg"><div class="frenzy-timer-fill" id="frenzyTimerFill"></div></div>
+      <img class="frenzy-order-icon" id="frenzyOrderIcon" src="" alt="">
+      <div class="frenzy-forge-bg"><div class="frenzy-forge-fill" id="frenzyForgeFill"></div></div>
+      <div class="frenzy-forge-label pixel-num" id="frenzyForgeLabel">0/5</div>
+    </div>
+    <button class="frenzy-anvil" id="frenzyAnvil"><span class="frenzy-anvil-icon">🔨</span><span class="frenzy-anvil-text">ตี!</span></button>
+    <div class="frenzy-hint">แตะ "ตี!" รัวๆ ให้ครบก่อนหลอดเวลาหมด — พลาด 3 ครั้งจบเกม!</div>
+    <div class="frenzy-gameover" id="frenzyGameover">
+      <div class="frenzy-go-title" id="frenzyGoTitle">จบเกม!</div>
+      <div class="frenzy-go-row">คะแนน <b id="frenzyGoScore">0</b></div>
+      <div class="frenzy-go-row">🏆 สถิติสูงสุด <b id="frenzyGoBest">0</b></div>
+      <button class="frenzy-retry" id="frenzyRetry">🔥 เล่นอีกครั้ง!</button>
+      <button class="frenzy-exit" id="frenzyExit">ออกจากโหมด</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/features/frenzy.js"></script>
+<script src="js/ui/frenzy-ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

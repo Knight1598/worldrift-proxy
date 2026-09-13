@@ -1,0 +1,251 @@
+/* =====================================================================
+   Player State
+   ===================================================================== */
+// สร้างจาก MATERIALS (data.js) แทนที่จะ hardcode คีย์ซ้ำสองที่ — เพิ่มวัตถุดิบชนิดใหม่ในอนาคต
+// แค่แก้ MATERIALS แล้ว default inventory ตามมาเองอัตโนมัติ
+function defaultInventory() {
+  const inv = {};
+  MATERIALS.forEach(m => { inv[m.key] = { stock: MATERIAL_CAPACITY, capacity: MATERIAL_CAPACITY }; });
+  return inv;
+}
+function defaultIdentity() {
+  return { playerId: null, displayName: null }; // เตรียมไว้สำหรับ Leaderboard (ดู systems/leaderboard.js)
+}
+// สถานีเสริม 2 ตัวของด่านปัจจุบัน (Multi-Station) — รีเซ็ตตอน Renovate เหมือน upgradeLevels
+// (สถานีหลักใช้ player.upgradeLevels.portion เป็นเลเวลอยู่แล้ว ไม่ต้องเก็บเพิ่ม)
+function defaultStationsExtra() {
+  return { s1: { unlocked: false, level: 0 }, s2: { unlocked: false, level: 0 } };
+}
+function defaultRenownUpgrades() {
+  const o = {};
+  RENOWN_UPGRADES.forEach(u => { o[u.key] = 0; });
+  return o;
+}
+// อุปกรณ์สวมใส่ถาวร (ดู EQUIPMENT_SLOTS ใน data.js) — เก็บ tier ที่สวมอยู่ของแต่ละช่อง (0 = ว่าง)
+function defaultEquipment() {
+  const o = {};
+  EQUIPMENT_SLOTS.forEach(s => { o[s.key] = 0; });
+  return o;
+}
+function defaultPrestige() {
+  // renown = ชื่อเสียงสะสมถาวร, goldAtCycleStart = snapshot totalGoldEarned ตอนเริ่มรอบปัจจุบัน
+  // (goldThisCycle = totalGoldEarned - goldAtCycleStart), count = จำนวนครั้งที่เกิดใหม่
+  // upgrades = เลเวลอัปเกรดร้านชื่อเสียง (ดู RENOWN_UPGRADES / systems/prestige.js)
+  return { renown: 0, goldAtCycleStart: 0, count: 0, upgrades: defaultRenownUpgrades() };
+}
+
+let player = {
+  gold: 0,
+  stageIndex: 0,
+  upgradeLevels: { speed: 0, portion: 0, signage: 0, decor: 0 },
+  staffCount: 0,     // แทนที่ staffHired (bool) เดิม — จำนวนลูกมือที่จ้างแล้ว (0..MAX_STAFF_COUNT)
+  vaultLevel: 0,     // อัปเกรดถาวร "คลังเก็บของตอนออฟไลน์" ไม่ถูกรีเซ็ตตอนขึ้นด่านใหม่
+  milestonesShown: {}, // { speed: [10, 25], signage: [10], ... } กันป๊อปอัพ Milestone เด้งซ้ำตอนโหลดเซฟ
+  inventory: defaultInventory(), // วัตถุดิบที่ต้องเบิกก่อนคราฟต์ (ดู entities/materials.js)
+  identity: defaultIdentity(),
+  gems: 0,             // เพชร ได้จาก Order Missions ใช้สุ่มบัพ (ดู systems/missions.js, systems/buffs.js)
+  missionIndex: 0,     // ภารกิจลำดับที่กำลังทำอยู่ (ยิ่งสูงยิ่งต้องเสิร์ฟออเดอร์เยอะขึ้น)
+  missionProgress: 0,  // จำนวนออเดอร์ที่เสิร์ฟแล้วนับตั้งแต่ภารกิจก่อนหน้าจบ (ไม่ใช่สะสมทั้งเกม)
+  stationsExtra: defaultStationsExtra(), // สถานีเสริมของด่านปัจจุบัน (Multi-Station ดู ui/stations.js)
+  equipment: defaultEquipment(),         // อุปกรณ์สวมใส่ถาวร (ดู systems/equipment.js)
+  prestige: defaultPrestige(),           // ชื่อเสียง/เกิดใหม่ (ดู systems/prestige.js)
+  achievements: { claimed: {} },         // { claimed: { key: true } } — ความสำเร็จที่กดรับรางวัลแล้ว
+  daily: { lastClaimDay: null, streak: 0 }, // รางวัลล็อกอินรายวัน (lastClaimDay = 'YYYY-M-D')
+  tutorialSeen: false,                   // เคยดูป๊อปอัพสอนเล่นครั้งแรกแล้วหรือยัง
+  objectiveIndex: 0,                     // เควสนำทางลำดับที่กำลังทำอยู่ (ดู systems/objectives.js)
+  frenzyBest: 0,                         // ไฮสกอร์โหมดเตาเดือด (ดู features/frenzy.js)
+  lastSeenAt: Date.now(),
+  settings: { soundEnabled: true, musicEnabled: true },
+  stats: { totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 },
+};
+
+// Combo (Active Rush) เป็น session state ล้วนๆ ไม่ persist — เริ่มนับใหม่ทุกครั้งที่เข้าเกม (ดู features/combo.js)
+let comboState = { count: 0, expiresAt: 0 };
+// Rush Hour เป็น session state เช่นกัน (ดู features/rush.js)
+let rushState = { active: false, endsAt: 0 };
+
+// Fever Mode เป็น session state ล้วนๆ (ไม่ persist ผ่าน save — รีเซ็ตทุกครั้งที่โหลดหน้าใหม่ เหมือน workers/customers/coins)
+let feverState = { progress: 0, active: false, endsAt: 0 };
+
+let audioCtx = null;
+
+/* =====================================================================
+   Save / Load — SAVE_KEY เป็น v4 (gems/missionIndex/missionProgress ใหม่ สำหรับ Order Missions + Buff Roll)
+   chain การ migrate: v4 (ตรงๆ) -> v3 (ตรงๆ + เติม default v4) -> v2 (ตรงๆ + เติม default v3 แล้วต่อ v4)
+   -> v1 (แปลงเป็น v2 ก่อน แล้วเติม default v3 ต่อด้วย v4) กันผู้เล่นเก่าทุกรุ่นความคืบหน้าไม่หาย
+   worker/customer/coin/feverState เป็น transient state ล้วนๆ ไม่ persist เหมือนเดิม
+   ===================================================================== */
+function saveGame() {
+  const data = {
+    gold: player.gold,
+    stageIndex: player.stageIndex,
+    upgradeLevels: player.upgradeLevels,
+    staffCount: player.staffCount,
+    vaultLevel: player.vaultLevel,
+    milestonesShown: player.milestonesShown,
+    inventory: player.inventory,
+    identity: player.identity,
+    gems: player.gems,
+    missionIndex: player.missionIndex,
+    missionProgress: player.missionProgress,
+    stationsExtra: player.stationsExtra,
+    equipment: player.equipment,
+    prestige: player.prestige,
+    achievements: player.achievements,
+    daily: player.daily,
+    tutorialSeen: player.tutorialSeen,
+    objectiveIndex: player.objectiveIndex,
+    frenzyBest: player.frenzyBest,
+    lastSeenAt: Date.now(),
+    settings: player.settings,
+    stats: player.stats,
+  };
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* localStorage อาจไม่พร้อมใช้งาน */ }
+}
+
+// แปลงเซฟรูปแบบเก่า (v1: staffHired เป็น true/false) ให้เป็นรูปแบบ v2 (staffCount เป็นตัวเลข) — เรียกเฉพาะตอน
+// หาเซฟ v2/v3/v4 ไม่เจอเท่านั้น ฟิลด์ใหม่ที่ v1 ไม่มี (vaultLevel/milestonesShown) ใส่ค่าเริ่มต้นให้ครบ
+// (ฟิลด์ใหม่ของ v3/v4 ยังไม่ต้องเติมตรงนี้ -- fillV3Defaults/fillV4Defaults ด้านล่างจะเติมให้อีกทีไม่ว่าจะมาจาก v1 หรือ v2)
+function migrateFromV1(rawV1) {
+  const data = JSON.parse(rawV1);
+  return {
+    gold: data.gold || 0,
+    stageIndex: data.stageIndex || 0,
+    upgradeLevels: Object.assign({ speed: 0, portion: 0, signage: 0, decor: 0 }, data.upgradeLevels || {}),
+    staffCount: data.staffHired ? 1 : 0,
+    vaultLevel: 0,
+    milestonesShown: {},
+    lastSeenAt: data.lastSeenAt || Date.now(),
+    settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
+    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0 }, data.stats || {}),
+  };
+}
+
+// เติมฟิลด์ใหม่ของ v3 (inventory/identity) ให้ข้อมูลที่เป็นทรง v2 อยู่แล้ว ไม่ว่าจะมาจาก key v2 ตรงๆ
+// หรือเพิ่ง migrateFromV1() มา — รวมจุดเติม default ไว้ที่เดียวกันทั้งสองเส้นทาง
+function fillV3Defaults(v2Data) {
+  return Object.assign({}, v2Data, {
+    inventory: defaultInventory(),
+    identity: defaultIdentity(),
+  });
+}
+
+// เติมฟิลด์ใหม่ของ v4 (gems/missionIndex/missionProgress) ให้ข้อมูลที่เป็นทรง v3 อยู่แล้ว ไม่ว่าจะมาจาก key v3
+// ตรงๆ หรือเพิ่ง fillV3Defaults() มา (จาก v2/v1)
+function fillV4Defaults(v3Data) {
+  return Object.assign({}, v3Data, {
+    gems: 0,
+    missionIndex: 0,
+    missionProgress: 0,
+  });
+}
+
+// เติมฟิลด์ใหม่ของ v5 (stationsExtra — Multi-Station) ให้ข้อมูลทรง v4
+function fillV5Defaults(v4Data) {
+  return Object.assign({}, v4Data, {
+    stationsExtra: defaultStationsExtra(),
+  });
+}
+
+// เติมฟิลด์ใหม่ของ v6 (prestige — ชื่อเสียง/เกิดใหม่) ให้ข้อมูลทรง v5
+function fillV6Defaults(v5Data) {
+  const p = Object.assign({}, v5Data, { prestige: defaultPrestige() });
+  // ผู้เล่นเก่าเคยหาเงินมาแล้วก่อนมีระบบ prestige -- ตั้ง snapshot เป็นยอดสะสมปัจจุบัน ไม่ให้กด prestige แรก
+  // แล้วได้ renown ก้อนใหญ่จากเงินที่หามาก่อนระบบนี้จะมี (goldThisCycle เริ่มนับ 0 จากตรงนี้)
+  if (p.stats && typeof p.stats.totalGoldEarned === 'number') p.prestige.goldAtCycleStart = p.stats.totalGoldEarned;
+  return p;
+}
+
+function loadGame() {
+  let raw;
+  try { raw = localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
+  let data = null;
+  if (raw) {
+    try { data = JSON.parse(raw); } catch (e) { data = null; /* เซฟ v6 เสีย ลอง fallback ลงไปต่อ */ }
+  }
+  let needsResave = false;
+  const keysToClean = [];
+  if (!data) {
+    // ไม่เจอ v6 -- ไล่ fallback ทีละรุ่น v5 -> v4 -> v3 -> v2 -> v1 (แต่ละชั้นเติม default ของรุ่นถัดขึ้นมา)
+    let v5Data = null;
+    let rawV5;
+    try { rawV5 = localStorage.getItem(SAVE_KEY_V5); } catch (e) { rawV5 = null; }
+    if (rawV5) {
+      try { v5Data = JSON.parse(rawV5); keysToClean.push(SAVE_KEY_V5); } catch (e) { v5Data = null; }
+    }
+    if (!v5Data) {
+      let v4Data = null;
+      let rawV4;
+      try { rawV4 = localStorage.getItem(SAVE_KEY_V4); } catch (e) { rawV4 = null; }
+      if (rawV4) {
+        try { v4Data = JSON.parse(rawV4); keysToClean.push(SAVE_KEY_V4); } catch (e) { v4Data = null; }
+      }
+      if (!v4Data) {
+        let rawV3;
+        try { rawV3 = localStorage.getItem(SAVE_KEY_V3); } catch (e) { rawV3 = null; }
+        let v3Data = null;
+        if (rawV3) {
+          try { v3Data = JSON.parse(rawV3); keysToClean.push(SAVE_KEY_V3); } catch (e) { v3Data = null; }
+        }
+        if (!v3Data) {
+          // ไม่เจอ v3 -- ลอง v2 ตรงๆ แล้วเติม default ของ v3 ก่อน
+          let rawV2;
+          try { rawV2 = localStorage.getItem(SAVE_KEY_V2); } catch (e) { rawV2 = null; }
+          let v2Data = null;
+          if (rawV2) {
+            try { v2Data = JSON.parse(rawV2); keysToClean.push(SAVE_KEY_V2); } catch (e) { v2Data = null; }
+          }
+          if (!v2Data) {
+            // ไม่เจอ v2 เหมือนกัน -- ลอง v1 แล้วแปลงเป็นทรง v2 ก่อน (migrateFromV1 เดิม)
+            let rawV1;
+            try { rawV1 = localStorage.getItem(SAVE_KEY_V1); } catch (e) { rawV1 = null; }
+            if (rawV1) {
+              try { v2Data = migrateFromV1(rawV1); keysToClean.push(SAVE_KEY_V1); } catch (e) { v2Data = null; }
+            }
+          }
+          if (v2Data) v3Data = fillV3Defaults(v2Data);
+        }
+        if (v3Data) v4Data = fillV4Defaults(v3Data);
+      }
+      if (v4Data) v5Data = fillV5Defaults(v4Data);
+    }
+    if (v5Data) {
+      data = fillV6Defaults(v5Data);
+      needsResave = true;
+    }
+  }
+  if (!data) return;
+  Object.assign(player, {
+    gold: data.gold || 0,
+    stageIndex: data.stageIndex || 0,
+    upgradeLevels: Object.assign({ speed: 0, portion: 0, signage: 0, decor: 0 }, data.upgradeLevels || {}),
+    staffCount: Math.max(0, Math.min(MAX_STAFF_COUNT, data.staffCount || 0)),
+    vaultLevel: Math.max(0, Math.min(MAX_VAULT_LEVEL, data.vaultLevel || 0)),
+    milestonesShown: data.milestonesShown || {},
+    inventory: data.inventory || defaultInventory(),
+    identity: Object.assign(defaultIdentity(), data.identity || {}),
+    gems: Math.max(0, data.gems || 0),
+    missionIndex: Math.max(0, data.missionIndex || 0),
+    missionProgress: Math.max(0, data.missionProgress || 0),
+    stationsExtra: Object.assign(defaultStationsExtra(), data.stationsExtra || {}),
+    // อุปกรณ์สวมใส่ (Tier ต่อช่อง) — เติมแบบ additive ไม่ต้อง bump save version เหมือนฟิลด์ Tier 3
+    equipment: Object.assign(defaultEquipment(), data.equipment || {}),
+    // merge ระดับบน + เติม upgrades ที่ขาด (เซฟ v6 รุ่นแรกยังไม่มี field upgrades — เติมให้ครบทุก key)
+    prestige: Object.assign(defaultPrestige(), data.prestige || {}, {
+      upgrades: Object.assign(defaultRenownUpgrades(), (data.prestige && data.prestige.upgrades) || {}),
+    }),
+    // ฟิลด์ Tier 3 (achievements/daily/tutorial) — เติมแบบ additive ไม่ต้อง bump save version
+    achievements: { claimed: Object.assign({}, (data.achievements && data.achievements.claimed) || {}) },
+    daily: Object.assign({ lastClaimDay: null, streak: 0 }, data.daily || {}),
+    tutorialSeen: !!data.tutorialSeen,
+    objectiveIndex: Math.max(0, data.objectiveIndex || 0),
+    frenzyBest: Math.max(0, data.frenzyBest || 0),
+    lastSeenAt: data.lastSeenAt || Date.now(),
+    settings: Object.assign({ soundEnabled: true, musicEnabled: true }, data.settings || {}),
+    stats: Object.assign({ totalCustomersServed: 0, totalGoldEarned: 0, feverCount: 0, bestCombo: 0 }, data.stats || {}),
+  });
+  if (needsResave) {
+    saveGame(); // เขียนเป็น v6 ทันทีหลัง migrate สำเร็จ
+    keysToClean.forEach(key => { try { localStorage.removeItem(key); } catch (e) { /* ไม่เป็นไรถ้าลบไม่ได้ */ } });
+  }
+}
